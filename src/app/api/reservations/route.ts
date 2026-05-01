@@ -32,10 +32,48 @@ export async function POST(req: NextRequest) {
     const { data: vehicle } = await supabase.from('vehicles').select('*').eq('id', vehicleId).single()
     if (!vehicle) return NextResponse.json({ error: 'Vozilo nije pronađeno' }, { status: 404 })
 
+    // Pronađi partnera — prvo u partners tabeli, pa u partner_qr_codes
     let partner = null
     if (partnerQrCode) {
-      const { data } = await supabase.from('partners').select('*').eq('qr_code', partnerQrCode).eq('is_active', true).single()
-      partner = data
+      const { data: directPartner } = await supabase
+        .from('partners')
+        .select('*')
+        .eq('qr_code', partnerQrCode)
+        .eq('is_active', true)
+        .single()
+
+      if (directPartner) {
+        partner = directPartner
+      } else {
+        // Novi kod — traži u partner_qr_codes
+        const { data: qrRow } = await supabase
+          .from('partner_qr_codes')
+          .select('partner_id')
+          .eq('qr_code', partnerQrCode)
+          .single()
+
+        if (qrRow) {
+          const { data: partnerData } = await supabase
+            .from('partners')
+            .select('*')
+            .eq('id', qrRow.partner_id)
+            .eq('is_active', true)
+            .single()
+
+          partner = partnerData
+        }
+      }
+    }
+
+    // Pronađi label QR koda (za izvještaj)
+    let qrLabel: string | null = null
+    if (partnerQrCode) {
+      const { data: qrRow } = await supabase
+        .from('partner_qr_codes')
+        .select('label')
+        .eq('qr_code', partnerQrCode)
+        .single()
+      qrLabel = qrRow?.label || null
     }
 
     const days = Math.max(1, Math.ceil((new Date(returnDate).getTime() - new Date(pickupDate).getTime()) / 86400000))
@@ -58,7 +96,6 @@ export async function POST(req: NextRequest) {
     if (existingClient) {
       clientId = existingClient.id
     } else {
-      // Novi klijent — kreiraj Supabase auth nalog sa privremenom lozinkom
       tempPassword = generateTempPassword()
       isNewClient = true
 
@@ -109,6 +146,8 @@ export async function POST(req: NextRequest) {
       partner_discount_percent: partnerDiscountPercent || null,
       partner_discount_amount: partnerDiscountAmount || null,
       qr_source: partnerQrCode ?? null,
+      ref_qr_code: partnerQrCode ?? null,
+      ref_qr_label: qrLabel ?? null,
       language: lang,
       status: 'confirmed',
       agent_id: agentId || null,
@@ -135,7 +174,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (partnerQrCode && partner) {
-      await supabase.from('qr_scans').insert({ partner_id: partner.id, qr_code: partnerQrCode, converted: true, reservation_id: reservation.id })
+      await supabase.from('qr_scans').insert({
+        partner_id: partner.id,
+        qr_code: partnerQrCode,
+        converted: true,
+        reservation_id: reservation.id,
+      })
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
@@ -145,11 +189,10 @@ export async function POST(req: NextRequest) {
       const ge = guestEmail({
         guestName, vehicleName: vehicle.name, pickupDate, returnDate,
         pickupLocation, totalPrice: finalTotal, refCode: reservation.ref_code, lang,
-        isNewClient, tempPassword, siteUrl,pickupTime: pickupTime || '10:00', returnTime: returnTime || '10:00',
+        isNewClient, tempPassword, siteUrl, pickupTime: pickupTime || '10:00', returnTime: returnTime || '10:00',
       })
       const ae = adminEmail({
         refCode: reservation.ref_code, guestName, guestEmail: gEmail, guestPhone,
-        
         vehicleName: vehicle.name, pickupDate, returnDate, pickupLocation,
         totalPrice: finalTotal, partnerName: partner?.name, commissionAmount,
         qrSource: partnerQrCode, notes,
