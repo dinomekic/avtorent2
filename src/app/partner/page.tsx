@@ -74,7 +74,7 @@ export default function PartnerPortalPage() {
     setPayouts(pay || [])
     setScans(sc?.length || 0)
 
-    // Za svaki QR kod dodaj broj skeniranja i konverzija
+   // Za svaki QR kod dodaj broj skeniranja i rezervacija
     if (codes && codes.length > 0) {
       const withStats = await Promise.all(codes.map(async (c) => {
         const { data: scanData } = await supabase
@@ -84,10 +84,9 @@ export default function PartnerPortalPage() {
         const { data: convData } = await supabase
           .from('reservations')
           .select('id', { count: 'exact' })
-          .eq('partner_id', pid)
+          .eq('ref_qr_code', c.qr_code)
           .neq('status', 'cancelled')
-          // Napomena: u budućnosti može se dodati qr_code kolona na reservations za precizniji tracking
-        return { ...c, scan_count: scanData?.length || 0, conversion_count: 0 }
+        return { ...c, scan_count: scanData?.length || 0, conversion_count: convData?.length || 0 }
       }))
       setQrCodes(withStats)
     } else {
@@ -343,14 +342,18 @@ export default function PartnerPortalPage() {
                           alt={c.label}
                           style={{ width: 160, height: 160 }}
                         />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, width: '100%' }}>
                           <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
                             <div style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>{c.scan_count}</div>
-                            <div style={{ fontSize: 11, color: '#9ca3af' }}>skeniranja</div>
+                            <div style={{ fontSize: 11, color: '#9ca3af' }}>posjeta</div>
+                          </div>
+                          <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>{c.conversion_count}</div>
+                            <div style={{ fontSize: 11, color: '#9ca3af' }}>rezervacija</div>
                           </div>
                           <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
                             <div style={{ fontSize: 18, fontWeight: 700, color: '#1D9E75' }}>
-                              {c.scan_count && c.scan_count > 0 ? `${((conversions / scans) * 100).toFixed(0)}%` : '—'}
+                              {c.scan_count && c.scan_count > 0 ? `${((( c.conversion_count || 0) / c.scan_count) * 100).toFixed(0)}%` : '—'}
                             </div>
                             <div style={{ fontSize: 11, color: '#9ca3af' }}>konverzija</div>
                           </div>
