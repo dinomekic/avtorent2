@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+.next/
+
+# Scripts se pokreću lokalno, ne deployaju se
+scripts/
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Misc
+.DS_Store
+*.log

@@ -21,6 +21,11 @@ type Payout = {
   id: string; amount: number; note: string; status: string; created_at: string
 }
 
+type PartnerQrCode = {
+  id: string; partner_id: string; qr_code: string; label: string; created_at: string
+  scan_count?: number
+}
+
 const emptyForm = { name: '', contact_name: '', email: '', portal_email: '', phone: '', commission_percent: '10', client_discount_percent: '5', qr_code: '', country: '', city: '', google_maps_url: '', acquisition_channel: 'direct', acquired_by_agent: '', acquired_by_collaborator_id: '' }
 
 export default function AdminPartneriPage() {
@@ -41,8 +46,13 @@ export default function AdminPartneriPage() {
   const [batchCount, setBatchCount] = useState('10')
   const [batchPrefix, setBatchPrefix] = useState('AP')
   const [batchGenerating, setBatchGenerating] = useState(false)
-  const [showQR, setShowQR] = useState<Partner | null>(null)
+  const [showQR, setShowQR] = useState<{ qr_code: string; name: string; label?: string } | null>(null)
   const [filterMode, setFilterMode] = useState<'all' | 'active' | 'draft'>('all')
+  const [partnerQrCodes, setPartnerQrCodes] = useState<PartnerQrCode[]>([])
+  const [showQrPanel, setShowQrPanel] = useState<Partner | null>(null)
+  const [newQrLabel, setNewQrLabel] = useState('')
+  const [addingQr, setAddingQr] = useState(false)
+  const [editingLabel, setEditingLabel] = useState<{ id: string; label: string } | null>(null)
   const qrRef = useRef<HTMLDivElement>(null)
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
@@ -74,18 +84,82 @@ export default function AdminPartneriPage() {
     setPayouts(data || [])
   }
 
+  async function fetchPartnerQrCodes(partnerId: string) {
+    const { data: codes } = await supabase
+      .from('partner_qr_codes')
+      .select('*')
+      .eq('partner_id', partnerId)
+      .order('created_at')
+
+    if (!codes) { setPartnerQrCodes([]); return }
+
+    // Dodaj broj skeniranja za svaki kod
+    const withScans = await Promise.all(codes.map(async (c) => {
+      const { count } = await supabase
+        .from('qr_scans')
+        .select('id', { count: 'exact' })
+        .eq('qr_code', c.qr_code)
+      return { ...c, scan_count: count || 0 }
+    }))
+
+    setPartnerQrCodes(withScans)
+  }
+
+  async function addQrCode() {
+    if (!showQrPanel || !newQrLabel.trim()) return
+    setAddingQr(true)
+
+    // Generiši novi jedinstveni kod
+    const { data: existing } = await supabase.from('partner_qr_codes').select('qr_code').ilike('qr_code', `${batchPrefix}-%`)
+    const { data: partnersCodes } = await supabase.from('partners').select('qr_code')
+    const allCodes = [...(existing || []).map((c: any) => c.qr_code), ...(partnersCodes || []).map((p: any) => p.qr_code)]
+    const maxNum = allCodes.reduce((max, code) => {
+      const parts = code.split('-')
+      const num = parseInt(parts[parts.length - 1] || '0')
+      return num > max ? num : max
+    }, 0)
+
+    const newCode = `${batchPrefix}-${String(maxNum + 1).padStart(4, '0')}`
+
+    await supabase.from('partner_qr_codes').insert({
+      partner_id: showQrPanel.id,
+      qr_code: newCode,
+      label: newQrLabel.trim(),
+    })
+
+    setNewQrLabel('')
+    setAddingQr(false)
+    fetchPartnerQrCodes(showQrPanel.id)
+  }
+
+  async function updateQrLabel(id: string, label: string) {
+    await supabase.from('partner_qr_codes').update({ label }).eq('id', id)
+    setEditingLabel(null)
+    if (showQrPanel) fetchPartnerQrCodes(showQrPanel.id)
+  }
+
+  function openQrPanel(p: Partner) {
+    setShowQrPanel(p)
+    setShowForm(false)
+    setShowBatchForm(false)
+    setSelectedPartner(null)
+    fetchPartnerQrCodes(p.id)
+  }
+
   function openEdit(p: Partner) {
     setEditPartner(p)
     setForm({ name: p.name || '', contact_name: p.contact_name || '', email: p.email || '', portal_email: p.portal_email || '', phone: p.phone || '', commission_percent: String(p.commission_percent), client_discount_percent: String(p.client_discount_percent || '0'), qr_code: p.qr_code, country: (p as any).country || '', city: (p as any).city || '', google_maps_url: (p as any).google_maps_url || '', acquisition_channel: (p as any).acquisition_channel || 'direct', acquired_by_agent: (p as any).acquired_by_agent || '', acquired_by_collaborator_id: (p as any).acquired_by_collaborator_id || '' })
     setShowForm(true)
     setSelectedPartner(null)
     setShowBatchForm(false)
+    setShowQrPanel(null)
   }
 
   function openPayouts(p: Partner) {
     setSelectedPartner(p)
     setShowForm(false)
     setShowBatchForm(false)
+    setShowQrPanel(null)
     fetchPayouts(p.id)
     setPayoutAmount('')
     setPayoutNote('')
@@ -111,8 +185,20 @@ export default function AdminPartneriPage() {
     }
     if (editPartner) {
       await supabase.from('partners').update(payload).eq('id', editPartner.id)
+      // Ako je partner upravo aktiviran (bio draft), sinkronizuj label glavnog koda
+      if (editPartner.is_draft && form.name) {
+        await supabase.from('partner_qr_codes').update({ label: 'Glavni kod' }).eq('partner_id', editPartner.id).eq('qr_code', editPartner.qr_code)
+      }
     } else {
-      await supabase.from('partners').insert({ ...payload })
+      const { data: newPartner } = await supabase.from('partners').insert({ ...payload }).select().single()
+      // Kreiraj početni QR kod u partner_qr_codes
+      if (newPartner) {
+        await supabase.from('partner_qr_codes').insert({
+          partner_id: newPartner.id,
+          qr_code: form.qr_code,
+          label: 'Glavni kod',
+        })
+      }
     }
     setSaving(false); setShowForm(false); fetchData()
   }
@@ -122,7 +208,6 @@ export default function AdminPartneriPage() {
     if (!count || count < 1 || count > 200) return
     setBatchGenerating(true)
 
-    // Pronađi najveći postojeći broj za prefix
     const existing = partners.filter(p => p.qr_code.startsWith(batchPrefix + '-'))
     const maxNum = existing.reduce((max, p) => {
       const num = parseInt(p.qr_code.split('-')[1] || '0')
@@ -138,7 +223,18 @@ export default function AdminPartneriPage() {
       is_draft: true,
     }))
 
-    await supabase.from('partners').insert(toInsert)
+    const { data: inserted } = await supabase.from('partners').insert(toInsert).select()
+
+    // Kreiraj početne QR kodove u partner_qr_codes za svaki batch partner
+    if (inserted) {
+      const qrInsert = inserted.map((p: any) => ({
+        partner_id: p.id,
+        qr_code: p.qr_code,
+        label: 'Glavni kod',
+      }))
+      await supabase.from('partner_qr_codes').insert(qrInsert)
+    }
+
     setBatchGenerating(false)
     setShowBatchForm(false)
     fetchData()
@@ -171,28 +267,29 @@ export default function AdminPartneriPage() {
     fetchData()
   }
 
-  function downloadQR(partner: Partner) {
-    const url = `${siteUrl}/?ref=${partner.qr_code}`
+  function downloadQR(qr_code: string, name: string) {
+    const url = `${siteUrl}/?ref=${qr_code}`
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&format=png`
     const a = document.createElement('a')
     a.href = qrUrl
-    a.download = `QR-${partner.qr_code}.png`
+    a.download = `QR-${qr_code}.png`
     a.target = '_blank'
     a.click()
   }
 
-  function printQR(partner: Partner) {
-    const url = `${siteUrl}/?ref=${partner.qr_code}`
+  function printQR(qr_code: string, name: string, label?: string) {
+    const url = `${siteUrl}/?ref=${qr_code}`
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&format=png`
     const win = window.open('', '_blank')
     if (!win) return
     win.document.write(`
-      <html><head><title>QR - ${partner.qr_code}</title>
-      <style>body{font-family:Arial;text-align:center;padding:40px} .code{font-size:14px;color:#666;margin-top:10px} .name{font-size:20px;font-weight:bold;margin-top:8px} .url{font-size:11px;color:#999;margin-top:6px}</style>
+      <html><head><title>QR - ${qr_code}</title>
+      <style>body{font-family:Arial;text-align:center;padding:40px} .code{font-size:14px;color:#666;margin-top:10px} .name{font-size:20px;font-weight:bold;margin-top:8px} .label{font-size:14px;color:#1D9E75;margin-top:4px} .url{font-size:11px;color:#999;margin-top:6px}</style>
       </head><body>
       <img src="${qrUrl}" width="300" height="300" />
-      <div class="code">${partner.qr_code}</div>
-      <div class="name">${partner.name || 'AvtoRent Montenegro'}</div>
+      <div class="code">${qr_code}</div>
+      <div class="name">${name || 'AdriaDrive'}</div>
+      ${label ? `<div class="label">${label}</div>` : ''}
       <div class="url">${url}</div>
       <script>window.onload=function(){window.print()}<\/script>
       </body></html>
@@ -220,6 +317,7 @@ export default function AdminPartneriPage() {
 
   const draftCount = partners.filter(p => p.is_draft).length
   const activeCount = partners.filter(p => !p.is_draft && p.is_active).length
+  const sideOpen = showForm || showBatchForm || !!selectedPartner || !!showQrPanel
 
   return (
     <div>
@@ -227,10 +325,10 @@ export default function AdminPartneriPage() {
         <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111' }}>Partneri</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={exportCSV} style={{ padding: '8px 14px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Izvoz CSV</button>
-          <button onClick={() => { setShowBatchForm(!showBatchForm); setShowForm(false); setSelectedPartner(null) }} style={{ padding: '8px 14px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 600 }}>
+          <button onClick={() => { setShowBatchForm(!showBatchForm); setShowForm(false); setSelectedPartner(null); setShowQrPanel(null) }} style={{ padding: '8px 14px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 600 }}>
             Generiši QR batch
           </button>
-          <button onClick={() => { setEditPartner(null); setForm({ ...emptyForm, qr_code: `${batchPrefix}-${String(Date.now()).slice(-4)}` }); setShowForm(true); setShowBatchForm(false); setSelectedPartner(null) }} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => { setEditPartner(null); setForm({ ...emptyForm, qr_code: `${batchPrefix}-${String(Date.now()).slice(-4)}` }); setShowForm(true); setShowBatchForm(false); setSelectedPartner(null); setShowQrPanel(null) }} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             + Dodaj partnera
           </button>
         </div>
@@ -245,21 +343,21 @@ export default function AdminPartneriPage() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: (showForm || showBatchForm || selectedPartner) ? '1fr 340px' : '1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: sideOpen ? '1fr 360px' : '1fr', gap: 16 }}>
         {/* Tabela */}
         <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
           {loading ? <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Učitavanje...</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
-                  {['Partner', 'QR', 'Popust', 'Rezerv.', 'Provizija', 'Preostalo', 'Status', ''].map(h => (
+                  {['Partner', 'QR kodovi', 'Popust', 'Rezerv.', 'Provizija', 'Preostalo', 'Status', ''].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6', background: selectedPartner?.id === p.id ? '#f0fdf8' : p.is_draft ? '#fefce8' : 'transparent' }}>
+                  <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6', background: (selectedPartner?.id === p.id || showQrPanel?.id === p.id) ? '#f0fdf8' : p.is_draft ? '#fefce8' : 'transparent' }}>
                     <td style={{ padding: '12px 14px' }}>
                       {p.is_draft ? (
                         <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>Blanko QR kod</div>
@@ -295,7 +393,14 @@ export default function AdminPartneriPage() {
                         <button onClick={() => openEdit(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#6b7280' }}>
                           {p.is_draft ? 'Aktiviraj' : 'Uredi'}
                         </button>
-                        <button onClick={() => setShowQR(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 6, background: '#FAEEDA', cursor: 'pointer', color: '#854F0B' }}>QR</button>
+                        {!p.is_draft && (
+                          <button onClick={() => openQrPanel(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 6, background: showQrPanel?.id === p.id ? '#FAEEDA' : 'transparent', cursor: 'pointer', color: '#854F0B', fontWeight: showQrPanel?.id === p.id ? 600 : 400 }}>
+                            QR kodovi
+                          </button>
+                        )}
+                        {p.is_draft && (
+                          <button onClick={() => setShowQR({ qr_code: p.qr_code, name: p.name })} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 6, background: '#FAEEDA', cursor: 'pointer', color: '#854F0B' }}>QR</button>
+                        )}
                         {!p.is_draft && <button onClick={() => openPayouts(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #5DCAA5', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#0F6E56' }}>Isplata</button>}
                       </div>
                     </td>
@@ -328,6 +433,74 @@ export default function AdminPartneriPage() {
             <button onClick={generateBatch} disabled={batchGenerating} style={{ width: '100%', padding: 10, background: batchGenerating ? '#5DCAA5' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               {batchGenerating ? 'Generisanje...' : `Generiši ${batchCount} QR kodova`}
             </button>
+          </div>
+        )}
+
+        {/* QR Kodovi panel */}
+        {showQrPanel && !showForm && !selectedPartner && (
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 20, background: '#fff', alignSelf: 'start' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>QR kodovi — {showQrPanel.name}</div>
+              <button onClick={() => setShowQrPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9ca3af' }}>✕</button>
+            </div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>Svaki kod možeš koristiti za različiti kanal (soba, poruka, flajer...)</div>
+
+            {/* Lista kodova */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {partnerQrCodes.map(c => (
+                <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    {editingLabel?.id === c.id ? (
+                      <div style={{ display: 'flex', gap: 6, flex: 1, marginRight: 8 }}>
+                        <input
+                          style={{ ...inp, padding: '4px 8px', fontSize: 12 }}
+                          value={editingLabel.label}
+                          onChange={e => setEditingLabel({ id: c.id, label: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') updateQrLabel(c.id, editingLabel.label); if (e.key === 'Escape') setEditingLabel(null) }}
+                          autoFocus
+                        />
+                        <button onClick={() => updateQrLabel(c.id, editingLabel.label)} style={{ padding: '4px 8px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✓</button>
+                        <button onClick={() => setEditingLabel(null)} style={{ padding: '4px 8px', background: 'transparent', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#111' }}>{c.label}</span>
+                        <button onClick={() => setEditingLabel({ id: c.id, label: c.label })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#9ca3af', padding: 0 }}>✏️</button>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => setShowQR({ qr_code: c.qr_code, name: showQrPanel.name, label: c.label })} style={{ padding: '3px 8px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 6, background: '#FAEEDA', cursor: 'pointer', color: '#854F0B' }}>QR</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#854F0B', background: '#FAEEDA', padding: '2px 7px', borderRadius: 12 }}>{c.qr_code}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{c.scan_count} skeniranja</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Dodaj novi kod */}
+            <div style={{ background: '#f9fafb', borderRadius: 8, padding: 14, border: '1px dashed #d1d5db' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 10 }}>+ Novi QR kod</div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={lbl}>Naziv / namjena koda</label>
+                <input
+                  style={inp}
+                  value={newQrLabel}
+                  onChange={e => setNewQrLabel(e.target.value)}
+                  placeholder="npr. Soba 1, Poruka gostima, Recepcija..."
+                  onKeyDown={e => { if (e.key === 'Enter') addQrCode() }}
+                />
+              </div>
+              <button
+                onClick={addQrCode}
+                disabled={addingQr || !newQrLabel.trim()}
+                style={{ width: '100%', padding: '9px', background: !newQrLabel.trim() ? '#9ca3af' : addingQr ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: !newQrLabel.trim() ? 'not-allowed' : 'pointer' }}
+              >
+                {addingQr ? 'Kreiranje...' : 'Kreiraj QR kod'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -406,7 +579,7 @@ export default function AdminPartneriPage() {
         )}
 
         {/* Isplate panel */}
-        {selectedPartner && !showForm && (
+        {selectedPartner && !showForm && !showQrPanel && (
           <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 20, background: '#fff', alignSelf: 'start' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>Isplate — {selectedPartner.name}</div>
@@ -459,10 +632,11 @@ export default function AdminPartneriPage() {
       {showQR && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 380, width: '90%', textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>
               QR kod — {showQR.qr_code}
             </div>
-            {showQR.name && <div style={{ fontSize: 14, color: '#374151', marginBottom: 12 }}>{showQR.name}</div>}
+            {showQR.label && <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 500, marginBottom: 4 }}>{showQR.label}</div>}
+            {showQR.name && <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>{showQR.name}</div>}
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`${siteUrl}/?ref=${showQR.qr_code}`)}&format=png`}
               alt="QR kod"
@@ -472,10 +646,10 @@ export default function AdminPartneriPage() {
               {siteUrl}/?ref={showQR.qr_code}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => downloadQR(showQR)} style={{ flex: 1, padding: '9px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', fontSize: 13, cursor: 'pointer', color: '#085041', fontWeight: 500 }}>
+              <button onClick={() => downloadQR(showQR.qr_code, showQR.name)} style={{ flex: 1, padding: '9px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', fontSize: 13, cursor: 'pointer', color: '#085041', fontWeight: 500 }}>
                 Preuzmi PNG
               </button>
-              <button onClick={() => printQR(showQR)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
+              <button onClick={() => printQR(showQR.qr_code, showQR.name, showQR.label)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
                 Štampaj
               </button>
               <button onClick={() => setShowQR(null)} style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#6b7280' }}>
