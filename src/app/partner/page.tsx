@@ -12,7 +12,7 @@ type Reservation = {
   id: string; ref_code: string; guest_name: string; guest_phone: string
   pickup_date: string; return_date: string; total_price: number
   commission_amount: number; partner_discount_amount: number
-  status: string; created_at: string
+  status: string; created_at: string; ref_qr_label: string | null
   vehicles: { name: string } | null
 }
 
@@ -270,7 +270,7 @@ export default function PartnerPortalPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f9fafb' }}>
-                      {['Ref', 'Gost', 'Vozilo', 'Period', 'Iznos', 'Vaša provizija', 'Ušteda gosta', 'Status'].map(h => (
+                      {['Ref', 'Gost', 'Vozilo', 'Period', 'Iznos', 'Vaša provizija', 'Ušteda gosta', 'QR kod', 'Status'].map(h => (
                         <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -294,6 +294,12 @@ export default function PartnerPortalPage() {
                           </td>
                           <td style={{ padding: '10px 12px', color: '#185FA5', fontWeight: 500 }}>
                             {r.partner_discount_amount ? `${r.partner_discount_amount.toFixed(2)}€` : '—'}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {r.ref_qr_label
+                              ? <span style={{ fontSize: 11, background: '#FAEEDA', color: '#854F0B', padding: '3px 8px', borderRadius: 20, fontWeight: 500 }}>{r.ref_qr_label}</span>
+                              : <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>
+                            }
                           </td>
                           <td style={{ padding: '10px 12px' }}>
                             <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '3px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>

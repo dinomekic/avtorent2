@@ -20,7 +20,8 @@ type Reservation = {
   closed_at: string | null; closed_by: string | null
   is_early_return: boolean; original_return_date: string | null; original_return_time: string | null
   early_return_note: string | null; early_return_at: string | null
-  qr_source: string | null; agent_name: string | null; created_at: string
+  qr_source: string | null; ref_qr_code: string | null; ref_qr_label: string | null
+  agent_name: string | null; created_at: string
   site_domain: string | null
   vehicles: { name: string } | null; partners: { name: string } | null
 }
@@ -497,6 +498,7 @@ export default function AdminReservationsPage() {
                         {r.qr_source ? (
                           <div>
                             <span style={{ fontSize: 11, background: '#FAEEDA', color: '#854F0B', padding: '2px 7px', borderRadius: 20, fontWeight: 500 }}>{r.partners?.name || r.qr_source}</span>
+                            {r.ref_qr_label && <div style={{ fontSize: 10, color: '#854F0B', marginTop: 2, fontWeight: 500 }}>{r.ref_qr_label}</div>}
                             <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Partner</div>
                           </div>
                         ) : r.site_domain && r.site_domain !== 'rent-cars.me' && r.site_domain !== 'www.rent-cars.me' ? (
