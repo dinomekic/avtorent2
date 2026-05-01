@@ -157,6 +157,9 @@ export async function POST(req: NextRequest) {
       await Promise.all([
         resend.emails.send({ from: process.env.FROM_EMAIL!, to: gEmail, subject: ge.subject, html: ge.html }),
         resend.emails.send({ from: process.env.FROM_EMAIL!, to: process.env.ADMIN_EMAIL!, subject: ae.subject, html: ae.html }),
+        ...(partner?.email ? [
+          resend.emails.send({ from: process.env.FROM_EMAIL!, to: partner.email, subject: ae.subject, html: ae.html })
+        ] : []),
       ])
     } catch (e) { console.error('Email error:', e) }
 
