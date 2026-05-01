@@ -60,7 +60,7 @@ export default function AdminPartneriPage() {
 
     const enriched = (partnersData || []).map(p => {
       const pRes = (reservations || []).filter(r => r.partner_id === p.id)
-      const completed = pRes.filter(r => r.status === 'completed' || r.status === 'closed')
+      const completed = pRes.filter(r => r.status === 'completed' || r.status === 'closed' || r.status === 'issued')
       const commissionEarned = completed.reduce((s: number, r: any) => s + (r.commission_amount || 0), 0)
       const commissionPaid = (payoutsData || []).filter((p2: any) => p2.partner_id === p.id && p2.status === 'confirmed').reduce((s: number, p2: any) => s + p2.amount, 0)
       return { ...p, reservation_count: pRes.length, total_revenue: pRes.reduce((s: number, r: any) => s + (r.total_price || 0), 0), commission_earned: commissionEarned, commission_paid: commissionPaid, commission_remaining: commissionEarned - commissionPaid }
