@@ -236,7 +236,7 @@ export default function PartnerPortalPage() {
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: '#111' }}>{r.total_price}€</td>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: (r.status === 'completed' || r.status === 'issued' || r.status === 'closed') ? '#1D9E75' : '#9ca3af' }}>
                         {r.commission_amount ? `${r.commission_amount.toFixed(2)}€` : '—'}
-                        {(r.status !== 'completed' && r.status !== 'issued') && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>po završetku</div>}
+                        {(r.status !== 'completed' && r.status !== 'issued' && r.status !== 'closed') && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>po završetku</div>}
                       </td>
                       <td style={{ padding: '10px 12px', color: '#185FA5', fontWeight: 500 }}>
                         {r.partner_discount_amount ? `${r.partner_discount_amount.toFixed(2)}€` : '—'}
