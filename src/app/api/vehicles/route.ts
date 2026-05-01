@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const { data: booked } = await supabase
       .from('reservations')
       .select('vehicle_id')
-      .in('status', ['pending', 'confirmed'])
+      .in('status', ['confirmed', 'issued'])
       .lte('pickup_date', returnDate)
       .gte('return_date', pickupDate)
 
