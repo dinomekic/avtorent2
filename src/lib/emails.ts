@@ -102,6 +102,13 @@ export function adminEmail(d: {
     </table>
     ${d.partnerName ? `<div style="background:#FAEEDA;border:1px solid #EF9F27;border-radius:8px;padding:14px;margin-top:16px"><strong>Izvor (QR): ${d.partnerName}</strong><br><span style="font-size:13px">Provizija: ${d.commissionAmount?.toFixed(2)}€ · QR: ${d.qrSource}</span></div>` : ''}
     ${d.notes ? `<div style="margin-top:12px;padding:12px;background:#f5f5f5;border-radius:8px;font-size:13px"><strong>Napomena:</strong> ${d.notes}</div>` : ''}
+
+    <div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:20px;text-align:center">
+      <div style="font-size:13px;color:#6b7280;margin-bottom:12px">Pratite sve vaše rezervacije i statistiku na partnerskom portalu.</div>
+      <a href="https://www.rent-cars.me/partner" style="display:inline-block;padding:11px 28px;background:#1a56a0;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:14px">
+        Otvorite partnerski portal →
+      </a>
+    </div>
   </div>
 </body>
 </html>`
