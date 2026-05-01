@@ -30,6 +30,7 @@ function getCookie(name: string): string {
 const ST: Record<string, { bg: string; color: string; label: string }> = {
   pending:   { bg: '#FAEEDA', color: '#633806', label: 'Na čekanju' },
   confirmed: { bg: '#E1F5EE', color: '#085041', label: 'Potvrđeno' },
+  issued:    { bg: '#EDE9FE', color: '#4C1D95', label: 'Aktivno' },
   completed: { bg: '#E6F1FB', color: '#0C447C', label: 'Završeno' },
   cancelled: { bg: '#FCEBEB', color: '#791F1F', label: 'Otkazano' },
 }
@@ -79,7 +80,7 @@ export default function PartnerPortalPage() {
     window.location.href = '/partner/login'
   }
 
-  const totalCommission = reservations.filter(r => r.status === 'completed').reduce((s, r) => s + (r.commission_amount || 0), 0)
+  const totalCommission = reservations.filter(r => r.status === 'completed' || r.status === 'issued').reduce((s, r) => s + (r.commission_amount || 0), 0)
   const totalDiscount = reservations.reduce((s, r) => s + (r.partner_discount_amount || 0), 0)
   const totalPaid = payouts.filter(p => p.status === 'confirmed').reduce((s, p) => s + p.amount, 0)
   const totalPending = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0)
@@ -232,9 +233,9 @@ export default function PartnerPortalPage() {
                       <td style={{ padding: '10px 12px', color: '#374151' }}>{r.vehicles?.name || '—'}</td>
                       <td style={{ padding: '10px 12px', fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>{r.pickup_date}<br/>{r.return_date}</td>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: '#111' }}>{r.total_price}€</td>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: r.status === 'completed' ? '#1D9E75' : '#9ca3af' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600, color: (r.status === 'completed' || r.status === 'issued') ? '#1D9E75' : '#9ca3af' }}>
                         {r.commission_amount ? `${r.commission_amount.toFixed(2)}€` : '—'}
-                        {r.status !== 'completed' && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>po završetku</div>}
+                        {(r.status !== 'completed' && r.status !== 'issued') && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>po završetku</div>}
                       </td>
                       <td style={{ padding: '10px 12px', color: '#185FA5', fontWeight: 500 }}>
                         {r.partner_discount_amount ? `${r.partner_discount_amount.toFixed(2)}€` : '—'}
