@@ -217,14 +217,13 @@ body: JSON.stringify({
       }
     }
 // Pošalji welcome email ako partner ima email i nije draft
-    if (form.name && (form.portal_email || form.email)) {
-      await fetch('/api/partner-welcome-notify', {
+   if (form.name && (form.portal_email || form.email)) {
+      await fetch('/api/partner-create-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           partnerName: form.name,
           partnerEmail: form.portal_email || form.email,
-          portalEmail: form.portal_email || form.email,
           qrCode: form.qr_code,
         }),
       }).catch(() => {})
