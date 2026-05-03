@@ -298,14 +298,17 @@ body: JSON.stringify({
     fetchData()
   }
 
-  async function deletePartner(p: Partner) {
+async function deletePartner(p: Partner) {
     const label = p.is_draft ? `blanko kod ${p.qr_code}` : `partnera "${p.name}"`
     const msg = p.reservation_count && p.reservation_count > 0
       ? `Partner "${p.name}" ima ${p.reservation_count} rezervacija. Brisanjem se uklanja samo partner, rezervacije ostaju. Nastavi?`
       : `Da li sigurno želiš obrisati ${label}?`
     if (!window.confirm(msg)) return
-    await supabase.from('partner_qr_codes').delete().eq('partner_id', p.id)
-    await supabase.from('partners').delete().eq('id', p.id)
+    await fetch('/api/partner-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partnerId: p.id }),
+    })
     setSelectedPartner(null)
     setShowQrPanel(null)
     setShowForm(false)
