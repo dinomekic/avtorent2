@@ -117,6 +117,39 @@ export default function PartnerInfoEditor() {
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#111' }}>Moja info stranica</div>
           <a href={pageUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1D9E75', textDecoration: 'none' }}>{pageUrl} ↗</a>
+      </div>
+      {/* QR kod za info stranicu */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+        <img
+          src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(pageUrl)}&format=png`}
+          alt="QR kod info stranice"
+          style={{ width: 70, height: 70, flexShrink: 0 }}
+        />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 4 }}>QR kod vaše info stranice</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Stavite ovaj kod na flajer — gosti ga skeniraju i odmah vide sve informacije.</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            
+              href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pageUrl)}&format=png`}
+              download={`QR-info-${page.slug}.png`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ padding: '6px 14px', border: '1px solid #1D9E75', borderRadius: 6, background: '#E1F5EE', fontSize: 12, color: '#085041', fontWeight: 500, textDecoration: 'none' }}
+            >
+              Preuzmi PNG
+            </a>
+            <button
+              onClick={() => {
+                const win = window.open('', '_blank')
+                if (!win) return
+                win.document.write(`<html><head><title>QR - Info stranica</title><style>body{font-family:Arial;text-align:center;padding:40px}.name{font-size:18px;font-weight:bold;margin-top:12px}.url{font-size:11px;color:#999;margin-top:6px}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(pageUrl)}&format=png" width="300" height="300" /><div class="name">${page.property_name || 'Info stranica'}</div><div class="url">${pageUrl}</div><script>window.onload=function(){window.print()}<\/script></body></html>`)
+              }}
+              style={{ padding: '6px 14px', border: '1px solid #185FA5', borderRadius: 6, background: '#E6F1FB', fontSize: 12, color: '#185FA5', fontWeight: 500, cursor: 'pointer' }}
+            >
+              Štampaj
+            </button>
+          </div>
+        </div>
         </div>
         <button
           onClick={savePage}
