@@ -395,7 +395,7 @@ export default function PartnerPortalPage() {
               href="/partner/info"
               style={{ display: 'inline-block', padding: '11px 28px', background: '#0e2d5e', color: '#fff', textDecoration: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14 }}
             >
-              Otvori editor →
+              Otvori editor »
             </a>
           </div>
         )}
