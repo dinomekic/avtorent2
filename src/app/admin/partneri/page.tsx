@@ -130,6 +130,20 @@ export default function AdminPartneriPage() {
     setNewQrLabel('')
     setAddingQr(false)
     fetchPartnerQrCodes(showQrPanel.id)
+
+    // Pošalji email sa novim kodom
+    if (showQrPanel.portal_email || showQrPanel.email) {
+      await fetch('/api/partner-welcome-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerName: showQrPanel.name,
+          partnerEmail: showQrPanel.portal_email || showQrPanel.email,
+          portalEmail: showQrPanel.portal_email || showQrPanel.email,
+          qrCode: newCode,
+        }),
+      }).catch(() => {})
+    }
   }
 
   async function updateQrLabel(id: string, label: string) {
