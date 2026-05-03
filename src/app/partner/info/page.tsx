@@ -69,6 +69,10 @@ export default function PartnerInfoEditor() {
   async function savePage() {
     if (!page) return
     setSaving(true)
+    // Dodaj https:// ako nedostaje
+    if (form.redirect_url && !form.redirect_url.startsWith('http')) {
+      form.redirect_url = 'https://' + form.redirect_url
+    }
     await supabase.from('partner_info_pages').update({
       ...form,
       custom_sections: customSections,
@@ -113,23 +117,32 @@ export default function PartnerInfoEditor() {
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 0 40px' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#111' }}>Moja info stranica</div>
           <a href={pageUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1D9E75', textDecoration: 'none' }}>{pageUrl} ↗</a>
+        </div>
+        <button
+          onClick={savePage}
+          disabled={saving}
+          style={{ padding: '9px 20px', background: saved ? '#1D9E75' : saving ? '#5DCAA5' : '#0e2d5e', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          {saved ? '✓ Sačuvano' : saving ? 'Snimanje...' : 'Sačuvaj'}
+        </button>
       </div>
-      {/* QR kod za info stranicu */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+
+      {/* QR kod info stranice */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px', marginBottom: 20 }}>
         <img
           src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(pageUrl)}&format=png`}
           alt="QR kod info stranice"
-          style={{ width: 70, height: 70, flexShrink: 0 }}
+          style={{ width: 72, height: 72, flexShrink: 0, borderRadius: 6 }}
         />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 4 }}>QR kod vaše info stranice</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Stavite ovaj kod na flajer — gosti ga skeniraju i odmah vide sve informacije.</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            
+            <a
               href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pageUrl)}&format=png`}
               download={`QR-info-${page.slug}.png`}
               target="_blank"
@@ -146,18 +159,10 @@ export default function PartnerInfoEditor() {
               }}
               style={{ padding: '6px 14px', border: '1px solid #185FA5', borderRadius: 6, background: '#E6F1FB', fontSize: 12, color: '#185FA5', fontWeight: 500, cursor: 'pointer' }}
             >
-              Štampaj
+              Stampaj
             </button>
           </div>
         </div>
-        </div>
-        <button
-          onClick={savePage}
-          disabled={saving}
-          style={{ padding: '9px 20px', background: saved ? '#1D9E75' : saving ? '#5DCAA5' : '#0e2d5e', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-        >
-          {saved ? '✓ Sačuvano' : saving ? 'Snimanje...' : 'Sačuvaj'}
-        </button>
       </div>
 
       {/* Redirect opcija */}
