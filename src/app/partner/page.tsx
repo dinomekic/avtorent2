@@ -387,11 +387,11 @@ export default function PartnerPortalPage() {
             </div>
           </div>
         )}
-{activeTab === 'info' && (
+        {activeTab === 'info' && (
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px', textAlign: 'center' }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#111', marginBottom: 8 }}>Moja info stranica</div>
             <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>Uredite stranicu koju vaši gosti vide kada skeniraju QR kod na flajeru.</div>
-            
+            <a
               href="/partner/info"
               style={{ display: 'inline-block', padding: '11px 28px', background: '#0e2d5e', color: '#fff', textDecoration: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14 }}
             >
@@ -399,3 +399,7 @@ export default function PartnerPortalPage() {
             </a>
           </div>
         )}
+      </main>
+    </div>
+  )
+}
