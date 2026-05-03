@@ -9,10 +9,10 @@ export async function POST(req: NextRequest) {
     )
 
     const { partnerId } = await req.json()
-    if (!partnerId) return NextResponse.json({ error: 'partnerId je obavezan' }, { status: 400 })
-
+    await supabase.from('qr_scans').delete().eq('partner_id', partnerId)
     await supabase.from('partner_qr_codes').delete().eq('partner_id', partnerId)
     await supabase.from('partner_payouts').delete().eq('partner_id', partnerId)
+    await supabase.from('reservations').update({ partner_id: null }).eq('partner_id', partnerId)
     const { error } = await supabase.from('partners').delete().eq('id', partnerId)
 
     if (error) {
