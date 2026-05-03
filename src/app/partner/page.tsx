@@ -50,7 +50,7 @@ export default function PartnerPortalPage() {
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [qrCodes, setQrCodes] = useState<PartnerQrCode[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'qr'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info'>('overview')
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
 
@@ -141,7 +141,7 @@ export default function PartnerPortalPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
-          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`]].map(([key, label]) => (
+          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`], ['info', 'Moja stranica']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
@@ -385,6 +385,14 @@ export default function PartnerPortalPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+{activeTab === 'info' && (
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px' }}>
+            <iframe
+              src="/partner/info"
+              style={{ width: '100%', height: 'calc(100vh - 220px)', border: 'none', borderRadius: 8 }}
+            />
           </div>
         )}
       </main>
