@@ -238,7 +238,6 @@ body: JSON.stringify({
           partnerName: form.name,
           partnerEmail: form.portal_email || form.email,
           qrCode: form.qr_code,
-        }),
       }).catch(() => {})
     }
     setSaving(false); setShowForm(false); fetchData()
