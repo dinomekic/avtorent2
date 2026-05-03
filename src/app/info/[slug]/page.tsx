@@ -4,11 +4,6 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useParams } from 'next/navigation'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 type InfoPage = {
   id: string
   partner_id: string
@@ -31,6 +26,10 @@ type InfoPage = {
 }
 
 export default function GuestInfoPage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
   const params = useParams()
   const slug = params?.slug as string
   const [page, setPage] = useState<InfoPage | null>(null)
