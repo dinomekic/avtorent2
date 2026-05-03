@@ -200,6 +200,19 @@ export default function AdminPartneriPage() {
         })
       }
     }
+// Pošalji welcome email ako partner ima email i nije draft
+    if (form.name && (form.portal_email || form.email)) {
+      await fetch('/api/partner-welcome-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerName: form.name,
+          partnerEmail: form.portal_email || form.email,
+          portalEmail: form.portal_email || form.email,
+          qrCode: form.qr_code,
+        }),
+      }).catch(() => {})
+    }
     setSaving(false); setShowForm(false); fetchData()
   }
 
