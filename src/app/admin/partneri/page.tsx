@@ -217,8 +217,21 @@ body: JSON.stringify({
       }
     }
 // Pošalji welcome email ako partner ima email i nije draft
-   if (form.name && (form.portal_email || form.email)) {
+// Pošalji welcome email sa nalogom u oba slučaja — novi partner ili aktivacija drafta
+    const isActivation = !!(editPartner?.is_draft && form.name)
+    const isNew = !editPartner
+    if ((isNew || isActivation) && form.name && (form.portal_email || form.email)) {
       await fetch('/api/partner-create-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerName: form.name,
+          partnerEmail: form.portal_email || form.email,
+          qrCode: form.qr_code,
+        }),
+      }).catch(() => {})
+    }
+    setSaving(false); setShowForm(false); fetchData()
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -292,6 +305,20 @@ body: JSON.stringify({
     setPayoutAmount(''); setPayoutNote('')
     setPayoutSaving(false)
     fetchPayouts(selectedPartner.id)
+    fetchData()
+  }
+
+  async function deletePartner(p: Partner) {
+    const label = p.is_draft ? `blanko kod ${p.qr_code}` : `partnera "${p.name}"`
+    const msg = p.reservation_count && p.reservation_count > 0
+      ? `Partner "${p.name}" ima ${p.reservation_count} rezervacija. Brisanjem se uklanja samo partner, rezervacije ostaju. Nastavi?`
+      : `Da li sigurno želiš obrisati ${label}?`
+    if (!window.confirm(msg)) return
+    await supabase.from('partner_qr_codes').delete().eq('partner_id', p.id)
+    await supabase.from('partners').delete().eq('id', p.id)
+    setSelectedPartner(null)
+    setShowQrPanel(null)
+    setShowForm(false)
     fetchData()
   }
 
@@ -430,6 +457,7 @@ body: JSON.stringify({
                           <button onClick={() => setShowQR({ qr_code: p.qr_code, name: p.name })} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 6, background: '#FAEEDA', cursor: 'pointer', color: '#854F0B' }}>QR</button>
                         )}
                         {!p.is_draft && <button onClick={() => openPayouts(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #5DCAA5', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#0F6E56' }}>Isplata</button>}
+                        <button onClick={() => deletePartner(p)} style={{ padding: '4px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#dc2626' }}>Obriši</button>
                       </div>
                     </td>
                   </tr>
