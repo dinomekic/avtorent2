@@ -3,7 +3,7 @@ import { Resend } from 'resend'
 
 export async function POST(req: NextRequest) {
   try {
-    const { partnerName, partnerEmail, qrCode, portalEmail } = await req.json()
+    const { partnerName, partnerEmail, qrCode, portalEmail, isNewCode, qrLabel } = await req.json()
     const resend = new Resend(process.env.RESEND_API_KEY)
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
@@ -19,7 +19,7 @@ Book in advance and secure your car at the exclusive guest rate:
     await resend.emails.send({
       from: process.env.FROM_EMAIL!,
       to: partnerEmail,
-      subject: `AdriaDrive — Dobrodošli u partnerski program`,
+      subject: isNewCode ? `AdriaDrive — Novi QR kod: ${qrLabel || qrCode}` : `AdriaDrive — Dobrodošli u partnerski program`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
           <div style="background:#0e2d5e;padding:24px;text-align:center">
@@ -29,7 +29,7 @@ Book in advance and secure your car at the exclusive guest rate:
 
           <div style="padding:28px 24px">
             <p style="font-size:15px;color:#111">Poštovani/a <strong>${partnerName}</strong>,</p>
-            <p style="font-size:14px;color:#374151">Vaš partnerski nalog na AdriaDrive platformi je kreiran. Od sada možete pratiti posjete, rezervacije i provizije na vašem partner portalu.</p>
+            <p style="font-size:14px;color:#374151">${isNewCode ? `Kreiran je novi QR kod <strong>${qrLabel || qrCode}</strong> za vaš partnerski nalog. Možete ga koristiti za praćenje konverzija iz novog kanala.` : `Vaš partnerski nalog na AdriaDrive platformi je kreiran. Od sada možete pratiti posjete, rezervacije i provizije na vašem partner portalu.`}</p>
 
             <!-- Portal pristup -->
             <div style="background:#e8f0fb;border:1px solid #4a90d9;border-radius:10px;padding:20px;margin:20px 0;text-align:center">

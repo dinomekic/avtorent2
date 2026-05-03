@@ -136,12 +136,14 @@ export default function AdminPartneriPage() {
       await fetch('/api/partner-welcome-notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          partnerName: showQrPanel.name,
-          partnerEmail: showQrPanel.portal_email || showQrPanel.email,
-          portalEmail: showQrPanel.portal_email || showQrPanel.email,
-          qrCode: newCode,
-        }),
+body: JSON.stringify({
+            partnerName: showQrPanel.name,
+            partnerEmail: showQrPanel.portal_email || showQrPanel.email,
+            portalEmail: showQrPanel.portal_email || showQrPanel.email,
+            qrCode: newCode,
+            isNewCode: true,
+            qrLabel: newQrLabel.trim(),
+          }),
       }).catch(() => {})
     }
   }
