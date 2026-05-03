@@ -232,16 +232,6 @@ body: JSON.stringify({
       }).catch(() => {})
     }
     setSaving(false); setShowForm(false); fetchData()
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          partnerName: form.name,
-          partnerEmail: form.portal_email || form.email,
-          qrCode: form.qr_code,
-      }).catch(() => {})
-    }
-    setSaving(false); setShowForm(false); fetchData()
-  }
 
   async function generateBatch() {
     const count = parseInt(batchCount)
