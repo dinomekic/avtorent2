@@ -1,12 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { supabase } from '@/lib/supabase'
 
 type Reservation = {
   id: string; ref_code: string; guest_name: string; guest_phone: string
@@ -51,6 +46,10 @@ export default function PartnerPortalPage() {
   const [confirming, setConfirming] = useState<string | null>(null)
   const [qrCodes, setQrCodes] = useState<PartnerQrCode[]>([])
   const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info'>('overview')
+  const [outdoorSlug, setOutdoorSlug] = useState<string | null>(null)
+  const [outdoorRedirectUrl, setOutdoorRedirectUrl] = useState('')
+  const [outdoorSaving, setOutdoorSaving] = useState(false)
+  const [outdoorSaved, setOutdoorSaved] = useState(false)
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
 
@@ -64,15 +63,20 @@ export default function PartnerPortalPage() {
   }, [])
 
   async function fetchData(pid: string) {
-    const [{ data: res }, { data: pay }, { data: sc }, { data: codes }] = await Promise.all([
+    const [{ data: res }, { data: pay }, { data: sc }, { data: codes }, { data: outdoor }] = await Promise.all([
       supabase.from('reservations').select('*, vehicles(name)').eq('partner_id', pid).neq('status', 'cancelled').order('created_at', { ascending: false }),
       supabase.from('partner_payouts').select('*').eq('partner_id', pid).order('created_at', { ascending: false }),
       supabase.from('qr_scans').select('id', { count: 'exact' }).eq('partner_id', pid),
       supabase.from('partner_qr_codes').select('*').eq('partner_id', pid).order('created_at'),
+      supabase.from('partner_outdoor_pages').select('*').eq('partner_id', pid).single(),
     ])
     setReservations(res || [])
     setPayouts(pay || [])
     setScans(sc?.length || 0)
+    if (outdoor) {
+      setOutdoorSlug(outdoor.slug)
+      setOutdoorRedirectUrl(outdoor.redirect_url || '')
+    }
 
    // Za svaki QR kod dodaj broj skeniranja i rezervacija
     if (codes && codes.length > 0) {
@@ -101,6 +105,20 @@ export default function PartnerPortalPage() {
     await supabase.from('partner_payouts').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', payoutId)
     fetchData(partnerId)
     setConfirming(null)
+  }
+
+  async function saveOutdoorRedirect() {
+    if (!outdoorSlug) return
+    setOutdoorSaving(true)
+    let url = outdoorRedirectUrl.trim()
+    if (url && !url.startsWith('http')) url = 'https://' + url
+    const { data: outdoorRow } = await supabase.from('partner_outdoor_pages').select('id').eq('partner_id', partnerId).single()
+    if (outdoorRow) {
+      await supabase.from('partner_outdoor_pages').update({ redirect_url: url || null }).eq('id', outdoorRow.id)
+    }
+    setOutdoorSaving(false)
+    setOutdoorSaved(true)
+    setTimeout(() => setOutdoorSaved(false), 3000)
   }
 
   async function handleLogout() {
@@ -141,7 +159,7 @@ export default function PartnerPortalPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
-          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`], ['info', 'Moja stranica']].map(([key, label]) => (
+          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`], ['info', 'Moja stranica'], ['outdoor', 'Outdoor']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
@@ -397,6 +415,75 @@ export default function PartnerPortalPage() {
             >
               Otvori editor
             </a>
+          </div>
+        )}
+        {activeTab === 'outdoor' && (
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#111', marginBottom: 4 }}>Outdoor Crna Gora</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>QR kod koji vodi na stranicu sa outdoor aktivnostima u Crnoj Gori. Možete ga postaviti na flajer ili usmjeriti goste na vlastitu stranicu.</div>
+
+            {outdoorSlug && (
+              <>
+                {/* QR kod */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#0a1628', borderRadius: 12, padding: '16px', marginBottom: 20 }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${siteUrl}/outdoor/${outdoorSlug}`)}&format=png&color=1D9E75&bgcolor=0a1628`}
+                    alt="Outdoor QR"
+                    style={{ width: 72, height: 72, flexShrink: 0, borderRadius: 6 }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Outdoor QR kod</div>
+                    <a href={`${siteUrl}/outdoor/${outdoorSlug}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#5DCAA5', textDecoration: 'none', display: 'block', marginBottom: 10 }}>{siteUrl}/outdoor/{outdoorSlug} ↗</a>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <a
+                        href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${siteUrl}/outdoor/${outdoorSlug}`)}&format=png`}
+                        download={`QR-outdoor-${outdoorSlug}.png`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ padding: '6px 14px', border: '1px solid #1D9E75', borderRadius: 6, background: 'rgba(29,158,117,0.15)', fontSize: 12, color: '#5DCAA5', fontWeight: 500, textDecoration: 'none' }}
+                      >
+                        Preuzmi PNG
+                      </a>
+                      <button
+                        onClick={() => {
+                          const url = `${siteUrl}/outdoor/${outdoorSlug}`
+                          const win = window.open('', '_blank')
+                          if (!win) return
+                          win.document.write(`<html><head><title>QR - Outdoor</title><style>body{font-family:Arial;text-align:center;padding:40px;background:#0a1628;color:#fff}.name{font-size:18px;font-weight:bold;margin-top:12px}.url{font-size:11px;color:#5DCAA5;margin-top:6px}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&format=png" width="300" height="300" /><div class="name">Outdoor Crna Gora</div><div class="url">${url}</div><script>window.onload=function(){window.print()}<\/script></body></html>`)
+                        }}
+                        style={{ padding: '6px 14px', border: '1px solid #185FA5', borderRadius: 6, background: 'rgba(74,144,217,0.15)', fontSize: 12, color: '#7ab8f5', fontWeight: 500, cursor: 'pointer' }}
+                      >
+                        Štampaj
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Redirect opcija */}
+                <div style={{ background: '#f9fafb', borderRadius: 10, padding: '16px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 4 }}>Preusmjeri na vlastitu stranicu</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>Opciono — ako imate vlastitu stranicu sa outdoor sadržajem, unesite link i posjetioci će biti automatski preusmjereni.</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      style={{ flex: 1, padding: '9px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111' }}
+                      value={outdoorRedirectUrl}
+                      onChange={e => setOutdoorRedirectUrl(e.target.value)}
+                      placeholder="https://vasa-outdoor-stranica.com"
+                    />
+                    <button
+                      onClick={saveOutdoorRedirect}
+                      disabled={outdoorSaving}
+                      style={{ padding: '9px 18px', background: outdoorSaved ? '#1D9E75' : outdoorSaving ? '#5DCAA5' : '#0e2d5e', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {outdoorSaved ? '✓ Sačuvano' : outdoorSaving ? '...' : 'Sačuvaj'}
+                    </button>
+                  </div>
+                  {outdoorRedirectUrl && (
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>Posjetioci će biti preusmjereni na: {outdoorRedirectUrl}</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>
