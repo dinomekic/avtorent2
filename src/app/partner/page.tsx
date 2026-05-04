@@ -45,7 +45,7 @@ export default function PartnerPortalPage() {
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [qrCodes, setQrCodes] = useState<PartnerQrCode[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info' | 'outdoor'>('overview')
   const [outdoorSlug, setOutdoorSlug] = useState<string | null>(null)
   const [outdoorRedirectUrl, setOutdoorRedirectUrl] = useState('')
   const [outdoorSaving, setOutdoorSaving] = useState(false)
