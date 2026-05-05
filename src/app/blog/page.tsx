@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { getAllPosts, getPostsByCategory, CATEGORIES, BlogPost } from "@/lib/blog";
-import { BlogCard } from "@/components/blog/BlogCard";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Blog — AdriaDrive",
@@ -14,25 +13,7 @@ export const metadata: Metadata = {
   },
 };
 
-type CategoryFilter = BlogPost["category"] | "sve";
-
-interface BlogPageProps {
-  searchParams: Promise<{ kategorija?: string }>;
-}
-
-export default async function BlogPage({ searchParams }: BlogPageProps) {
-  const { kategorija } = await searchParams;
-  const activeCategory = (kategorija ?? "sve") as CategoryFilter;
-
-  const posts =
-    activeCategory === "sve"
-      ? getAllPosts()
-      : getPostsByCategory(activeCategory as BlogPost["category"]);
-
-  const allPosts = getAllPosts();
-  const featuredPost = allPosts[0];
-  const restPosts = activeCategory === "sve" ? allPosts.slice(1) : posts;
-
+export default function BlogPage() {
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
       {/* Hero */}
@@ -54,60 +35,13 @@ export default async function BlogPage({ searchParams }: BlogPageProps) {
         </div>
       </section>
 
-      {/* Category Filter */}
-      <section className="sticky top-0 z-30 bg-neutral-950/90 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto scrollbar-none">
-          {(["sve", "savjeti", "destinacije", "vijesti"] as const).map(
-            (cat) => (
-              <a
-                key={cat}
-                href={cat === "sve" ? "/blog" : `/blog?kategorija=${cat}`}
-                className={`flex-none px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  activeCategory === cat
-                    ? "bg-amber-500 text-black"
-                    : "bg-white/5 text-neutral-300 hover:bg-white/10"
-                }`}
-              >
-                {cat === "sve"
-                  ? "Sve"
-                  : CATEGORIES[cat as BlogPost["category"]]}
-              </a>
-            )
-          )}
-        </div>
-      </section>
-
-      {/* Posts */}
+      {/* Soro Blog Embed */}
       <section className="max-w-5xl mx-auto px-4 py-12">
-        {activeCategory === "sve" && featuredPost && (
-          <div className="mb-8">
-            <p className="text-xs text-neutral-500 uppercase tracking-widest mb-4">
-              Istaknuto
-            </p>
-            <div className="grid md:grid-cols-2 gap-6">
-              <BlogCard post={featuredPost} featured />
-            </div>
-          </div>
-        )}
-
-        {restPosts.length > 0 ? (
-          <>
-            {activeCategory === "sve" && (
-              <p className="text-xs text-neutral-500 uppercase tracking-widest mb-4 mt-10">
-                Svi članci
-              </p>
-            )}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restPosts.map((post) => (
-                <BlogCard key={post.slug} post={post} />
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-20 text-neutral-500">
-            Nema objava u ovoj kategoriji.
-          </div>
-        )}
+        <div id="soro-blog" />
+        <Script
+          src="https://app.trysoro.com/api/embed/16773211-0733-4454-87cc-ebd145c43c1b"
+          strategy="afterInteractive"
+        />
       </section>
     </main>
   );
