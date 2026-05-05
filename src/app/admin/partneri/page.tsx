@@ -53,6 +53,10 @@ export default function AdminPartneriPage() {
   const [newQrLabel, setNewQrLabel] = useState('')
   const [addingQr, setAddingQr] = useState(false)
   const [editingLabel, setEditingLabel] = useState<{ id: string; label: string } | null>(null)
+  const [outdoorPage, setOutdoorPage] = useState<{ id: string; slug: string; redirect_url: string | null } | null>(null)
+  const [outdoorRedirect, setOutdoorRedirect] = useState('')
+  const [savingOutdoor, setSavingOutdoor] = useState(false)
+  const [savedOutdoor, setSavedOutdoor] = useState(false)
   const qrRef = useRef<HTMLDivElement>(null)
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
@@ -148,6 +152,17 @@ body: JSON.stringify({
     }
   }
 
+  async function saveOutdoorRedirect() {
+    if (!outdoorPage) return
+    setSavingOutdoor(true)
+    let url = outdoorRedirect.trim()
+    if (url && !url.startsWith('http')) url = 'https://' + url
+    await supabase.from('partner_outdoor_pages').update({ redirect_url: url || null }).eq('id', outdoorPage.id)
+    setSavingOutdoor(false)
+    setSavedOutdoor(true)
+    setTimeout(() => setSavedOutdoor(false), 3000)
+  }
+
   async function updateQrLabel(id: string, label: string) {
     await supabase.from('partner_qr_codes').update({ label }).eq('id', id)
     setEditingLabel(null)
@@ -160,6 +175,11 @@ body: JSON.stringify({
     setShowBatchForm(false)
     setSelectedPartner(null)
     fetchPartnerQrCodes(p.id)
+    // Fetch outdoor stranica
+    supabase.from('partner_outdoor_pages').select('*').eq('partner_id', p.id).single().then(({ data }) => {
+      if (data) { setOutdoorPage(data); setOutdoorRedirect(data.redirect_url || '') }
+      else { setOutdoorPage(null); setOutdoorRedirect('') }
+    })
   }
 
   function openEdit(p: Partner) {
@@ -529,6 +549,52 @@ async function deletePartner(p: Partner) {
               ))}
             </div>
 
+            {/* Outdoor QR kod */}
+            {outdoorPage && (
+              <div style={{ background: '#0a1628', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#5DCAA5', marginBottom: 10, letterSpacing: 1 }}>OUTDOOR QR KOD</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${siteUrl}/outdoor/${outdoorPage.slug}`)}&format=png`}
+                    alt="Outdoor QR"
+                    style={{ width: 56, height: 56, borderRadius: 4, flexShrink: 0 }}
+                  />
+                  <div>
+                    <a href={`${siteUrl}/outdoor/${outdoorPage.slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#5DCAA5', textDecoration: 'none', display: 'block', marginBottom: 4 }}>
+                      /outdoor/{outdoorPage.slug} ↗
+                    </a>
+                    <button
+                      onClick={() => setShowQR({ qr_code: `outdoor-${outdoorPage.slug}`, name: showQrPanel?.name || '', label: 'Outdoor Crna Gora' })}
+                      style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 6, background: 'rgba(29,158,117,0.15)', cursor: 'pointer', color: '#5DCAA5' }}
+                    >
+                      Prikaži QR
+                    </button>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <label style={{ ...lbl, color: '#9ca3af' }}>Redirect URL (opciono)</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      style={{ ...inp, background: '#111827', color: '#e5e7eb', borderColor: '#374151', flex: 1 }}
+                      value={outdoorRedirect}
+                      onChange={e => setOutdoorRedirect(e.target.value)}
+                      placeholder="https://outdoor-stranica.com"
+                    />
+                    <button
+                      onClick={saveOutdoorRedirect}
+                      disabled={savingOutdoor}
+                      style={{ padding: '8px 12px', background: savedOutdoor ? '#1D9E75' : '#1a4a8a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {savedOutdoor ? '✓' : 'Sačuvaj'}
+                    </button>
+                  </div>
+                  {outdoorPage.redirect_url && (
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>Aktivan redirect: {outdoorPage.redirect_url}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Dodaj novi kod */}
             <div style={{ background: '#f9fafb', borderRadius: 8, padding: 14, border: '1px dashed #d1d5db' }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 10 }}>+ Novi QR kod</div>
@@ -678,36 +744,49 @@ async function deletePartner(p: Partner) {
       </div>
 
       {/* QR Modal */}
-      {showQR && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 380, width: '90%', textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>
-              QR kod — {showQR.qr_code}
-            </div>
-            {showQR.label && <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 500, marginBottom: 4 }}>{showQR.label}</div>}
-            {showQR.name && <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>{showQR.name}</div>}
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`${siteUrl}/?ref=${showQR.qr_code}`)}&format=png`}
-              alt="QR kod"
-              style={{ width: 240, height: 240, margin: '0 auto 16px', display: 'block' }}
-            />
-            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 20, wordBreak: 'break-all' }}>
-              {siteUrl}/?ref={showQR.qr_code}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => downloadQR(showQR.qr_code, showQR.name)} style={{ flex: 1, padding: '9px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', fontSize: 13, cursor: 'pointer', color: '#085041', fontWeight: 500 }}>
-                Preuzmi PNG
-              </button>
-              <button onClick={() => printQR(showQR.qr_code, showQR.name, showQR.label)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
-                Štampaj
-              </button>
-              <button onClick={() => setShowQR(null)} style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#6b7280' }}>
-                Zatvori
-              </button>
+      {showQR && (() => {
+        const isOutdoor = showQR.qr_code.startsWith('outdoor-')
+        const slug = isOutdoor ? showQR.qr_code.replace('outdoor-', '') : null
+        const qrUrl = isOutdoor
+          ? `${siteUrl}/outdoor/${slug}`
+          : `${siteUrl}/?ref=${showQR.qr_code}`
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 380, width: '90%', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>
+                QR kod — {isOutdoor ? 'Outdoor' : showQR.qr_code}
+              </div>
+              {showQR.label && <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 500, marginBottom: 4 }}>{showQR.label}</div>}
+              {showQR.name && <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>{showQR.name}</div>}
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrUrl)}&format=png`}
+                alt="QR kod"
+                style={{ width: 240, height: 240, margin: '0 auto 16px', display: 'block' }}
+              />
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 20, wordBreak: 'break-all' }}>
+                {qrUrl}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <a
+                  href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}&format=png`}
+                  download={`QR-${isOutdoor ? 'outdoor' : showQR.qr_code}.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ flex: 1, padding: '9px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', fontSize: 13, cursor: 'pointer', color: '#085041', fontWeight: 500, textDecoration: 'none', display: 'block' }}
+                >
+                  Preuzmi PNG
+                </a>
+                <button onClick={() => printQR(isOutdoor ? `outdoor-${slug}` : showQR.qr_code, showQR.name, showQR.label)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
+                  Štampaj
+                </button>
+                <button onClick={() => setShowQR(null)} style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#6b7280' }}>
+                  Zatvori
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
