@@ -12,7 +12,7 @@ import {
 import { BlogCard } from "@/components/blog/BlogCard";
 
 interface PostPageProps {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateStaticParams() {
@@ -22,7 +22,8 @@ export async function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: PostPageProps): Promise<Metadata> {
-  const post = getPostBySlug(params.slug);
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
   if (!post) return {};
   return {
     title: `${post.title} — AdriaDrive Blog`,
@@ -41,8 +42,9 @@ const CATEGORY_COLORS: Record<BlogPost["category"], string> = {
   vijesti: "bg-sky-500/20 text-sky-400 border-sky-500/30",
 };
 
-export default function PostPage({ params }: PostPageProps) {
-  const post = getPostBySlug(params.slug);
+export default async function PostPage({ params }: PostPageProps) {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
   if (!post) notFound();
 
   const allPosts = getAllPosts();
