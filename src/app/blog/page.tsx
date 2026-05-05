@@ -17,11 +17,12 @@ export const metadata: Metadata = {
 type CategoryFilter = BlogPost["category"] | "sve";
 
 interface BlogPageProps {
-  searchParams: { kategorija?: string };
+  searchParams: Promise<{ kategorija?: string }>;
 }
 
-export default function BlogPage({ searchParams }: BlogPageProps) {
-  const activeCategory = (searchParams?.kategorija ?? "sve") as CategoryFilter;
+export default async function BlogPage({ searchParams }: BlogPageProps) {
+  const { kategorija } = await searchParams;
+  const activeCategory = (kategorija ?? "sve") as CategoryFilter;
 
   const posts =
     activeCategory === "sve"
