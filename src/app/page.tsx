@@ -395,6 +395,7 @@ function HomePageContent() {
           <div style={{ display: 'flex', gap: 24 }}>
             <a href="mailto:info@rent-cars.me" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>info@rent-cars.me</a>
             <a href="https://wa.me/38269000000" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>WhatsApp</a>
+<a href="/blog" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>Blog</a>
           </div>
           <div style={{ fontSize: 12, color: '#4a90d9' }}>© 2025 AdriaDrive · rent-cars.me</div>
         </div>
