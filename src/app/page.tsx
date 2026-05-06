@@ -379,7 +379,7 @@ function HomePageContent() {
             })}
           </div>
         )}
-        {/* Blog — istaknuta objava */}
+        {/* Blog — link ka blog stranici */}
         <div style={{ marginTop: 40, marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
@@ -390,11 +390,10 @@ function HomePageContent() {
                 {lang === 'sr' ? 'Savjeti, destinacije i vijesti' : lang === 'en' ? 'Tips, destinations and news' : 'Tipps, Reiseziele und Neuigkeiten'}
               </p>
             </div>
-            <a href="/blog" style={{ fontSize: 13, color: '#1a56a0', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <a href="/blog" style={{ fontSize: 13, color: '#1a56a0', textDecoration: 'none', fontWeight: 600 }}>
               {lang === 'sr' ? 'Svi članci →' : lang === 'en' ? 'All articles →' : 'Alle Artikel →'}
             </a>
           </div>
-          <div id="soro-blog-featured" />
         </div>
 
         {/* Trust section */}
@@ -425,7 +424,7 @@ function HomePageContent() {
               {lang === 'sr' ? 'Svi članci →' : lang === 'en' ? 'All articles →' : 'Alle Artikel →'}
             </a>
           </div>
-          <div id="soro-blog-all" />
+          <div id="soro-blog" />
         </div>
       </div>
 
