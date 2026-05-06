@@ -45,6 +45,15 @@ function HomePageContent() {
   const [site, setSite] = useState<SiteConfig | null>(null)
   const tr = translations[lang]
 
+  // Učitaj Soro blog embed skriptu
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = 'https://app.trysoro.com/api/embed/16773211-0733-4454-87cc-ebd145c43c1b'
+    script.defer = true
+    document.body.appendChild(script)
+    return () => { document.body.removeChild(script) }
+  }, [])
+
   // Detektuj sajt po domeni ili ?site= parametru
   useEffect(() => {
     const siteParam = searchParams.get('site')
@@ -180,6 +189,9 @@ function HomePageContent() {
           <a href="/faq" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>FAQ</a>
           <a href="/kontakt" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>
             {lang === 'sr' ? 'Kontakt' : lang === 'de' ? 'Kontakt' : 'Contact'}
+          </a>
+          <a href="/blog" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none', fontWeight: 500 }}>
+            Blog
           </a>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
@@ -367,6 +379,24 @@ function HomePageContent() {
             })}
           </div>
         )}
+        {/* Blog — istaknuta objava */}
+        <div style={{ marginTop: 40, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111', margin: 0 }}>
+                {lang === 'sr' ? 'Sa našeg bloga' : lang === 'en' ? 'From our blog' : 'Aus unserem Blog'}
+              </h2>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
+                {lang === 'sr' ? 'Savjeti, destinacije i vijesti' : lang === 'en' ? 'Tips, destinations and news' : 'Tipps, Reiseziele und Neuigkeiten'}
+              </p>
+            </div>
+            <a href="/blog" style={{ fontSize: 13, color: '#1a56a0', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {lang === 'sr' ? 'Svi članci →' : lang === 'en' ? 'All articles →' : 'Alle Artikel →'}
+            </a>
+          </div>
+          <div id="soro-blog-featured" />
+        </div>
+
         {/* Trust section */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 40, marginBottom: 24 }}>
           {[
@@ -384,6 +414,21 @@ function HomePageContent() {
         </div>
       </main>
 
+      {/* Blog — sve objave */}
+      <div style={{ background: '#f3f7fd', borderTop: '1px solid #e5e7eb', padding: '48px 24px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>
+              {lang === 'sr' ? 'Blog & Savjeti' : lang === 'en' ? 'Blog & Tips' : 'Blog & Tipps'}
+            </h2>
+            <a href="/blog" style={{ fontSize: 13, color: '#1a56a0', textDecoration: 'none', fontWeight: 600 }}>
+              {lang === 'sr' ? 'Svi članci →' : lang === 'en' ? 'All articles →' : 'Alle Artikel →'}
+            </a>
+          </div>
+          <div id="soro-blog-all" />
+        </div>
+      </div>
+
       {/* Footer */}
       <footer style={{ background: '#0e2d5e', padding: '32px 24px', marginTop: 40 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
@@ -395,7 +440,6 @@ function HomePageContent() {
           <div style={{ display: 'flex', gap: 24 }}>
             <a href="mailto:info@rent-cars.me" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>info@rent-cars.me</a>
             <a href="https://wa.me/38269000000" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>WhatsApp</a>
-<a href="/blog" style={{ fontSize: 13, color: '#7ab8f5', textDecoration: 'none' }}>Blog</a>
           </div>
           <div style={{ fontSize: 12, color: '#4a90d9' }}>© 2025 AdriaDrive · rent-cars.me</div>
         </div>
