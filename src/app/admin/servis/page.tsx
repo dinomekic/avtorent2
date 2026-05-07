@@ -99,6 +99,20 @@ export default function ServisPage() {
   const [editForm, setEditForm] = useState<any>({})
   const [editSaving, setEditSaving] = useState(false)
 
+  // Vehicle search
+  const [vehicleSearch, setVehicleSearch] = useState('')
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false)
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null)
+
+  const filteredVehicleOptions = vehicles.filter(v => {
+    if (!vehicleSearch) return true
+    const q = vehicleSearch.toLowerCase()
+    return (
+      v.name?.toLowerCase().includes(q) ||
+      v.license_plate?.toLowerCase().includes(q)
+    )
+  }).slice(0, 8)
+
   const fetchData = useCallback(async () => {
     const [{ data: act }, { data: v }, { data: t }] = await Promise.all([
       supabase.from('service_activities')
@@ -165,6 +179,8 @@ export default function ServisPage() {
     setSaving(false)
     setShowForm(false)
     setForm(emptyForm)
+    setSelectedVehicle(null)
+    setVehicleSearch('')
     fetchData()
   }
 
@@ -211,7 +227,7 @@ export default function ServisPage() {
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111' }}>Servisne aktivnosti</h1>
           {activeCount > 0 && <div style={{ fontSize: 13, color: '#d97706', marginTop: 2 }}>{activeCount} aktivnih</div>}
         </div>
-        <button onClick={() => { setShowForm(s => !s); setSelected(null) }}
+        <button onClick={() => { setShowForm(s => !s); setSelected(null); setSelectedVehicle(null); setVehicleSearch('') }}
           style={{ padding: '8px 16px', background: showForm ? '#f3f4f6' : '#1D9E75', color: showForm ? '#374151' : '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           {showForm ? 'Zatvori formu' : '+ Nova aktivnost'}
         </button>
@@ -288,12 +304,60 @@ export default function ServisPage() {
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 20, alignSelf: 'start' }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#111', marginBottom: 16 }}>Nova servisna aktivnost</div>
 
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 12, position: 'relative' }}>
               <label style={lbl}>Vozilo *</label>
-              <select value={form.vehicle_id} onChange={e => setForm((f: any) => ({ ...f, vehicle_id: e.target.value }))} style={inp}>
-                <option value="">-- Odaberi vozilo --</option>
-                {vehicles.map(v => <option key={v.id} value={v.id}>{v.name} {v.license_plate ? `(${v.license_plate})` : ''}</option>)}
-              </select>
+              {selectedVehicle ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE' }}>
+                  <span style={{ fontSize: 16 }}>🚗</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#085041', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVehicle.name}</div>
+                    {selectedVehicle.license_plate && <div style={{ fontSize: 11, color: '#1D9E75' }}>{selectedVehicle.license_plate}</div>}
+                  </div>
+                  <button onClick={() => { setSelectedVehicle(null); setForm((f: any) => ({ ...f, vehicle_id: '' })); setVehicleSearch('') }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}>✕</button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <input
+                    value={vehicleSearch}
+                    onChange={e => { setVehicleSearch(e.target.value); setVehicleDropdownOpen(true) }}
+                    onFocus={() => setVehicleDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setVehicleDropdownOpen(false), 150)}
+                    placeholder="Pretraži po nazivu ili tablicama..."
+                    style={{ ...inp, paddingLeft: 36 }}
+                    autoComplete="off"
+                  />
+                  <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none', color: '#9ca3af' }}>🔍</span>
+                  {vehicleDropdownOpen && filteredVehicleOptions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 220, overflowY: 'auto' }}>
+                      {filteredVehicleOptions.map(v => (
+                        <div key={v.id}
+                          onMouseDown={() => {
+                            setSelectedVehicle(v)
+                            setForm((f: any) => ({ ...f, vehicle_id: v.id }))
+                            setVehicleSearch('')
+                            setVehicleDropdownOpen(false)
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                        >
+                          <span style={{ fontSize: 15 }}>🚗</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#111' }}>{v.name}</div>
+                            {v.license_plate && <div style={{ fontSize: 11, color: '#9ca3af' }}>{v.license_plate}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {vehicleDropdownOpen && vehicleSearch.length > 0 && filteredVehicleOptions.length === 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, padding: '12px', textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      Nema pronađenih vozila
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: 12 }}>
