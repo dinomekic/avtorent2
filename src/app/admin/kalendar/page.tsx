@@ -1,30 +1,18 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { RezervacijaModal, RezForm, VoziloOption, EMPTY_REZ_FORM, calcDana, calcUkupno, generateUgovor } from './RezervacijaModal'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// ─── TIPOVI ───────────────────────────────────────────────
-type Vozilo = {
-  id: number
-  license_plate: string | null
-  marka: string | null
-  model: string | null
-  agregirani_2: string | null
-  fleet_status: string
-  lokacija: string
-  transmission: string | null
-}
-
-type Rezervacija = {
+type KalRezervacija = {
   id: number
   br_tablica: string
   ime_prezime: string
-  br_vozacke?: string
   daily_status: string
   od_datuma: string
   do_datuma: string
@@ -52,7 +40,10 @@ type Rezervacija = {
   dodatni_vozac_vozacka?: string
   ukupno_naplata?: number
   naplaceno?: number
-  broj_dana?: number
+  br_vozacke?: string
+  br_vozacke2?: string
+  ime2?: string
+  prezime2?: string
   ko_je_izdao?: string
   ko_je_preuzeo?: string
   br_leta?: string
@@ -91,12 +82,10 @@ type Upit = {
   napomena?: string
 }
 
-// ─── KONSTANTE ────────────────────────────────────────────
 const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
-const FIRME = ['Meriem d.o.o.', 'Planet Rent a Car', '3G-COMPANY DOO']
-const AGENTI = ['Ranka Bulatovic', 'Ena Rondic', 'Esad Djokic', 'Kenan Kolic', 'Edmir Paljevic', 'Semira Pepic', 'Adis Nikaj', 'Besim Adzovic', 'Jasmin Skrijelj', 'Edin Suljevic', 'Dino Mekic']
 const SIFRE: Record<string, string> = { 'CRNA GORA': 'cg810805', 'BiH': 'bih000', 'SRBIJA': 'srb222', 'ALBANIJA': 'alb333' }
 const MONTHS = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Juni', 'Juli', 'August', 'Septembar', 'Oktobar', 'Novembar', 'Decembar']
+const AGENTI = ['Ranka Bulatovic', 'Ena Rondic', 'Esad Djokic', 'Kenan Kolic', 'Edmir Paljevic', 'Semira Pepic', 'Adis Nikaj', 'Besim Adzovic', 'Jasmin Skrijelj', 'Edin Suljevic', 'Dino Mekic']
 
 const STATUS_COLORS: Record<string, string> = {
   'Na čekanju': '#f97316',
@@ -104,46 +93,73 @@ const STATUS_COLORS: Record<string, string> = {
   'Nije izdato': '#dc2626',
 }
 
-// ─── HELPERS ─────────────────────────────────────────────
 function toDMY(iso: string) {
   if (!iso) return ''
   const p = iso.split('-')
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso
 }
-function toISO(dmy: string) {
-  if (!dmy) return ''
-  const p = dmy.split('/')
-  return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : dmy
-}
+
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
 }
+
 function dateStr(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-const EMPTY_REZ: Partial<Rezervacija> = {
-  daily_status: 'Na čekanju',
-  firma: 'Meriem d.o.o.',
-  nacin_placanja: 'Keš',
-  granica: 'DOZVOLJENO VAN ZEMLJE',
-  tip_osiguranja: 'Osnovno (AO)',
-  mjesto_preuzimanja: 'Bulevar Veljka Vlahovića 16',
-  mjesto_povratka: 'Bulevar Veljka Vlahovića 16',
-  izvor_rezervacije: 'Sajt',
-  depozit: 0, naplaceno: 0,
-  vreme_izdavanja: '10:00',
-  vreme_povratka: '10:00',
+// Konvertuj KalRezervacija u RezForm
+function rezToForm(r: KalRezervacija): RezForm {
+  return {
+    id: r.id,
+    br_vozacke: r.br_vozacke || '',
+    ime_prezime: r.ime_prezime || '',
+    zemlja: r.zemlja || '',
+    datum_rodjenja: r.datum_rodjenja || '',
+    telefon: r.telefon || '',
+    email: r.email || '',
+    adresa: r.adresa || '',
+    istek_vozacke: '',
+    br_vozacke2: r.br_vozacke2 || '',
+    ime2: r.ime2 || '',
+    prezime2: r.prezime2 || '',
+    br_tablica: r.br_tablica || '',
+    firma: r.firma || 'Meriem d.o.o.',
+    tip_osiguranja: r.tip_osiguranja || 'Osnovno (AO)',
+    kasko_cijena: r.kasko_cijena || 0,
+    kasko_tip: r.kasko_tip || 'FULL KASKO',
+    kasko_ucesce: r.kasko_ucesce || 0,
+    granica: r.granica || 'DOZVOLJENO VAN ZEMLJE',
+    napomena: r.napomena || '',
+    br_leta: r.br_leta || '',
+    ko_je_izdao: r.ko_je_izdao || '',
+    ko_je_preuzeo: r.ko_je_preuzeo || '',
+    daily_status: r.daily_status || 'Na čekanju',
+    od_datuma: r.od_datuma || '',
+    do_datuma: r.do_datuma || '',
+    vreme_izdavanja: r.vreme_izdavanja || '10:00',
+    vreme_povratka: r.vreme_povratka || '10:00',
+    cijena_dan: r.cijena_dan || 0,
+    depozit: r.depozit || 0,
+    nacin_placanja: r.nacin_placanja || 'Keš',
+    mjesto_preuzimanja: r.mjesto_preuzimanja || 'Bulevar Veljka Vlahovića 16',
+    mjesto_povratka: r.mjesto_povratka || 'Bulevar Veljka Vlahovića 16',
+    izvor_rezervacije: r.izvor_rezervacije || 'Sajt',
+    dozvola_van_zemlje_cijena: r.dozvola_van_zemlje_cijena || 0,
+    dostava_cijena: r.dostava_cijena || 0,
+    bebi_sic_cijena: r.bebi_sic_cijena || 0,
+    dodatni_vozac_cijena: r.dodatni_vozac_cijena || 0,
+    dodatni_vozac_vozacka: r.dodatni_vozac_vozacka || '',
+    naplaceno: r.naplaceno || 0,
+  }
 }
 
-// ─── GLAVNI KOMPONENT ─────────────────────────────────────
 export default function AdminKalendarPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [currentLok, setCurrentLok] = useState('CRNA GORA')
-  const [vozila, setVozila] = useState<Vozilo[]>([])
-  const [rezervacije, setRezervacije] = useState<Rezervacija[]>([])
+  const [vozila, setVozila] = useState<VoziloOption[]>([])
+  const [rezervacije, setRezervacije] = useState<KalRezervacija[]>([])
   const [duznici, setDuznici] = useState<Duznik[]>([])
   const [upiti, setUpiti] = useState<Upit[]>([])
   const [logovi, setLogovi] = useState<any[]>([])
@@ -151,32 +167,46 @@ export default function AdminKalendarPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const today = new Date().toISOString().split('T')[0]
 
-  // Modali
-  const [modal, setModal] = useState<'none' | 'rez' | 'duznici' | 'upiti' | 'logovi' | 'agent'>('none')
-  const [selectedRez, setSelectedRez] = useState<Rezervacija | null>(null)
-  const [rezForm, setRezForm] = useState<Partial<Rezervacija>>(EMPTY_REZ)
-  const [isNewRez, setIsNewRez] = useState(false)
-  const [saving, setSaving] = useState(false)
+  // Modal stanja
+  const [showRezModal, setShowRezModal] = useState(false)
+  const [showDuznici, setShowDuznici] = useState(false)
+  const [showUpiti, setShowUpiti] = useState(false)
+  const [showLogovi, setShowLogovi] = useState(false)
+  const [showAgentModal, setShowAgentModal] = useState(false)
   const [agentTip, setAgentTip] = useState<'izdavanje' | 'preuzimanje'>('izdavanje')
   const [agentRezId, setAgentRezId] = useState<number | null>(null)
 
-  // Filteri kalendara
+  const [rezForm, setRezForm] = useState<RezForm>(EMPTY_REZ_FORM)
+  const [isNewRez, setIsNewRez] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Filteri
   const [searchQ, setSearchQ] = useState('')
   const [filterGear, setFilterGear] = useState('ALL')
 
-  // Stats
-  const vozilaLok = vozila.filter(v => v.lokacija === currentLok && v.fleet_status === 'available')
-  const rezLok = rezervacije.filter(r => vozilaLok.find(v => v.license_plate === r.br_tablica))
-  const zauzetaDanas = new Set(rezLok.filter(r => {
-    if (r.daily_status === 'Nije izdato') return false
-    return r.od_datuma <= today && r.do_datuma > today
-  }).map(r => r.br_tablica))
+  const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
+  const vozilaKal = vozilaLok.filter(v => {
+    if (filterGear !== 'ALL') {
+      // Potrebno je dohvatiti transmission iz baze
+    }
+    if (!searchQ) return true
+    const q = searchQ.toLowerCase()
+    return (v.license_plate || '').toLowerCase().includes(q) ||
+      (v.agregirani_2 || '').toLowerCase().includes(q)
+  })
 
-  // ─── LOAD ─────────────────────────────────────────────
+  const zauzetaDanas = new Set(
+    rezervacije.filter(r => {
+      if (r.daily_status === 'Nije izdato') return false
+      return r.od_datuma <= today && r.do_datuma > today &&
+        vozilaLok.find(v => v.license_plate === r.br_tablica)
+    }).map(r => r.br_tablica)
+  )
+
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: r }, { data: d }, { data: u }] = await Promise.all([
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija, transmission').order('marka'),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
       supabase.from('rezervacije').select('*'),
       supabase.from('duznici').select('*').order('ukupan_dug', { ascending: false }),
       supabase.from('upiti_sajt').select('*').eq('status', 'PENDING'),
@@ -190,7 +220,6 @@ export default function AdminKalendarPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // ─── LOKACIJA PROVJERA ────────────────────────────────
   function setLokacija(lok: string) {
     const key = `auth_${lok.replace(/\s+/g, '')}`
     if (sessionStorage.getItem(key) === 'ok') { setCurrentLok(lok); return }
@@ -199,63 +228,100 @@ export default function AdminKalendarPage() {
     else if (uneto !== null) alert('Pogrešna lozinka!')
   }
 
-  // ─── FILTRIRANA VOZILA ZA KALENDAR ───────────────────
-  const vozilaKal = vozilaLok.filter(v => {
-    if (filterGear === 'ALL') return true
-    const t = (v.transmission || '').toUpperCase()
-    if (filterGear === 'AUTOMATIC') return t.includes('AUTO') || t.includes('AUTOMAT')
-    if (filterGear === 'MANUAL') return t.includes('MAN')
-    return true
-  }).filter(v => {
-    if (!searchQ) return true
-    const q = searchQ.toLowerCase()
-    return (v.license_plate || '').toLowerCase().includes(q) ||
-      (v.agregirani_2 || '').toLowerCase().includes(q)
-  })
+  function openRez(r: KalRezervacija) {
+    setRezForm(rezToForm(r))
+    setIsNewRez(false)
+    setShowRezModal(true)
+  }
 
-  // ─── REZERVACIJA SAVE ────────────────────────────────
+  function openNewRez(tablica?: string, datum?: string) {
+    setRezForm({
+      ...EMPTY_REZ_FORM,
+      br_tablica: tablica || '',
+      od_datuma: datum || '',
+    })
+    setIsNewRez(true)
+    setShowRezModal(true)
+  }
+
   async function saveRezervacija() {
     if (!rezForm.br_tablica || !rezForm.ime_prezime) {
-      alert('Unesite tablice i ime gosta!'); return
+      alert('Unesite tablice i ime!'); return
     }
     setSaving(true)
     const dana = calcDana(rezForm)
-    const ukupno = calcUkupno(rezForm, dana)
-    const payload = { ...rezForm, broj_dana: dana, ukupno_naplata: ukupno }
+    const ukupno = calcUkupno(rezForm)
 
-    if (selectedRez?.id) {
-      await supabase.from('rezervacije').update(payload).eq('id', selectedRez.id)
-      await supabase.from('logovi').insert([{ akcija: `Izmijenjena rezervacija REZ #${selectedRez.id}` }])
+    const payload = {
+      br_tablica: rezForm.br_tablica,
+      ime_prezime: rezForm.ime_prezime,
+      br_vozacke: rezForm.br_vozacke,
+      daily_status: rezForm.daily_status,
+      od_datuma: rezForm.od_datuma,
+      do_datuma: rezForm.do_datuma,
+      vreme_izdavanja: rezForm.vreme_izdavanja,
+      vreme_povratka: rezForm.vreme_povratka,
+      cijena_dan: rezForm.cijena_dan,
+      nacin_placanja: rezForm.nacin_placanja,
+      firma: rezForm.firma,
+      adresa: rezForm.adresa,
+      telefon: rezForm.telefon,
+      email: rezForm.email,
+      zemlja: rezForm.zemlja,
+      datum_rodjenja: rezForm.datum_rodjenja,
+      tip_osiguranja: rezForm.tip_osiguranja,
+      kasko_cijena: rezForm.kasko_cijena,
+      kasko_tip: rezForm.kasko_tip,
+      kasko_ucesce: rezForm.kasko_ucesce,
+      granica: rezForm.granica,
+      depozit: rezForm.depozit,
+      napomena: rezForm.napomena,
+      bebi_sic_cijena: rezForm.bebi_sic_cijena,
+      dozvola_van_zemlje_cijena: rezForm.dozvola_van_zemlje_cijena,
+      dostava_cijena: rezForm.dostava_cijena,
+      dodatni_vozac_cijena: rezForm.dodatni_vozac_cijena,
+      dodatni_vozac_vozacka: rezForm.br_vozacke2,
+      br_leta: rezForm.br_leta,
+      mjesto_preuzimanja: rezForm.mjesto_preuzimanja,
+      mjesto_povratka: rezForm.mjesto_povratka,
+      izvor_rezervacije: rezForm.izvor_rezervacije,
+      ko_je_izdao: rezForm.ko_je_izdao,
+      naplaceno: rezForm.naplaceno,
+      ukupno_naplata: ukupno,
+      broj_dana: dana,
+    }
+
+    if (rezForm.id) {
+      await supabase.from('rezervacije').update(payload).eq('id', rezForm.id)
+      await supabase.from('logovi').insert([{ akcija: `Izmijenjena rezervacija REZ #${rezForm.id}` }])
     } else {
       await supabase.from('rezervacije').insert([payload])
       await supabase.from('logovi').insert([{ akcija: `Kreirana rezervacija za ${rezForm.ime_prezime} (${rezForm.br_tablica})` }])
     }
+
     setSaving(false)
-    setModal('none')
-    setSelectedRez(null)
+    setShowRezModal(false)
     loadAll()
   }
 
   async function deleteRezervacija() {
-    if (!selectedRez?.id) return
+    if (!rezForm.id) return
     const sifra = window.prompt('Admin lozinka za brisanje:')
-    if (sifra !== '810805') { alert('Pogrešna lozinka!'); return }
-    if (!confirm('Sigurno obrišete ovu rezervaciju?')) return
-    await supabase.from('rezervacije').delete().eq('id', selectedRez.id)
-    await supabase.from('logovi').insert([{ akcija: `Obrisana rezervacija REZ #${selectedRez.id}` }])
-    setModal('none')
-    setSelectedRez(null)
+    if (sifra !== '810805') { alert('Pogrešna!'); return }
+    if (!confirm('Sigurno obrišete?')) return
+    await supabase.from('rezervacije').delete().eq('id', rezForm.id)
+    await supabase.from('logovi').insert([{ akcija: `Obrisana rezervacija REZ #${rezForm.id}` }])
+    setShowRezModal(false)
     loadAll()
   }
 
-  // ─── AGENT AKCIJA ────────────────────────────────────
   async function izvrsiAgentAkciju(agent: string) {
     if (!agentRezId) return
     const rez = rezervacije.find(r => r.id === agentRezId)
     if (!rez) return
 
     if (agentTip === 'izdavanje') {
-      const naplataStr = window.prompt('Iznos naplaćen na licu mjesta (€):', '0')
+      const naplataStr = window.prompt('Iznos naplaćen (€):', '0')
       if (naplataStr === null) return
       await supabase.from('rezervacije').update({
         daily_status: 'Izdato', ko_je_izdao: agent,
@@ -272,31 +338,17 @@ export default function AdminKalendarPage() {
       }
       const novoNaplaceno = (rez.naplaceno || 0) + naplacenoDuga
       await supabase.from('rezervacije').update({ ko_je_preuzeo: agent, naplaceno: novoNaplaceno }).eq('id', agentRezId)
-
-      // Provjeri dug
-      const preostaliDug = (rez.ukupno_naplata || 0) - novoNaplaceno
-      if (preostaliDug > 0 && rez.br_vozacke) {
-        const { data: d } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
-        const hist = [...(d?.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos: preostaliDug, komentar: `Dug sa REZ #${agentRezId}`, tip: 'zaduzenje' }]
-        if (d) {
-          await supabase.from('duznici').update({ ukupan_dug: d.ukupan_dug + preostaliDug, istorija: hist }).eq('br_vozacke', rez.br_vozacke)
-        } else {
-          await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: preostaliDug, istorija: hist }])
-        }
-        alert(`Klijent ostao dužan ${preostaliDug.toFixed(2)}€ — dodato u dužnike!`)
-      }
       await supabase.from('logovi').insert([{ akcija: `${agent} preuzeo vozilo REZ #${agentRezId}` }])
     }
-    setModal('none')
+    setShowAgentModal(false)
     loadAll()
   }
 
-  // ─── DUZNICI ────────────────────────────────────────
   async function razduziDuznika(br_v: string, trenutniDug: number) {
     const unos = window.prompt(`Dug: ${trenutniDug}€. Koliko plaća?`)
     if (!unos) return
     const sifra = window.prompt('Admin lozinka:')
-    if (sifra !== '810805') { alert('Pogrešna lozinka!'); return }
+    if (sifra !== '810805') { alert('Pogrešna!'); return }
     const uplata = parseFloat(unos)
     if (isNaN(uplata) || uplata <= 0) return
     const { data: d } = await supabase.from('duznici').select('*').eq('br_vozacke', br_v).single()
@@ -304,32 +356,25 @@ export default function AdminKalendarPage() {
     const noviDug = d.ukupan_dug - uplata
     const istorija = [...(d.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos: uplata, komentar: 'Uplata', tip: 'razduzenje' }]
     if (noviDug <= 0) {
-      if (confirm('Dug otplaćen! Obrisati klijenta?')) {
-        await supabase.from('duznici').delete().eq('br_vozacke', br_v)
-      } else {
-        await supabase.from('duznici').update({ ukupan_dug: 0, istorija }).eq('br_vozacke', br_v)
-      }
+      if (confirm('Dug otplaćen! Obrisati?')) await supabase.from('duznici').delete().eq('br_vozacke', br_v)
+      else await supabase.from('duznici').update({ ukupan_dug: 0, istorija }).eq('br_vozacke', br_v)
     } else {
       await supabase.from('duznici').update({ ukupan_dug: noviDug, istorija }).eq('br_vozacke', br_v)
     }
     loadAll()
   }
 
-  // ─── LOGOVI ─────────────────────────────────────────
   async function otvoriLogove() {
-    const sifra = window.prompt('Admin lozinka za logove:')
+    const sifra = window.prompt('Admin lozinka:')
     if (sifra !== '810805') { alert('Pogrešna!'); return }
     const { data } = await supabase.from('logovi').select('*').order('vrijeme', { ascending: false }).limit(100)
     setLogovi(data || [])
-    setModal('logovi')
+    setShowLogovi(true)
   }
 
-  // ─── UPIT ODOBRI ─────────────────────────────────────
   function odobriUpit(u: Upit) {
-    setIsNewRez(true)
-    setSelectedRez(null)
     setRezForm({
-      ...EMPTY_REZ,
+      ...EMPTY_REZ_FORM,
       br_vozacke: u.br_vozacke || '',
       ime_prezime: u.ime_prezime || '',
       telefon: u.telefon || '',
@@ -338,86 +383,36 @@ export default function AdminKalendarPage() {
       datum_rodjenja: u.datum_rodjenja || '',
       od_datuma: u.od_datuma,
       do_datuma: u.do_datuma,
-      vreme_izdavanja: '10:00',
-      vreme_povratka: '10:00',
       mjesto_preuzimanja: u.mjesto_preuzimanja || 'Bulevar Veljka Vlahovića 16',
       mjesto_povratka: u.mjesto_povratka || 'Bulevar Veljka Vlahovića 16',
       napomena: `ŽELJENI MODEL: ${u.izabrani_model || ''}${u.napomena ? '\nNAPOMENA: ' + u.napomena : ''}`,
       granica: u.granica || 'DOZVOLJENO VAN ZEMLJE',
       tip_osiguranja: u.osiguranje?.includes('Kasko') ? 'Full Kasko' : 'Osnovno (AO)',
     })
-    setModal('rez')
+    setIsNewRez(true)
+    setShowUpiti(false)
+    setShowRezModal(true)
   }
 
-  async function obrisiUpit(id: number) {
-    if (!confirm('Obrisati upit?')) return
-    await supabase.from('upiti_sajt').delete().eq('id', id)
-    loadAll()
-  }
-
-  // ─── KALKULACIJE ─────────────────────────────────────
-  function calcDana(f: Partial<Rezervacija>): number {
-    if (!f.od_datuma || !f.do_datuma) return 0
-    const d1 = new Date(f.od_datuma), d2 = new Date(f.do_datuma)
-    return Math.max(1, Math.ceil((d2.getTime() - d1.getTime()) / 86400000))
-  }
-
-  function calcUkupno(f: Partial<Rezervacija>, dana: number): number {
-    let tot = dana * (f.cijena_dan || 0)
-    if (f.tip_osiguranja?.includes('Kasko')) tot += dana * (f.kasko_cijena || 0)
-    tot += (f.bebi_sic_cijena || 0) * dana
-    tot += (f.dozvola_van_zemlje_cijena || 0)
-    tot += (f.dostava_cijena || 0)
-    tot += (f.dodatni_vozac_cijena || 0)
-    return tot
-  }
-
-  // ─── RENDER KALENDAR ─────────────────────────────────
   const daysInMonth = getDaysInMonth(year, month)
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
-  function getRezForCell(tablica: string, day: number): Rezervacija | undefined {
+  function getRezForCell(tablica: string, day: number): KalRezervacija | undefined {
     const ds = dateStr(year, month, day)
-    return rezervacije.find(r =>
-      r.br_tablica === tablica &&
-      r.od_datuma <= ds &&
-      r.do_datuma > ds
-    )
+    return rezervacije.find(r => r.br_tablica === tablica && r.od_datuma <= ds && r.do_datuma > ds)
   }
-
-  function openRez(r: Rezervacija) {
-    setSelectedRez(r)
-    setRezForm({ ...r })
-    setIsNewRez(false)
-    setModal('rez')
-  }
-
-  function openNewRez(tablica?: string, datum?: string) {
-    setSelectedRez(null)
-    setIsNewRez(true)
-    setRezForm({
-      ...EMPTY_REZ,
-      br_tablica: tablica || '',
-      od_datuma: datum || '',
-    })
-    setModal('rez')
-  }
-
-  const dana = calcDana(rezForm)
-  const ukupno = calcUkupno(rezForm, dana)
-  const dug = ukupno - (rezForm.naplaceno || 0)
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
 
   return (
     <div style={{ fontFamily: 'inherit' }}>
-      {/* ─── HEADER ─── */}
+      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Kalendar zauzetosti</h1>
           <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, margin: 0 }}>
-            {vozilaLok.filter(v => v.fleet_status === 'available').length} vozila · {zauzetaDanas.size} zauzeto danas · {vozilaLok.length - zauzetaDanas.size} slobodno
+            {vozilaLok.length} vozila · {zauzetaDanas.size} zauzeto danas · {vozilaLok.length - zauzetaDanas.size} slobodno
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -426,12 +421,12 @@ export default function AdminKalendarPage() {
             + Nova rezervacija
           </button>
           {upiti.length > 0 && (
-            <button onClick={() => setModal('upiti')}
-              style={{ padding: '8px 16px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
+            <button onClick={() => setShowUpiti(true)}
+              style={{ padding: '8px 16px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               ⏳ Upiti ({upiti.length})
             </button>
           )}
-          <button onClick={() => setModal('duznici')}
+          <button onClick={() => setShowDuznici(true)}
             style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             📝 Dužnici ({duznici.length})
           </button>
@@ -442,7 +437,7 @@ export default function AdminKalendarPage() {
         </div>
       </div>
 
-      {/* ─── LOKACIJE ─── */}
+      {/* LOKACIJE */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {LOKACIJE.map(l => (
           <button key={l} onClick={() => setLokacija(l)}
@@ -452,28 +447,21 @@ export default function AdminKalendarPage() {
         ))}
       </div>
 
-      {/* ─── NAVIGACIJA I FILTERI ─── */}
+      {/* NAVIGACIJA */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <button onClick={() => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }}
           style={{ padding: '7px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16 }}>←</button>
-        <span style={{ fontSize: 16, fontWeight: 600, color: '#111', minWidth: 160, textAlign: 'center' }}>{MONTHS[month]} {year}</span>
+        <span style={{ fontSize: 16, fontWeight: 600, color: '#111', minWidth: 160, textAlign: 'center' as const }}>{MONTHS[month]} {year}</span>
         <button onClick={() => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }}
           style={{ padding: '7px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16 }}>→</button>
         <button onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth()) }}
           style={{ padding: '7px 14px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', fontSize: 12, color: '#0F6E56', fontWeight: 600 }}>Danas</button>
-
         <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži vozilo..."
           style={{ ...inp, width: 160, marginBottom: 0 }} />
-        <select value={filterGear} onChange={e => setFilterGear(e.target.value)}
-          style={{ ...inp, width: 120, marginBottom: 0 }}>
-          <option value="ALL">Svi mjenjači</option>
-          <option value="MANUAL">Manual</option>
-          <option value="AUTOMATIC">Automat</option>
-        </select>
         <span style={{ fontSize: 12, color: '#9ca3af' }}>{vozilaKal.length} vozila</span>
       </div>
 
-      {/* ─── LEGENDA ─── */}
+      {/* LEGENDA */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
         {[['#f97316', 'Na čekanju'], ['#1D9E75', 'Izdato'], ['#dc2626', 'Nije izdato']].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6b7280' }}>
@@ -481,13 +469,9 @@ export default function AdminKalendarPage() {
             {label}
           </div>
         ))}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6b7280' }}>
-          <div style={{ width: 12, height: 12, borderRadius: 2, background: '#f0fdf8', border: '1px solid #1D9E75' }} />
-          Danas
-        </div>
       </div>
 
-      {/* ─── KALENDAR TABELA ─── */}
+      {/* KALENDAR TABELA */}
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Učitavanje...</div>
@@ -514,8 +498,7 @@ export default function AdminKalendarPage() {
                       <th key={day} style={{
                         padding: '4px 2px', textAlign: 'center', minWidth: 34,
                         background: isToday ? '#E1F5EE' : '#f9fafb',
-                        borderBottom: '2px solid #e5e7eb',
-                        borderRight: '1px solid #f3f4f6',
+                        borderBottom: '2px solid #e5e7eb', borderRight: '1px solid #f3f4f6',
                         color: isToday ? '#085041' : isWeekend ? '#9ca3af' : '#374151',
                         fontWeight: isToday ? 700 : 400,
                       }}>
@@ -532,18 +515,17 @@ export default function AdminKalendarPage() {
                 </tr>
               </thead>
               <tbody>
-                {/* Grupiši po marki */}
                 {Array.from(new Set(vozilaKal.map(v => v.marka || 'Ostalo'))).sort().map(marka => {
                   const vozilaMarke = vozilaKal.filter(v => (v.marka || 'Ostalo') === marka)
                   return [
                     <tr key={`group-${marka}`}>
-                      <td colSpan={daysInMonth + 1} style={{ padding: '6px 12px', background: '#f3f4f6', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #e5e7eb' }}>
+                      <td colSpan={daysInMonth + 1} style={{ padding: '6px 12px', background: '#f3f4f6', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: 1, borderBottom: '1px solid #e5e7eb' }}>
                         {marka} ({vozilaMarke.length})
                       </td>
                     </tr>,
                     ...vozilaMarke.map(v => (
                       <tr key={v.id}>
-                        <td style={{ padding: '6px 10px', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #e5e7eb', fontWeight: 500, color: '#111', fontSize: 11, background: '#fff', position: 'sticky', left: 0, zIndex: 1, whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '6px 10px', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #e5e7eb', fontWeight: 500, color: '#111', fontSize: 11, background: '#fff', position: 'sticky', left: 0, zIndex: 1, whiteSpace: 'nowrap' as const }}>
                           <div>{v.agregirani_2 || `${v.marka} ${v.model}`}</div>
                           {v.license_plate && (
                             <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#9ca3af' }}>{v.license_plate}</div>
@@ -566,13 +548,13 @@ export default function AdminKalendarPage() {
                               }}
                               onMouseEnter={() => rez && setHoveredId(rez.id)}
                               onMouseLeave={() => setHoveredId(null)}
+                              title={rez ? `${rez.ime_prezime} (${rez.daily_status})` : 'Klikni za novu rezervaciju'}
                               style={{
                                 padding: '2px 1px', height: 36,
                                 background: isToday ? '#f0fdf8' : '#fff',
                                 borderBottom: '1px solid #f3f4f6',
                                 borderRight: '1px solid #f3f4f6',
                                 cursor: 'pointer',
-                                position: 'relative',
                               }}
                             >
                               {rez && color && (
@@ -588,16 +570,10 @@ export default function AdminKalendarPage() {
                                   overflow: 'hidden', transition: 'background .1s',
                                 }}>
                                   {isStart && (
-                                    <span style={{ fontSize: 10, color: isHov ? '#fff' : color, paddingLeft: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 80, fontWeight: 600 }}>
+                                    <span style={{ fontSize: 10, color: isHov ? '#fff' : color, paddingLeft: 4, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 80, fontWeight: 600 }}>
                                       {rez.ime_prezime?.split(' ')[0]}
                                     </span>
                                   )}
-                                </div>
-                              )}
-                              {!rez && (
-                                <div style={{ height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0 }}
-                                  className="hover-plus">
-                                  <span style={{ fontSize: 14, color: '#d1d5db' }}>+</span>
                                 </div>
                               )}
                             </td>
@@ -613,232 +589,46 @@ export default function AdminKalendarPage() {
         )}
       </div>
 
-      {/* ─── MODAL: REZERVACIJA ─── */}
-      {modal === 'rez' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1100, maxHeight: '95vh', overflowY: 'auto' }}>
-            {/* Header */}
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>
-                {isNewRez ? 'Nova rezervacija' : `REZ #${selectedRez?.id}`}
-              </h2>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {!isNewRez && selectedRez && (
-                  <button onClick={deleteRezervacija}
-                    style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>
-                    🗑️ Obriši
-                  </button>
-                )}
-                {!isNewRez && selectedRez && (
-                  <>
-                    {!selectedRez.ko_je_izdao && (
-                      <button onClick={() => { setAgentTip('izdavanje'); setAgentRezId(selectedRez.id!); setModal('agent') }}
-                        style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>
-                        🚗 Izdaj
-                      </button>
-                    )}
-                    {selectedRez.ko_je_izdao && !selectedRez.ko_je_preuzeo && (
-                      <button onClick={() => { setAgentTip('preuzimanje'); setAgentRezId(selectedRez.id!); setModal('agent') }}
-                        style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>
-                        🔙 Preuzmi
-                      </button>
-                    )}
-                  </>
-                )}
-                <button onClick={saveRezervacija} disabled={saving}
-                  style={{ padding: '7px 16px', fontSize: 12, background: saving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
-                  {saving ? '...' : '💾 Snimi'}
-                </button>
-                <button onClick={() => { setModal('none'); setSelectedRez(null) }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
-              </div>
-            </div>
-
-            <div style={{ padding: 24, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-              {/* KLIJENT */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1D9E75', textTransform: 'uppercase', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Klijent</div>
-                {[['br_vozacke', 'Broj vozačke'], ['ime_prezime', 'Ime i Prezime *'], ['telefon', 'Telefon'], ['email', 'Email'], ['adresa', 'Adresa'], ['zemlja', 'Zemlja'], ['datum_rodjenja', 'Datum rođenja']].map(([k, l]) => (
-                  <div key={k} style={{ marginBottom: 10 }}>
-                    <label style={lbl}>{l}</label>
-                    <input style={inp} value={(rezForm as any)[k] || ''} onChange={e => setRezForm(f => ({ ...f, [k]: e.target.value }))} />
-                  </div>
-                ))}
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Status</label>
-                  <select style={inp} value={rezForm.daily_status || 'Na čekanju'} onChange={e => setRezForm(f => ({ ...f, daily_status: e.target.value }))}>
-                    {['Na čekanju', 'Izdato', 'Nije izdato'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                {rezForm.ko_je_izdao && (
-                  <div style={{ background: '#f0fdf8', padding: '8px 10px', borderRadius: 8, fontSize: 12, color: '#085041', marginBottom: 8 }}>
-                    🚗 Izdao: <strong>{rezForm.ko_je_izdao}</strong>
-                  </div>
-                )}
-                {rezForm.ko_je_preuzeo && (
-                  <div style={{ background: '#E6F1FB', padding: '8px 10px', borderRadius: 8, fontSize: 12, color: '#0C447C' }}>
-                    🔙 Preuzeo: <strong>{rezForm.ko_je_preuzeo}</strong>
-                  </div>
-                )}
-              </div>
-
-              {/* VOZILO */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1D9E75', textTransform: 'uppercase', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Vozilo & Detalji</div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Firma</label>
-                  <select style={inp} value={rezForm.firma || 'Meriem d.o.o.'} onChange={e => setRezForm(f => ({ ...f, firma: e.target.value }))}>
-                    {FIRME.map(fi => <option key={fi}>{fi}</option>)}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Tablice *</label>
-                  <select style={{ ...inp, color: '#f59e0b', fontWeight: 700 }} value={rezForm.br_tablica || ''} onChange={e => setRezForm(f => ({ ...f, br_tablica: e.target.value }))}>
-                    <option value="">-- Izaberi vozilo --</option>
-                    {Array.from(new Set(vozilaLok.map(v => v.marka || 'Ostalo'))).sort().map(marka => (
-                      <optgroup key={marka} label={marka}>
-                        {vozilaLok.filter(v => (v.marka || 'Ostalo') === marka).map(v => (
-                          <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Osiguranje</label>
-                  <select style={inp} value={rezForm.tip_osiguranja || 'Osnovno (AO)'} onChange={e => setRezForm(f => ({ ...f, tip_osiguranja: e.target.value }))}>
-                    {['Osnovno (AO)', 'Full Kasko', 'Kasko sa učešćem'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                {rezForm.tip_osiguranja?.includes('Kasko') && (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                    <label style={lbl}>Kasko €/dan</label>
-                    <input style={inp} type="number" value={rezForm.kasko_cijena || 0} onChange={e => setRezForm(f => ({ ...f, kasko_cijena: parseFloat(e.target.value) || 0 }))} />
-                  </div>
-                )}
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Granica</label>
-                  <select style={inp} value={rezForm.granica || 'DOZVOLJENO VAN ZEMLJE'} onChange={e => setRezForm(f => ({ ...f, granica: e.target.value }))}>
-                    <option value="DOZVOLJENO VAN ZEMLJE">✅ Dozvoljeno</option>
-                    <option value="ZABRANJENO VAN ZEMLJE">🚫 Zabranjeno</option>
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Broj leta</label>
-                  <input style={inp} value={rezForm.br_leta || ''} onChange={e => setRezForm(f => ({ ...f, br_leta: e.target.value }))} placeholder="Npr. FR1234" />
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Napomena / Oštećenja</label>
-                  <textarea value={rezForm.napomena || ''} onChange={e => setRezForm(f => ({ ...f, napomena: e.target.value }))}
-                    style={{ ...inp, minHeight: 70, resize: 'vertical' as const }} />
-                </div>
-              </div>
-
-              {/* NAJAM */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1D9E75', textTransform: 'uppercase', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Najam & Obračun</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                  <div>
-                    <label style={lbl}>Od datuma</label>
-                    <input style={inp} type="date" value={rezForm.od_datuma || ''} onChange={e => setRezForm(f => ({ ...f, od_datuma: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Do datuma</label>
-                    <input style={inp} type="date" value={rezForm.do_datuma || ''} onChange={e => setRezForm(f => ({ ...f, do_datuma: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Sat izlaska</label>
-                    <input style={inp} value={rezForm.vreme_izdavanja || '10:00'} onChange={e => setRezForm(f => ({ ...f, vreme_izdavanja: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Sat povratka</label>
-                    <input style={inp} value={rezForm.vreme_povratka || '10:00'} onChange={e => setRezForm(f => ({ ...f, vreme_povratka: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Cijena €/dan</label>
-                    <input style={inp} type="number" value={rezForm.cijena_dan || ''} onChange={e => setRezForm(f => ({ ...f, cijena_dan: parseFloat(e.target.value) || 0 }))} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Depozit €</label>
-                    <input style={inp} type="number" value={rezForm.depozit || 0} onChange={e => setRezForm(f => ({ ...f, depozit: parseFloat(e.target.value) || 0 }))} />
-                  </div>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Način plaćanja</label>
-                  <select style={inp} value={rezForm.nacin_placanja || 'Keš'} onChange={e => setRezForm(f => ({ ...f, nacin_placanja: e.target.value }))}>
-                    {['Keš', 'Kartica', 'Renta kartica - depozit keš', 'Preko računa'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Mjesto preuzimanja</label>
-                  <input style={inp} value={rezForm.mjesto_preuzimanja || ''} onChange={e => setRezForm(f => ({ ...f, mjesto_preuzimanja: e.target.value }))} />
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Mjesto povratka</label>
-                  <input style={inp} value={rezForm.mjesto_povratka || ''} onChange={e => setRezForm(f => ({ ...f, mjesto_povratka: e.target.value }))} />
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={lbl}>Izvor rezervacije</label>
-                  <select style={inp} value={rezForm.izvor_rezervacije || 'Sajt'} onChange={e => setRezForm(f => ({ ...f, izvor_rezervacije: e.target.value }))}>
-                    {['Sajt', 'Google', 'Instagram', 'Facebook', 'Mert', 'Localrents', 'Rent a car Montenegro', 'Posrednici hoteli'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                {/* Dodaci */}
-                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Dodaci</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {[['dozvola_van_zemlje_cijena', 'Van zemlje €'], ['dostava_cijena', 'Dostava €'], ['bebi_sic_cijena', 'Bebi sic €/dan'], ['dodatni_vozac_cijena', '2. vozač €']].map(([k, l]) => (
-                      <div key={k}>
-                        <label style={lbl}>{l}</label>
-                        <input style={inp} type="number" value={(rezForm as any)[k] || 0} onChange={e => setRezForm(f => ({ ...f, [k]: parseFloat(e.target.value) || 0 }))} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>Dana:</span>
-                    <strong style={{ fontSize: 15 }}>{dana}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>Ukupno:</span>
-                    <strong style={{ fontSize: 17, color: '#111' }}>{ukupno.toFixed(2)} €</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>Naplaćeno:</span>
-                    <input type="number" value={rezForm.naplaceno || 0} onChange={e => setRezForm(f => ({ ...f, naplaceno: parseFloat(e.target.value) || 0 }))}
-                      style={{ width: 80, textAlign: 'right', fontSize: 15, fontWeight: 700, color: '#1D9E75', background: 'transparent', border: 'none', borderBottom: '1px dashed #1D9E75', outline: 'none' }} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>Dug:</span>
-                    <strong style={{ fontSize: 20, color: dug > 0 ? '#dc2626' : '#1D9E75' }}>{dug.toFixed(2)} €</strong>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* REZERVACIJA MODAL */}
+      {showRezModal && (
+        <RezervacijaModal
+          form={rezForm}
+          setForm={setRezForm}
+          vozila={vozilaLok}
+          onSave={saveRezervacija}
+          onClose={() => setShowRezModal(false)}
+          onDelete={!isNewRez ? deleteRezervacija : undefined}
+          saving={saving}
+          isNew={isNewRez}
+          onIzdaj={!isNewRez && !rezForm.ko_je_izdao ? () => {
+            setAgentTip('izdavanje')
+            setAgentRezId(rezForm.id!)
+            setShowAgentModal(true)
+          } : undefined}
+          onPreuzmi={!isNewRez && rezForm.ko_je_izdao && !rezForm.ko_je_preuzeo ? () => {
+            setAgentTip('preuzimanje')
+            setAgentRezId(rezForm.id!)
+            setShowAgentModal(true)
+          } : undefined}
+        />
       )}
 
-      {/* ─── MODAL: AGENT ─── */}
-      {modal === 'agent' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 420, width: '100%' }}>
-            <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: '#111' }}>
+      {/* AGENT MODAL */}
+      {showAgentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 400, width: '100%' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>
               {agentTip === 'izdavanje' ? '🚗 Ko izdaje vozilo?' : '🔙 Ko preuzima vozilo?'}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {AGENTI.map(a => (
                 <button key={a} onClick={() => izvrsiAgentAkciju(a)}
-                  style={{ padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#374151', textAlign: 'left' }}>
+                  style={{ padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
                   {a}
                 </button>
               ))}
             </div>
-            <button onClick={() => setModal('rez')}
+            <button onClick={() => setShowAgentModal(false)}
               style={{ width: '100%', padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
               Odustani
             </button>
@@ -846,18 +636,17 @@ export default function AdminKalendarPage() {
         </div>
       )}
 
-      {/* ─── MODAL: DUZNICI ─── */}
-      {modal === 'duznici' && (
+      {/* DUZNICI MODAL */}
+      {showDuznici && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#dc2626' }}>⚠️ Lista dužnika</h2>
-              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+              <button onClick={() => setShowDuznici(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ padding: 20 }}>
-              {/* Novi dug forma */}
-              <NoviDugForm onSave={loadAll} inp={inp} lbl={lbl} />
-              {/* Lista */}
+              {/* Novi dug */}
+              <NoviDugForm onSave={loadAll} />
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 16 }}>
                 <thead>
                   <tr style={{ background: '#f9fafb' }}>
@@ -881,9 +670,7 @@ export default function AdminKalendarPage() {
                       </td>
                     </tr>
                   ))}
-                  {duznici.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nema dužnika.</td></tr>
-                  )}
+                  {duznici.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nema dužnika.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -891,13 +678,13 @@ export default function AdminKalendarPage() {
         </div>
       )}
 
-      {/* ─── MODAL: UPITI ─── */}
-      {modal === 'upiti' && (
+      {/* UPITI MODAL */}
+      {showUpiti && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#f59e0b' }}>⏳ Upiti sa sajta ({upiti.length})</h2>
-              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+              <button onClick={() => setShowUpiti(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {upiti.map(u => (
@@ -907,20 +694,15 @@ export default function AdminKalendarPage() {
                       <div style={{ fontWeight: 700, fontSize: 15 }}>{u.ime_prezime}</div>
                       <div style={{ fontSize: 13, color: '#f59e0b', fontWeight: 600, marginTop: 2 }}>Model: {u.izabrani_model}</div>
                       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{toDMY(u.od_datuma)} → {toDMY(u.do_datuma)}</div>
-                      <div style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>
-                        📍 {u.mjesto_preuzimanja} → {u.mjesto_povratka}
-                        {u.telefon && <span style={{ marginLeft: 12 }}>📞 {u.telefon}</span>}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                        Primljeno: {new Date(u.vrijeme_upisa).toLocaleString('sr-RS')}
-                      </div>
+                      <div style={{ fontSize: 12, marginTop: 2 }}>📍 {u.mjesto_preuzimanja} → {u.mjesto_povratka}</div>
+                      {u.telefon && <div style={{ fontSize: 12, marginTop: 2 }}>📞 {u.telefon}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                       <button onClick={() => odobriUpit(u)}
                         style={{ padding: '8px 14px', fontSize: 12, background: '#E1F5EE', color: '#085041', border: '1px solid #1D9E75', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
                         ✅ Odobri
                       </button>
-                      <button onClick={() => obrisiUpit(u.id)}
+                      <button onClick={async () => { if (!confirm('Obrisati upit?')) return; await supabase.from('upiti_sajt').delete().eq('id', u.id); loadAll() }}
                         style={{ padding: '8px 12px', fontSize: 12, background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
                         ✕
                       </button>
@@ -928,19 +710,19 @@ export default function AdminKalendarPage() {
                   </div>
                 </div>
               ))}
-              {upiti.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Nema upita na čekanju.</div>}
+              {upiti.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Nema upita.</div>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── MODAL: LOGOVI ─── */}
-      {modal === 'logovi' && (
+      {/* LOGOVI MODAL */}
+      {showLogovi && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>📜 Sistemski logovi</h2>
-              <button onClick={() => setModal('none')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+              <button onClick={() => setShowLogovi(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ padding: 20 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -965,46 +747,39 @@ export default function AdminKalendarPage() {
         </div>
       )}
 
-      <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-        tr:hover td { background: #fafafa !important; }
-      `}</style>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }`}</style>
     </div>
   )
 }
 
 // ─── NOVI DUG FORMA ───────────────────────────────────────
-function NoviDugForm({ onSave, inp, lbl }: { onSave: () => void; inp: React.CSSProperties; lbl: React.CSSProperties }) {
+function NoviDugForm({ onSave }: { onSave: () => void }) {
   const [form, setForm] = useState({ br_vozacke: '', ime_prezime: '', telefon: '', iznos: '', komentar: '' })
+  const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3 }
 
   async function save() {
-    if (!form.br_vozacke || !form.ime_prezime || !form.iznos || !form.komentar) {
-      alert('Popunite sva polja!'); return
-    }
+    if (!form.br_vozacke || !form.ime_prezime || !form.iznos || !form.komentar) { alert('Popunite sva polja!'); return }
     const iznos = parseFloat(form.iznos)
     const { data: d } = await supabase.from('duznici').select('*').eq('br_vozacke', form.br_vozacke).maybeSingle()
     const hist = [...(d?.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos, komentar: form.komentar, tip: 'zaduzenje' }]
-    if (d) {
-      await supabase.from('duznici').update({ ukupan_dug: d.ukupan_dug + iznos, istorija: hist }).eq('br_vozacke', form.br_vozacke)
-    } else {
-      await supabase.from('duznici').insert([{ br_vozacke: form.br_vozacke, ime_prezime: form.ime_prezime, telefon: form.telefon, ukupan_dug: iznos, istorija: hist }])
-    }
+    if (d) await supabase.from('duznici').update({ ukupan_dug: d.ukupan_dug + iznos, istorija: hist }).eq('br_vozacke', form.br_vozacke)
+    else await supabase.from('duznici').insert([{ br_vozacke: form.br_vozacke, ime_prezime: form.ime_prezime, telefon: form.telefon, ukupan_dug: iznos, istorija: hist }])
     setForm({ br_vozacke: '', ime_prezime: '', telefon: '', iznos: '', komentar: '' })
     onSave()
   }
 
   return (
-    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>+ Unesi novi dug</div>
+    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>+ Unesi novi dug</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {[['br_vozacke', 'Vozačka *'], ['ime_prezime', 'Ime *'], ['telefon', 'Telefon'], ['iznos', 'Iznos €*'], ['komentar', 'Komentar *']].map(([k, l]) => (
-          <div key={k} style={{ flex: 1, minWidth: 100 }}>
+        {[['br_vozacke', 'Vozačka *'], ['ime_prezime', 'Ime *'], ['telefon', 'Tel'], ['iznos', 'Iznos €*'], ['komentar', 'Komentar *']].map(([k, l]) => (
+          <div key={k} style={{ flex: 1, minWidth: 90 }}>
             <label style={lbl}>{l}</label>
             <input style={inp} value={(form as any)[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} />
           </div>
         ))}
-        <button onClick={save}
-          style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 1 }}>
+        <button onClick={save} style={{ padding: '7px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
           + Zaduži
         </button>
       </div>
