@@ -3,11 +3,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -15,33 +10,84 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
-  // Provjeri da li je Google SSO vratio sesiju
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
   useEffect(() => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        // Provjeri da li je agent odobren
-        const { data: agent } = await supabase
-          .from('agents')
-          .select('*')
-          .eq('email', session.user.email)
-          .eq('is_active', true)
-          .single()
+    // Hvata OAuth token iz URL hash-a (#access_token=...)
+    async function handleOAuthRedirect() {
+      const hash = window.location.hash
+      if (!hash || !hash.includes('access_token')) return
 
-        if (!agent) {
-          await supabase.auth.signOut()
-          setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-          setGoogleLoading(false)
-          return
+      setGoogleLoading(true)
+
+      // Supabase automatski parsira hash i postavlja sesiju
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session) {
+        // Pokušaj ručno parsirati
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          const { data: { session: newSession } } = await supabase.auth.getSession()
+          if (newSession) {
+            await processSession(newSession)
+            return
+          }
         }
+        setError('Greška pri OAuth prijavi.')
+        setGoogleLoading(false)
+        return
+      }
 
-        // Sačuvaj token u cookie
-        document.cookie = `avtorent-admin-token=${session.access_token}; path=/; max-age=86400`
-        // Sačuvaj ime agenta
-        document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || session.user.email)}; path=/; max-age=86400`
-        window.location.href = '/admin'
+      await processSession(session)
+    }
+
+    handleOAuthRedirect()
+
+    // Slušaj promjene auth stanja
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await processSession(session)
       }
     })
+
+    return () => subscription.unsubscribe()
   }, [])
+
+  async function processSession(session: any) {
+    try {
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('email', session.user.email)
+        .eq('is_active', true)
+        .single()
+
+      if (!agent) {
+        await supabase.auth.signOut()
+        setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
+        setGoogleLoading(false)
+        setLoading(false)
+        return
+      }
+
+      document.cookie = `avtorent-admin-token=${session.access_token}; path=/; max-age=86400`
+      document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || session.user.email)}; path=/; max-age=86400`
+
+      // Ukloni hash iz URL-a i preusmjeri
+      window.location.replace('/admin')
+    } catch (e) {
+      setError('Greška pri provjeri naloga.')
+      setGoogleLoading(false)
+      setLoading(false)
+    }
+  }
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -57,24 +103,7 @@ export default function AdminLoginPage() {
       return
     }
 
-    // Provjeri da li je agent odobren
-    const { data: agent } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('email', email)
-      .eq('is_active', true)
-      .single()
-
-    if (!agent) {
-      await supabase.auth.signOut()
-      setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-      setLoading(false)
-      return
-    }
-
-    document.cookie = `avtorent-admin-token=${data.session.access_token}; path=/; max-age=86400`
-    document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || email)}; path=/; max-age=86400`
-    window.location.href = '/admin'
+    await processSession(data.session)
   }
 
   async function handleGoogleLogin() {
@@ -82,10 +111,10 @@ export default function AdminLoginPage() {
     setError('')
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-       options: { 
-  redirectTo: `${window.location.origin}/admin/login`,
-  queryParams: { prompt: 'select_account' }
-},
+      options: {
+        redirectTo: `${window.location.origin}/admin/login`,
+        queryParams: { prompt: 'select_account' }
+      },
     })
     if (err) {
       setError('Greška pri Google prijavi.')
@@ -101,10 +130,15 @@ export default function AdminLoginPage() {
         </div>
         <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 28 }}>Admin panel — prijava</div>
 
-        {/* Google SSO dugme */}
+        {googleLoading && (
+          <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#085041', marginBottom: 16, textAlign: 'center' }}>
+            Prijava u toku...
+          </div>
+        )}
+
         <button
           onClick={handleGoogleLogin}
-          disabled={googleLoading}
+          disabled={googleLoading || loading}
           style={{ width: '100%', padding: '11px', background: '#fff', color: '#374151', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18">
@@ -151,7 +185,7 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleLoading}
             style={{ display: 'block', width: '100%', padding: 11, background: loading ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
             {loading ? 'Prijava...' : 'Prijavi se'}
