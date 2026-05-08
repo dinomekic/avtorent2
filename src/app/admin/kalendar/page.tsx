@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { RezervacijaModal, RezForm, VoziloOption, EMPTY_REZ_FORM, calcDana, calcUkupno, generateUgovor } from './RezervacijaModal'
+import { RezervacijaModal, RezForm, VoziloOption, EMPTY_REZ_FORM, calcDana, calcUkupno, generateUgovor } from '@/lib/RezervacijaModal'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
