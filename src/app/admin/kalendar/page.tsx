@@ -554,7 +554,7 @@ export default function AdminKalendarPage() {
                           const isToday = ds === today
                           const rez = v.license_plate ? getRezForCell(v.license_plate, day) : undefined
                           const isStart = rez && rez.od_datuma === ds
-                          const isEnd = rez && rez.return_date === ds
+                          const isEnd = rez && rez.do_datuma === ds
                           const color = rez ? (STATUS_COLORS[rez.daily_status] || '#6b7280') : null
                           const isHov = rez && hoveredId === rez.id
 
