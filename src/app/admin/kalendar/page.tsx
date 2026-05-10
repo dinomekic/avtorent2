@@ -107,7 +107,12 @@ function dateStr(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-// Konvertuj KalRezervacija u RezForm
+function addDays(dateIso: string, n: number): string {
+  const d = new Date(dateIso)
+  d.setDate(d.getDate() + n)
+  return d.toISOString().split('T')[0]
+}
+
 function rezToForm(r: KalRezervacija): RezForm {
   return {
     id: r.id,
@@ -167,6 +172,11 @@ export default function AdminKalendarPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const today = new Date().toISOString().split('T')[0]
 
+  // ─── DRAG & DROP STATE ───────────────────────────────────
+  const [dragRezId, setDragRezId] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<{ tablica: string; day: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
   // Modal stanja
   const [showRezModal, setShowRezModal] = useState(false)
   const [showDuznici, setShowDuznici] = useState(false)
@@ -180,15 +190,10 @@ export default function AdminKalendarPage() {
   const [isNewRez, setIsNewRez] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Filteri
   const [searchQ, setSearchQ] = useState('')
-  const [filterGear, setFilterGear] = useState('ALL')
 
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
   const vozilaKal = vozilaLok.filter(v => {
-    if (filterGear !== 'ALL') {
-      // Potrebno je dohvatiti transmission iz baze
-    }
     if (!searchQ) return true
     const q = searchQ.toLowerCase()
     return (v.license_plate || '').toLowerCase().includes(q) ||
@@ -243,6 +248,103 @@ export default function AdminKalendarPage() {
     setIsNewRez(true)
     setShowRezModal(true)
   }
+
+  // ─── DRAG & DROP HANDLERS ────────────────────────────────
+
+  function handleDragStart(e: React.DragEvent, rezId: number) {
+    e.dataTransfer.effectAllowed = 'move'
+    // Mali timeout da browser napravi ghost image prije nego što postavimo state
+    setTimeout(() => {
+      setDragRezId(rezId)
+      setIsDragging(true)
+    }, 0)
+  }
+
+  function handleDragEnd() {
+    setDragRezId(null)
+    setDragOver(null)
+    setIsDragging(false)
+  }
+
+  function handleDragOver(e: React.DragEvent, tablica: string, day: number) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver({ tablica, day })
+  }
+
+  function handleDragLeave() {
+    // Ne resetuj odmah — čeka se drop ili drag end
+  }
+
+  async function handleDrop(e: React.DragEvent, novaTablica: string, noviDan: number) {
+    e.preventDefault()
+    if (!dragRezId) return
+
+    const rez = rezervacije.find(r => r.id === dragRezId)
+    if (!rez) return
+
+    // Izračunaj pomak u danima (novi start dan u tekućem mj/god vs stari od_datuma)
+    const noviStartStr = dateStr(year, month, noviDan)
+    const oldStart = new Date(rez.od_datuma)
+    const newStart = new Date(noviStartStr)
+    const diffDays = Math.round((newStart.getTime() - oldStart.getTime()) / 86400000)
+
+    // Ako ništa nije promijenjeno, ne radi ništa
+    if (diffDays === 0 && novaTablica === rez.br_tablica) {
+      setDragRezId(null)
+      setDragOver(null)
+      setIsDragging(false)
+      return
+    }
+
+    const novoOd = addDays(rez.od_datuma, diffDays)
+    const novoDo = addDays(rez.do_datuma, diffDays)
+
+    // Provjeri konflikt — da li je vozilo zauzeto u novom periodu (osim iste rezervacije)
+    const konflikt = rezervacije.find(r => {
+      if (r.id === dragRezId) return false
+      if (r.br_tablica !== novaTablica) return false
+      if (r.daily_status === 'Nije izdato') return false
+      return r.od_datuma < novoDo && r.do_datuma > novoOd
+    })
+
+    if (konflikt) {
+      alert(`❌ Konflikt! Vozilo ${novaTablica} je već rezervisano od ${toDMY(konflikt.od_datuma)} do ${toDMY(konflikt.do_datuma)} (${konflikt.ime_prezime})`)
+      setDragRezId(null)
+      setDragOver(null)
+      setIsDragging(false)
+      return
+    }
+
+    const payload: any = {
+      od_datuma: novoOd,
+      do_datuma: novoDo,
+    }
+    if (novaTablica !== rez.br_tablica) {
+      payload.br_tablica = novaTablica
+    }
+
+    // Optimistički update UI odmah
+    setRezervacije(prev => prev.map(r =>
+      r.id === dragRezId
+        ? { ...r, ...payload }
+        : r
+    ))
+
+    setDragRezId(null)
+    setDragOver(null)
+    setIsDragging(false)
+
+    await supabase.from('rezervacije').update(payload).eq('id', dragRezId)
+    await supabase.from('logovi').insert([{
+      akcija: `Drag&Drop: REZ #${dragRezId} (${rez.ime_prezime}) → ${novaTablica}, ${novoOd} – ${novoDo}`
+    }])
+
+    // Osvježi da bude sigurno sinhronizovano
+    loadAll()
+  }
+
+  // ────────────────────────────────────────────────────────
 
   async function saveRezervacija() {
     if (!rezForm.br_tablica || !rezForm.ime_prezime) {
@@ -402,11 +504,33 @@ export default function AdminKalendarPage() {
     return rezervacije.find(r => r.br_tablica === tablica && r.od_datuma <= ds && r.do_datuma > ds)
   }
 
+  // Drop zone highlight boja
+  function getDropBg(tablica: string, day: number, isToday: boolean): string {
+    if (dragOver?.tablica === tablica && dragOver?.day === day) {
+      return '#dbeafe' // plava highlight dok vuces
+    }
+    if (isToday) return '#f0fdf8'
+    return '#fff'
+  }
+
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
 
   return (
-    <div style={{ fontFamily: 'inherit' }}>
+    <div style={{ fontFamily: 'inherit', userSelect: isDragging ? 'none' : 'auto' }}>
+
+      {/* Drag overlay indikator */}
+      {isDragging && (
+        <div style={{
+          position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
+          background: '#1D9E75', color: '#fff', padding: '8px 20px', borderRadius: 20,
+          fontSize: 13, fontWeight: 600, zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          pointerEvents: 'none',
+        }}>
+          🚗 Prevuci na novo vozilo ili datum
+        </div>
+      )}
+
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
@@ -462,13 +586,18 @@ export default function AdminKalendarPage() {
       </div>
 
       {/* LEGENDA */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {[['#f97316', 'Na čekanju'], ['#1D9E75', 'Izdato'], ['#dc2626', 'Nije izdato']].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6b7280' }}>
             <div style={{ width: 12, height: 12, borderRadius: 2, background: color }} />
             {label}
           </div>
         ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6b7280' }}>
+          <div style={{ width: 12, height: 12, borderRadius: 2, background: '#dbeafe', border: '1px solid #93c5fd' }} />
+          Drag & Drop zona
+        </div>
+        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>✦ Povuci rezervaciju da pomjeriš datum ili vozilo</span>
       </div>
 
       {/* KALENDAR TABELA */}
@@ -536,41 +665,80 @@ export default function AdminKalendarPage() {
                           const isToday = ds === today
                           const rez = v.license_plate ? getRezForCell(v.license_plate, day) : undefined
                           const isStart = rez && rez.od_datuma === ds
-                          const isEnd = rez && rez.do_datuma === ds
                           const color = rez ? (STATUS_COLORS[rez.daily_status] || '#6b7280') : null
                           const isHov = rez && hoveredId === rez.id
+                          const isDragSource = rez && dragRezId === rez.id
+                          const isDropTarget = dragOver?.tablica === v.license_plate && dragOver?.day === day
 
                           return (
                             <td key={day}
+                              // Drop target handlers (uvijek aktivni)
+                              onDragOver={e => {
+                                if (isDragging) handleDragOver(e, v.license_plate || '', day)
+                              }}
+                              onDragLeave={handleDragLeave}
+                              onDrop={e => {
+                                if (v.license_plate) handleDrop(e, v.license_plate, day)
+                              }}
+                              // Klik za otvaranje/novu rez (samo kad ne vucemo)
                               onClick={() => {
+                                if (isDragging) return
                                 if (rez) openRez(rez)
                                 else if (v.license_plate) openNewRez(v.license_plate, ds)
                               }}
-                              onMouseEnter={() => rez && setHoveredId(rez.id)}
-                              onMouseLeave={() => setHoveredId(null)}
-                              title={rez ? `${rez.ime_prezime} (${rez.daily_status})` : 'Klikni za novu rezervaciju'}
                               style={{
-                                padding: '2px 1px', height: 36,
-                                background: isToday ? '#f0fdf8' : '#fff',
+                                padding: '2px 1px',
+                                height: 36,
+                                background: isDropTarget
+                                  ? '#dbeafe'
+                                  : isToday ? '#f0fdf8' : '#fff',
                                 borderBottom: '1px solid #f3f4f6',
-                                borderRight: '1px solid #f3f4f6',
-                                cursor: 'pointer',
+                                borderRight: isDropTarget ? '1px solid #93c5fd' : '1px solid #f3f4f6',
+                                cursor: isDragging ? 'copy' : 'pointer',
+                                outline: isDropTarget ? '2px solid #3b82f6' : 'none',
+                                outlineOffset: -2,
+                                transition: 'background 0.1s, outline 0.1s',
                               }}
                             >
                               {rez && color && (
-                                <div style={{
-                                  height: 28, margin: '0 1px',
-                                  background: isHov ? color : `${color}25`,
-                                  borderTop: `2px solid ${color}`,
-                                  borderBottom: `2px solid ${color}`,
-                                  borderLeft: isStart ? `2px solid ${color}` : 'none',
-                                  borderRight: isEnd ? `2px solid ${color}` : 'none',
-                                  borderRadius: isStart && isEnd ? 4 : isStart ? '4px 0 0 4px' : isEnd ? '0 4px 4px 0' : 0,
-                                  display: 'flex', alignItems: 'center',
-                                  overflow: 'hidden', transition: 'background .1s',
-                                }}>
+                                <div
+                                  // Drag source — samo na rezervaciji
+                                  draggable
+                                  onDragStart={e => handleDragStart(e, rez.id)}
+                                  onDragEnd={handleDragEnd}
+                                  onMouseEnter={() => !isDragging && setHoveredId(rez.id)}
+                                  onMouseLeave={() => setHoveredId(null)}
+                                  title={`${rez.ime_prezime} | ${toDMY(rez.od_datuma)} – ${toDMY(rez.do_datuma)} | ${rez.daily_status}\nVuci da pomjeriš`}
+                                  style={{
+                                    height: 28,
+                                    margin: '0 1px',
+                                    background: isDragSource
+                                      ? `${color}15`
+                                      : isHov ? color : `${color}25`,
+                                    borderTop: `2px solid ${color}`,
+                                    borderBottom: `2px solid ${color}`,
+                                    borderLeft: isStart ? `2px solid ${color}` : 'none',
+                                    borderRight: rez.do_datuma === ds ? `2px solid ${color}` : 'none',
+                                    borderRadius: isStart && rez.do_datuma === ds ? 4 : isStart ? '4px 0 0 4px' : rez.do_datuma === ds ? '0 4px 4px 0' : 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    overflow: 'hidden',
+                                    transition: 'background .1s, opacity .1s',
+                                    cursor: isDragging ? 'grabbing' : 'grab',
+                                    opacity: isDragSource ? 0.4 : 1,
+                                  }}
+                                >
                                   {isStart && (
-                                    <span style={{ fontSize: 10, color: isHov ? '#fff' : color, paddingLeft: 4, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 80, fontWeight: 600 }}>
+                                    <span style={{
+                                      fontSize: 10,
+                                      color: isHov && !isDragSource ? '#fff' : color,
+                                      paddingLeft: 4,
+                                      whiteSpace: 'nowrap' as const,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      maxWidth: 80,
+                                      fontWeight: 600,
+                                    }}>
                                       {rez.ime_prezime?.split(' ')[0]}
                                     </span>
                                   )}
@@ -645,7 +813,6 @@ export default function AdminKalendarPage() {
               <button onClick={() => setShowDuznici(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ padding: 20 }}>
-              {/* Novi dug */}
               <NoviDugForm onSave={loadAll} />
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 16 }}>
                 <thead>
