@@ -2,581 +2,665 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { RezervacijaModal, RezForm, VoziloOption, EMPTY_REZ_FORM, calcDana, calcUkupno, generateUgovor } from '@/lib/RezervacijaModal'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type Reservation = {
-  id: string; ref_code: string; guest_name: string; guest_phone: string
-  pickup_date: string; return_date: string; pickup_time: string; return_time: string
-  pickup_location: string; total_price: number; final_total: number | null
-  status: string; payment_status: string; agent_name: string | null
-  amount_paid: number; amount_debt: number; amount_prepaid: number
-  surcharges_total: number; payment_method: string | null
-  cash_amount: number; card_amount: number; wire_amount: number
-  issued_at: string | null; issued_by: string | null
-  closed_at: string | null; closed_by: string | null
-  is_early_return: boolean; original_return_date: string | null
-  early_return_note: string | null
-  vehicles: { name: string; category: string } | null
+// ─── TIPOVI ───────────────────────────────────────────────
+type KalRezervacija = {
+  id: number
+  br_tablica: string
+  ime_prezime: string
+  daily_status: string
+  od_datuma: string
+  do_datuma: string
+  vreme_izdavanja?: string
+  vreme_povratka?: string
+  cijena_dan?: number
+  nacin_placanja?: string
+  firma?: string
+  adresa?: string
+  telefon?: string
+  email?: string
+  zemlja?: string
+  datum_rodjenja?: string
+  tip_osiguranja?: string
+  kasko_cijena?: number
+  kasko_tip?: string
+  kasko_ucesce?: number
+  granica?: string
+  depozit?: number
+  napomena?: string
+  bebi_sic_cijena?: number
+  dozvola_van_zemlje_cijena?: number
+  dostava_cijena?: number
+  dodatni_vozac_cijena?: number
+  dodatni_vozac_vozacka?: string
+  ukupno_naplata?: number
+  naplaceno?: number
+  br_vozacke?: string
+  br_vozacke2?: string
+  ime2?: string
+  prezime2?: string
+  ko_je_izdao?: string
+  ko_je_preuzeo?: string
+  br_leta?: string
+  mjesto_preuzimanja?: string
+  mjesto_povratka?: string
+  izvor_rezervacije?: string
+  ugovor_slika?: string
+  depozit_uzet?: boolean
+  depozit_vracen?: boolean
+  vraceni_depozit_iznos?: number
 }
 
-type SurchargeType = { id: string; name: string; is_active: boolean; sort_order: number }
-type PaymentInput = { method: 'cash' | 'card' | 'wire' | 'split'; cashAmount: string; cardAmount: string; wireAmount: string }
-
-const PM_LABELS: Record<string, string> = { cash: 'Keš', card: 'Kartica', wire: 'Virmanski', split: 'Podijeljeno' }
+const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
+const SIFRE: Record<string, string> = { 'CRNA GORA': 'cg810805', 'BiH': 'bih000', 'SRBIJA': 'srb222', 'ALBANIJA': 'alb333' }
+const AGENTI = ['Ranka Bulatovic', 'Ena Rondic', 'Esad Djokic', 'Kenan Kolic', 'Edmir Paljevic', 'Semira Pepic', 'Adis Nikaj', 'Besim Adzovic', 'Jasmin Skrijelj', 'Edin Suljevic', 'Dino Mekic']
+const MONTHS = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Juni', 'Juli', 'August', 'Septembar', 'Oktobar', 'Novembar', 'Decembar']
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> = {
-  pending:   { bg: '#FAEEDA', color: '#633806', label: 'Na čekanju' },
-  confirmed: { bg: '#E1F5EE', color: '#085041', label: 'Potvrđeno' },
-  issued:    { bg: '#E6F1FB', color: '#0C447C', label: 'Izdato' },
-  closed:    { bg: '#f3f4f6', color: '#374151', label: 'Zatvoreno' },
-  cancelled: { bg: '#FCEBEB', color: '#791F1F', label: 'Otkazano' },
+  'Na čekanju': { bg: '#FAEEDA', color: '#633806', label: 'Na čekanju' },
+  'Izdato':     { bg: '#E1F5EE', color: '#085041', label: 'Izdato' },
+  'Nije izdato':{ bg: '#FCEBEB', color: '#791F1F', label: 'Nije izdato' },
 }
 
-function getCookie(name: string): string {
-  if (typeof document === 'undefined') return ''
-  const match = document.cookie.match(new RegExp(`${name}=([^;]+)`))
-  return match ? decodeURIComponent(match[1]) : ''
+function toDMY(iso: string) {
+  if (!iso) return ''
+  const p = iso.split('-')
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso
 }
 
-function PaymentMethodSelector({ total, value, onChange }: { total: number; value: PaymentInput; onChange: (v: PaymentInput) => void }) {
-  const splitTotal = parseFloat(value.cashAmount || '0') + parseFloat(value.cardAmount || '0') + parseFloat(value.wireAmount || '0')
-  const remaining = total - splitTotal
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Način plaćanja</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 10 }}>
-        {(['cash', 'card', 'wire', 'split'] as const).map(m => (
-          <button key={m} onClick={() => onChange({ ...value, method: m })}
-            style={{ padding: '7px 4px', border: `1px solid ${value.method === m ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: value.method === m ? '#E1F5EE' : '#fff', color: value.method === m ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 12, fontWeight: value.method === m ? 600 : 400 }}>
-            {PM_LABELS[m]}
-          </button>
-        ))}
-      </div>
-      {value.method === 'split' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {[['cash', 'Keš', value.cashAmount], ['card', 'Kartica', value.cardAmount], ['wire', 'Virmanski', value.wireAmount]].map(([key, label, val]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: '#6b7280', width: 70 }}>{label}</span>
-              <input type="number" step="0.01" placeholder="0" value={val}
-                onChange={e => onChange({ ...value, [`${key}Amount`]: e.target.value } as PaymentInput)}
-                style={{ flex: 1, padding: '6px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111' }} />
-              <span style={{ fontSize: 12, color: '#9ca3af' }}>€</span>
-            </div>
-          ))}
-          <div style={{ padding: '7px 12px', borderRadius: 8, background: Math.abs(remaining) < 0.01 ? '#E1F5EE' : '#FAEEDA', fontSize: 12, color: Math.abs(remaining) < 0.01 ? '#085041' : '#633806' }}>
-            {Math.abs(remaining) < 0.01 ? 'Iznosi se poklapaju' : `Preostalo: ${remaining.toFixed(2)}€`}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+function addDays(iso: string, n: number): string {
+  const d = new Date(iso)
+  d.setDate(d.getDate() + n)
+  return d.toISOString().split('T')[0]
 }
 
-function getPaymentAmounts(payment: PaymentInput, total: number) {
-  if (payment.method === 'cash') return { cash: total, card: 0, wire: 0 }
-  if (payment.method === 'card') return { cash: 0, card: total, wire: 0 }
-  if (payment.method === 'wire') return { cash: 0, card: 0, wire: total }
-  return { cash: parseFloat(payment.cashAmount || '0'), card: parseFloat(payment.cardAmount || '0'), wire: parseFloat(payment.wireAmount || '0') }
+function rezToForm(r: KalRezervacija): RezForm {
+  return {
+    id: r.id,
+    br_vozacke: r.br_vozacke || '',
+    ime_prezime: r.ime_prezime || '',
+    zemlja: r.zemlja || '',
+    datum_rodjenja: r.datum_rodjenja || '',
+    telefon: r.telefon || '',
+    email: r.email || '',
+    adresa: r.adresa || '',
+    istek_vozacke: '',
+    br_vozacke2: r.br_vozacke2 || '',
+    ime2: r.ime2 || '',
+    prezime2: r.prezime2 || '',
+    br_tablica: r.br_tablica || '',
+    firma: r.firma || 'Meriem d.o.o.',
+    tip_osiguranja: r.tip_osiguranja || 'Osnovno (AO)',
+    kasko_cijena: r.kasko_cijena || 0,
+    kasko_tip: r.kasko_tip || 'FULL KASKO',
+    kasko_ucesce: r.kasko_ucesce || 0,
+    granica: r.granica || 'DOZVOLJENO VAN ZEMLJE',
+    napomena: r.napomena || '',
+    br_leta: r.br_leta || '',
+    ko_je_izdao: r.ko_je_izdao || '',
+    ko_je_preuzeo: r.ko_je_preuzeo || '',
+    daily_status: r.daily_status || 'Na čekanju',
+    od_datuma: r.od_datuma || '',
+    do_datuma: r.do_datuma || '',
+    vreme_izdavanja: r.vreme_izdavanja || '10:00',
+    vreme_povratka: r.vreme_povratka || '10:00',
+    cijena_dan: r.cijena_dan || 0,
+    depozit: r.depozit || 0,
+    nacin_placanja: r.nacin_placanja || 'Keš',
+    mjesto_preuzimanja: r.mjesto_preuzimanja || 'Bulevar Veljka Vlahovića 16',
+    mjesto_povratka: r.mjesto_povratka || 'Bulevar Veljka Vlahovića 16',
+    izvor_rezervacije: r.izvor_rezervacije || 'Sajt',
+    dozvola_van_zemlje_cijena: r.dozvola_van_zemlje_cijena || 0,
+    dostava_cijena: r.dostava_cijena || 0,
+    bebi_sic_cijena: r.bebi_sic_cijena || 0,
+    dodatni_vozac_cijena: r.dodatni_vozac_cijena || 0,
+    dodatni_vozac_vozacka: r.dodatni_vozac_vozacka || '',
+    naplaceno: r.naplaceno || 0,
+  }
 }
 
+// ─── MAIN PAGE ────────────────────────────────────────────
 export default function AdminDanPage() {
   const today = new Date().toISOString().split('T')[0]
   const [selectedDate, setSelectedDate] = useState(today)
-  const [reservations, setReservations] = useState<Reservation[]>([])
-  const [surchargeTypes, setSurchargeTypes] = useState<SurchargeType[]>([])
-  const [extras, setExtras] = useState<{id: string; name: string; price: number}[]>([])
+  const [currentLok, setCurrentLok] = useState('CRNA GORA')
+  const [rezervacije, setRezervacije] = useState<KalRezervacija[]>([])
+  const [vozila, setVozila] = useState<VoziloOption[]>([])
   const [loading, setLoading] = useState(true)
-  const [agentName] = useState(() => getCookie('avtorent-agent-name'))
-
-  const [modal, setModal] = useState<'issue' | 'close' | 'charge' | null>(null)
-  const [selected, setSelected] = useState<Reservation | null>(null)
-  const [selectedCharges, setSelectedCharges] = useState<any[]>([])
-
-  const [issueMode, setIssueMode] = useState<'quick' | 'full'>('quick')
-  const [issuePaymentMode, setIssuePaymentMode] = useState<'full' | 'other'>('full')
-  const [issueAmount, setIssueAmount] = useState('')
-  const [issuePayment, setIssuePayment] = useState<PaymentInput>({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-  const [issueSaving, setIssueSaving] = useState(false)
-
-  const [closeMode, setCloseMode] = useState<'quick' | 'full'>('quick')
-  const [debtCollected, setDebtCollected] = useState<boolean | null>(null)
-  const [debtPayment, setDebtPayment] = useState<PaymentInput>({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-  const [prepaidReturned, setPrepaidReturned] = useState<boolean | null>(null)
-  const [hasSurcharges, setHasSurcharges] = useState<boolean | null>(null)
-  const [surchargeAmounts, setSurchargeAmounts] = useState<Record<string, string>>({})
-  const [surchargePayments, setSurchargePayments] = useState<Record<string, PaymentInput>>({})
-  const [customSurcharge, setCustomSurcharge] = useState('')
-  const [customSurchargeAmount, setCustomSurchargeAmount] = useState('')
-  const [earlyReturnNote, setEarlyReturnNote] = useState('')
-  const [closeSaving, setCloseSaving] = useState(false)
-
-  const [chargeType, setChargeType] = useState<'extra' | 'surcharge' | 'custom'>('surcharge')
-  const [chargeItemId, setChargeItemId] = useState('')
-  const [chargeItemName, setChargeItemName] = useState('')
-  const [chargeAmount, setChargeAmount] = useState('')
-  const [chargePayment, setChargePayment] = useState<PaymentInput>({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-  const [chargeComment, setChargeComment] = useState('')
-  const [chargeSaving, setChargeSaving] = useState(false)
-
-  const [showWashModal, setShowWashModal] = useState(false)
-  const [washReservation, setWashReservation] = useState<Reservation | null>(null)
-  const [washType, setWashType] = useState('')
-  const [washAssignedTo, setWashAssignedTo] = useState<'partner' | 'agent'>('partner')
-  const [washCustomPrice, setWashCustomPrice] = useState('')
-  const [washNotes, setWashNotes] = useState('')
-  const [washSaving, setWashSaving] = useState(false)
-  const [washPartnerId, setWashPartnerId] = useState<string | null>(null)
-
-  const WASH_TYPES = [
-    { key: 'quick', label: 'Brzo pranje', price: 5 },
-    { key: 'detailed', label: 'Detaljno pranje', price: 10 },
-    { key: 'deep_quick', label: 'Dubinsko brzo', price: 40 },
-    { key: 'deep_detailed', label: 'Dubinsko detaljno', price: 80 },
-    { key: 'specific', label: 'Specifično pranje', price: 0 },
-  ]
-
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  const [newResAlert, setNewResAlert] = useState<string | null>(null)
   const [showDone, setShowDone] = useState(false)
-  const [cancelModal, setCancelModal] = useState<string | null>(null)
-  const [cancelReason, setCancelReason] = useState('')
-  const [cancelSaving, setCancelSaving] = useState(false)
-  const [locations, setLocations] = useState<{id: string; name: string}[]>([])
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
-  const [showLocationFilter, setShowLocationFilter] = useState(false)
-  const [vehiclesByLocation, setVehiclesByLocation] = useState<Record<string, string[]>>({})
-  const [reservationExtras, setReservationExtras] = useState<Record<string, {name: string; days: number; total_price: number}[]>>({})
-  const [overdueReservations, setOverdueReservations] = useState<Reservation[]>([])
+  const [newAlert, setNewAlert] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
+  // Modali
+  const [showRezModal, setShowRezModal] = useState(false)
+  const [rezForm, setRezForm] = useState<RezForm>(EMPTY_REZ_FORM)
+  const [isNewRez, setIsNewRez] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Agent modal
+  const [showAgentModal, setShowAgentModal] = useState(false)
+  const [agentTip, setAgentTip] = useState<'izdavanje' | 'preuzimanje'>('izdavanje')
+  const [agentRezId, setAgentRezId] = useState<number | null>(null)
+
+  // Produži rentu modal
+  const [showProduziModal, setShowProduziModal] = useState(false)
+  const [produziRezId, setProduziRezId] = useState<number | null>(null)
+  const [produziDana, setProduziDana] = useState('')
+  const [produziCijena, setProduziCijena] = useState('')
+  const [produziNaplaceno, setProduziNaplaceno] = useState('')
+  const [produziSaving, setProduziSaving] = useState(false)
+
+  // Upload ugovora modal
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadRezId, setUploadRezId] = useState<number | null>(null)
+  const [uploadUrl, setUploadUrl] = useState('')
+  const [uploadSaving, setUploadSaving] = useState(false)
+
+  const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
+
+  const loadAll = useCallback(async () => {
     setLoading(true)
-    supabase.from('wash_partners').select('id').eq('is_active', true).single().then(({ data: wp }) => {
-      if (wp) setWashPartnerId(wp.id)
-    })
-    const [{ data }, { data: st }, { data: ex }] = await Promise.all([
-      supabase.from('reservations').select('*, vehicles(name, category)').neq('status', 'cancelled')
-        .or(`pickup_date.eq.${selectedDate},return_date.eq.${selectedDate},and(pickup_date.lt.${selectedDate},return_date.gt.${selectedDate})`)
-        .order('pickup_time', { ascending: true }),
-      supabase.from('surcharge_types').select('*').eq('is_active', true).order('sort_order'),
-      supabase.from('extras').select('id, name, price').eq('is_active', true),
+    const [{ data: v }, { data: r }] = await Promise.all([
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
+      supabase.from('rezervacije').select('*')
+        .or(`od_datuma.eq.${selectedDate},do_datuma.eq.${selectedDate},and(od_datuma.lt.${selectedDate},do_datuma.gt.${selectedDate})`)
+        .order('vreme_izdavanja'),
     ])
-    const resData = data || []
-    setReservations(resData)
-    setSurchargeTypes(st || [])
-    setExtras(ex || [])
-
-    // Fetch extras for all reservations
-    if (resData.length > 0) {
-      const ids = resData.map((r: any) => r.id)
-      const { data: extrasData } = await supabase
-        .from('reservation_extras')
-        .select('reservation_id, extra_name, days, total_price')
-        .in('reservation_id', ids)
-      if (extrasData) {
-        const grouped: Record<string, any[]> = {}
-        extrasData.forEach((e: any) => {
-          if (!grouped[e.reservation_id]) grouped[e.reservation_id] = []
-          grouped[e.reservation_id].push({ name: e.extra_name, days: e.days, total_price: e.total_price })
-        })
-        setReservationExtras(grouped)
-      }
-    }
-    const { data: overdue } = await supabase
-      .from('reservations')
-      .select('*, vehicles(name, category)')
-      .neq('status', 'cancelled')
-      .neq('status', 'closed')
-      .or(`and(status.eq.confirmed,pickup_date.lt.${selectedDate}),and(status.eq.issued,return_date.lt.${selectedDate})`)
-      .order('pickup_date', { ascending: false })
-    setOverdueReservations(overdue || [])
-
+    if (v) setVozila(v)
+    if (r) setRezervacije(r)
     setLoading(false)
   }, [selectedDate])
 
+  // Overdue — nije preuzeto ni izdato iz prošlih dana
+  const [overdueRez, setOverdueRez] = useState<KalRezervacija[]>([])
+  const loadOverdue = useCallback(async () => {
+    const { data } = await supabase.from('rezervacije').select('*')
+      .neq('daily_status', 'Nije izdato')
+      .or(`and(daily_status.eq.Na čekanju,od_datuma.lt.${selectedDate}),and(daily_status.eq.Izdato,do_datuma.lt.${selectedDate})`)
+    setOverdueRez(data || [])
+  }, [selectedDate])
+
+  useEffect(() => { loadAll(); loadOverdue() }, [loadAll, loadOverdue])
+
+  // Real-time
   useEffect(() => {
-    fetchData()
-
-    const channel = supabase
-      .channel('dan-reservations')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'reservations',
-      }, (payload) => {
+    const channel = supabase.channel('dan-rez')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rezervacije' }, (payload) => {
         const r = payload.new as any
-        const isForToday = r.pickup_date === selectedDate || r.return_date === selectedDate
-        if (isForToday) {
-          setNewResAlert(`Nova rezervacija: ${r.guest_name} — ${r.pickup_date}`)
-          setTimeout(() => setNewResAlert(null), 8000)
+        if (r.od_datuma === selectedDate || r.do_datuma === selectedDate) {
+          setNewAlert(`Nova rezervacija: ${r.ime_prezime} — ${r.od_datuma}`)
+          setTimeout(() => setNewAlert(null), 8000)
         }
-        if (!modal) fetchData()
+        loadAll()
       })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'reservations',
-      }, () => {
-        if (!modal) fetchData()
-      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rezervacije' }, () => loadAll())
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
-  }, [fetchData, selectedDate, modal])
+  }, [loadAll, selectedDate])
 
-  function hasDebtOrPrepaid(r: Reservation) {
-    return r.payment_status === 'debt' || r.payment_status === 'prepaid'
+  function provjeriSifru(lok: string): boolean {
+    const key = `auth_${lok.replace(/\s+/g, '')}`
+    if (sessionStorage.getItem(key) === 'ok') return true
+    const uneto = window.prompt(`Lozinka za: ${lok}`)
+    if (uneto === SIFRE[lok]) { sessionStorage.setItem(key, 'ok'); return true }
+    else if (uneto !== null) alert('Pogrešna lozinka!')
+    return false
   }
 
-  function openIssue(r: Reservation) {
-    setSelected(r); setIssueMode('quick'); setIssuePaymentMode('full')
-    setIssueAmount(String(r.total_price))
-    setIssuePayment({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-    setModal('issue')
+  function setLokacija(lok: string) {
+    if (provjeriSifru(lok)) setCurrentLok(lok)
   }
 
-  function openClose(r: Reservation) {
-    setSelected(r); setCloseMode('quick')
-    setDebtCollected(null); setPrepaidReturned(null)
-    setDebtPayment({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-    setHasSurcharges(null); setSurchargeAmounts({}); setSurchargePayments({})
-    setCustomSurcharge(''); setCustomSurchargeAmount(''); setEarlyReturnNote('')
-    setModal('close')
+  function prevDay() {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() - 1)
+    setSelectedDate(d.toISOString().split('T')[0])
   }
 
-  function openCharge(r: Reservation) {
-    setSelected(r)
-    supabase.from('reservation_charges').select('*').eq('reservation_id', r.id).order('created_at', { ascending: false }).then(({ data }) => setSelectedCharges(data || []))
-    setChargeType('surcharge'); setChargeItemId(''); setChargeItemName(''); setChargeAmount(''); setChargeComment('')
-    setChargePayment({ method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' })
-    setModal('charge')
+  function nextDay() {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() + 1)
+    setSelectedDate(d.toISOString().split('T')[0])
   }
 
-  async function handleWashOrder(skip: boolean) {
-    setShowWashModal(false)
-    if (skip || !washReservation || !washType) return
-    setWashSaving(true)
-    const wt = WASH_TYPES.find(w => w.key === washType)
-    const price = washType === 'specific' ? parseFloat(washCustomPrice || '0') : (wt?.price || 0)
-    await supabase.from('wash_orders').insert({
-      reservation_id: washReservation.id,
-      vehicle_name: washReservation.vehicles?.name || 'Nepoznato',
-      wash_type: washType, wash_type_label: wt?.label || washType,
-      price, status: 'pending', assigned_to: washAssignedTo,
-      agent_name: washAssignedTo === 'agent' ? (agentName || 'Agent') : null,
-      wash_partner_id: washAssignedTo === 'partner' ? washPartnerId : null,
-      notes: washNotes || null,
-      payout_status: washAssignedTo === 'partner' ? 'unpaid' : null,
-      payout_amount: washAssignedTo === 'partner' ? price : null,
-    })
-    setWashSaving(false)
-    setWashReservation(null); setWashType(''); setWashCustomPrice(''); setWashNotes('')
+  function formatDate(d: string) {
+    return new Date(d).toLocaleDateString('sr-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }
 
-  function triggerWash(r: Reservation) {
-    setWashReservation(r); setWashType(''); setWashAssignedTo('partner')
-    setWashCustomPrice(''); setWashNotes(''); setShowWashModal(true)
-  }
+  // ─── FILTER PO LOKACIJI ──────────────────────────────────
+  const vozilaLokTablice = new Set(vozilaLok.map(v => v.license_plate).filter(Boolean))
 
-  async function handleCancel() {
-    if (!cancelModal || !cancelReason.trim()) return
-    setCancelSaving(true)
-    await supabase.from('reservations').update({
-      status: 'cancelled',
-      closed_by: agentName || 'Agent',
-      closed_at: new Date().toISOString(),
-      notes: cancelReason.trim(),
-    }).eq('id', cancelModal)
-    setCancelSaving(false)
-    setCancelModal(null)
-    setCancelReason('')
-    fetchData()
-  }
+  const izdavanja = rezervacije.filter(r =>
+    r.od_datuma === selectedDate && vozilaLokTablice.has(r.br_tablica)
+  ).sort((a, b) => (a.vreme_izdavanja || '').localeCompare(b.vreme_izdavanja || ''))
 
-  async function handleQuickIssue() {
-    if (!selected) return
-    setIssueSaving(true)
-    const amounts = getPaymentAmounts(issuePayment, selected.total_price)
-    await supabase.from('reservations').update({
-      status: 'issued', payment_status: 'paid', amount_paid: selected.total_price,
-      payment_method: issuePayment.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire,
-      issued_at: new Date().toISOString(), issued_by: agentName || 'Agent',
-    }).eq('id', selected.id)
-    await supabase.from('agent_collections').insert({
-      reservation_id: selected.id, agent_name: agentName || 'Agent',
-      amount: selected.total_price, collection_type: 'rental',
-      payment_method: issuePayment.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire,
-      note: `Brzo izdavanje. Ref: ${selected.ref_code}`,
-    })
-    setIssueSaving(false); setModal(null); fetchData()
-  }
+  const povratci = rezervacije.filter(r =>
+    r.do_datuma === selectedDate && vozilaLokTablice.has(r.br_tablica)
+  ).sort((a, b) => (a.vreme_povratka || '').localeCompare(b.vreme_povratka || ''))
 
-  async function handleFullIssue() {
-    if (!selected) return
-    setIssueSaving(true)
-    const paid = issuePaymentMode === 'full' ? selected.total_price : parseFloat(issueAmount || '0')
-    const diff = paid - selected.total_price
-    const paymentStatus = Math.abs(diff) < 0.01 ? 'paid' : diff < 0 ? 'debt' : 'prepaid'
-    const amounts = getPaymentAmounts(issuePayment, paid)
-    await supabase.from('reservations').update({
-      status: 'issued', payment_status: paymentStatus,
-      amount_paid: paid, amount_debt: diff < 0 ? Math.abs(diff) : 0, amount_prepaid: diff > 0 ? diff : 0,
-      payment_method: issuePayment.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire,
-      issued_at: new Date().toISOString(), issued_by: agentName || 'Agent',
-    }).eq('id', selected.id)
-    await supabase.from('agent_collections').insert({
-      reservation_id: selected.id, agent_name: agentName || 'Agent',
-      amount: paid, collection_type: 'rental',
-      payment_method: issuePayment.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire,
-      note: `Ref: ${selected.ref_code}`,
-    })
-    setIssueSaving(false); setModal(null); fetchData()
-  }
-
-  async function handleQuickClose() {
-    if (!selected) return
-    setCloseSaving(true)
-    const now = new Date()
-    const updateData: any = {
-      status: 'closed', final_total: selected.total_price,
-      closed_at: now.toISOString(), closed_by: agentName || 'Agent',
-    }
-    if (selected.return_date > selectedDate) {
-      updateData.is_early_return = true; updateData.early_return_at = now.toISOString()
-      updateData.early_return_note = earlyReturnNote || 'Brzo preuzimanje'
-      updateData.original_return_date = selected.return_date; updateData.return_date = selectedDate
-    }
-    const r = selected
-    await supabase.from('reservations').update(updateData).eq('id', selected.id)
-    setCloseSaving(false); setModal(null)
-    triggerWash(r)
-    fetchData()
-  }
-
-  async function handleFullClose() {
-    if (!selected) return
-    setCloseSaving(true)
-    const surcharges = surchargeTypes
-      .filter(st => surchargeAmounts[st.id] && parseFloat(surchargeAmounts[st.id]) > 0)
-      .map(st => ({ reservation_id: selected.id, name: st.name, amount: parseFloat(surchargeAmounts[st.id]) }))
-    if (customSurcharge && customSurchargeAmount && parseFloat(customSurchargeAmount) > 0)
-      surcharges.push({ reservation_id: selected.id, name: customSurcharge, amount: parseFloat(customSurchargeAmount) })
-    const surchargesTotal = surcharges.reduce((s, c) => s + c.amount, 0)
-    if (surcharges.length > 0) {
-      await supabase.from('reservation_surcharges').insert(surcharges)
-      for (const s of surcharges) {
-        const sp = surchargePayments[s.name] || { method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' }
-        const amounts = getPaymentAmounts(sp, s.amount)
-        await supabase.from('agent_collections').insert({
-          reservation_id: selected.id, agent_name: agentName || 'Agent',
-          amount: s.amount, collection_type: 'surcharge',
-          payment_method: sp.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire, note: s.name,
-        })
-      }
-    }
-    if (selected.payment_status === 'debt' && debtCollected) {
-      const amounts = getPaymentAmounts(debtPayment, selected.amount_debt)
-      await supabase.from('agent_collections').insert({
-        reservation_id: selected.id, agent_name: agentName || 'Agent',
-        amount: selected.amount_debt, collection_type: 'debt_collected',
-        payment_method: debtPayment.method, cash_amount: amounts.cash, card_amount: amounts.card, wire_amount: amounts.wire,
-        note: 'Naplata duga pri preuzimanju',
-      })
-    }
-    if (selected.payment_status === 'prepaid' && prepaidReturned) {
-      await supabase.from('agent_collections').insert({
-        reservation_id: selected.id, agent_name: agentName || 'Agent',
-        amount: -selected.amount_prepaid, collection_type: 'prepaid_returned',
-        payment_method: 'cash', cash_amount: -selected.amount_prepaid, card_amount: 0, wire_amount: 0,
-        note: 'Povrat pretplate klijentu',
-      })
-    }
-    const finalTotal = (selected.final_total || selected.total_price) + surchargesTotal
-    const now = new Date()
-    const updateData: any = {
-      status: 'closed', surcharges_total: surchargesTotal, final_total: finalTotal,
-      closed_at: now.toISOString(), closed_by: agentName || 'Agent',
-    }
-    if (selected.return_date > selectedDate) {
-      updateData.is_early_return = true; updateData.early_return_at = now.toISOString()
-      updateData.early_return_note = earlyReturnNote || 'Vozilo vraćeno prije isteka'
-      updateData.original_return_date = selected.return_date; updateData.original_return_time = selected.return_time
-      updateData.return_date = selectedDate; updateData.return_time = now.toTimeString().slice(0, 5)
-    }
-    const r = selected
-    await supabase.from('reservations').update(updateData).eq('id', selected.id)
-    setCloseSaving(false); setModal(null)
-    triggerWash(r)
-    fetchData()
-  }
-
-  async function handleCharge() {
-    if (!selected || !chargeAmount || parseFloat(chargeAmount) <= 0) return
-    setChargeSaving(true)
-    const amount = parseFloat(chargeAmount)
-    const pm = chargePayment.method
-    const cashAmt = pm === 'cash' ? amount : pm === 'split' ? parseFloat(chargePayment.cashAmount || '0') : 0
-    const cardAmt = pm === 'card' ? amount : pm === 'split' ? parseFloat(chargePayment.cardAmount || '0') : 0
-    const wireAmt = pm === 'wire' ? amount : pm === 'split' ? parseFloat(chargePayment.wireAmount || '0') : 0
-    const { data: charge } = await supabase.from('reservation_charges').insert({
-      reservation_id: selected.id, agent_name: agentName || 'Agent',
-      charge_type: chargeType, item_id: chargeItemId || null, item_name: chargeItemName,
-      amount, payment_method: pm, cash_amount: cashAmt, card_amount: cardAmt, wire_amount: wireAmt,
-      comment: chargeComment || null,
-    }).select().single()
-    await supabase.from('agent_collections').insert({
-      reservation_id: selected.id, agent_name: agentName || 'Agent',
-      amount, collection_type: chargeType === 'extra' ? 'rental' : 'surcharge',
-      payment_method: pm, cash_amount: cashAmt, card_amount: cardAmt, wire_amount: wireAmt,
-      note: chargeItemName, charge_id: charge?.id || null,
-    })
-    setChargeSaving(false); setModal(null); fetchData()
-  }
-
-  const locationFilter = (r: Reservation) => {
-    if (selectedLocations.length === 0) return true
-    const vehicleName = r.vehicles?.name || ''
-    return selectedLocations.some(locId => (vehiclesByLocation[locId] || []).includes(vehicleName))
-  }
-
-  const pickups = reservations.filter(r => r.pickup_date === selectedDate && locationFilter(r))
-  const returns = reservations.filter(r => r.return_date === selectedDate && locationFilter(r))
-  const pendingCount = pickups.filter(r => r.status !== 'issued' && r.status !== 'closed').length
-    + returns.filter(r => r.status !== 'closed').length
-  const totalCount = pickups.length + returns.length
+  const pendingIzdavanja = izdavanja.filter(r => r.daily_status === 'Na čekanju')
+  const pendingPovratci = povratci.filter(r => r.daily_status !== 'Nije izdato' && !r.ko_je_preuzeo)
+  const pendingCount = pendingIzdavanja.length + pendingPovratci.length
+  const totalCount = izdavanja.length + povratci.length
   const doneCount = totalCount - pendingCount
 
-  const isEarlyReturn = selected && selected.return_date > selectedDate && selected.status === 'issued'
-  const surchargesSum = surchargeTypes.reduce((s, st) => s + (parseFloat(surchargeAmounts[st.id] || '0') || 0), 0) + (parseFloat(customSurchargeAmount || '0') || 0)
-  const fullIssueAmount = issuePaymentMode === 'full' ? (selected?.total_price || 0) : parseFloat(issueAmount || '0')
-  const issueDiff = selected ? fullIssueAmount - selected.total_price : 0
+  const overdueFiltered = overdueRez.filter(r => vozilaLokTablice.has(r.br_tablica))
 
-useEffect(() => {
-    async function loadLocations() {
-      const [locRes, vlRes, vRes] = await Promise.all([
-        fetch('/api/locations').then(r => r.json()),
-        supabase.from('vehicle_locations').select('vehicle_id, location_id'),
-        supabase.from('vehicles').select('id, name'),
-      ])
-      const locs = locRes.locations || []
-      setLocations(locs)
-      const vehicles = vRes.data || []
-      const vl = vlRes.data || []
-      const map: Record<string, string[]> = {}
-      vl.forEach((row: any) => {
-        if (!map[row.location_id]) map[row.location_id] = []
-        const vehicle = vehicles.find((v: any) => v.id === row.vehicle_id)
-        if (vehicle?.name) map[row.location_id].push(vehicle.name)
-      })
-      setVehiclesByLocation(map)
-      try {
-        const saved = localStorage.getItem('avtorent-agent-locations')
-        if (saved) setSelectedLocations(JSON.parse(saved))
-      } catch {}
-    }
-    loadLocations()
-  }, [])
-function toggleLocation(id: string) {
-    setSelectedLocations(prev => {
-      const next = prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
-      localStorage.setItem('avtorent-agent-locations', JSON.stringify(next))
-      return next
-    })
+  // ─── REZ MODAL ───────────────────────────────────────────
+  function openRez(r: KalRezervacija) {
+    setRezForm(rezToForm(r))
+    setIsNewRez(false)
+    setShowRezModal(true)
   }
-  function formatTime(t: string | null) { return t ? t.slice(0, 5) : '10:00' }
-  function formatDate(d: string) { return new Date(d).toLocaleDateString('sr-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
-  function isToday() { return selectedDate === today }
-  function isFuture() { return selectedDate > today }
-  function prevDay() { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split('T')[0]) }
-  function nextDay() { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split('T')[0]) }
 
-  const ReservationCard = ({ r, type }: { r: Reservation; type: 'pickup' | 'return' }) => {
-    const st = STATUS_COLORS[r.status] || STATUS_COLORS.pending
-    const timeLabel = type === 'pickup' ? formatTime(r.pickup_time) : formatTime(r.return_time)
+  async function saveRezervacija() {
+    if (!rezForm.br_tablica || !rezForm.ime_prezime) { alert('Unesite tablice i ime!'); return }
+    setSaving(true)
+    const dana = calcDana(rezForm)
+    const ukupno = calcUkupno(rezForm)
+    const payload = {
+      br_tablica: rezForm.br_tablica, ime_prezime: rezForm.ime_prezime,
+      br_vozacke: rezForm.br_vozacke, daily_status: rezForm.daily_status,
+      od_datuma: rezForm.od_datuma, do_datuma: rezForm.do_datuma,
+      vreme_izdavanja: rezForm.vreme_izdavanja, vreme_povratka: rezForm.vreme_povratka,
+      cijena_dan: rezForm.cijena_dan, nacin_placanja: rezForm.nacin_placanja,
+      firma: rezForm.firma, adresa: rezForm.adresa, telefon: rezForm.telefon,
+      email: rezForm.email, zemlja: rezForm.zemlja, datum_rodjenja: rezForm.datum_rodjenja,
+      tip_osiguranja: rezForm.tip_osiguranja, kasko_cijena: rezForm.kasko_cijena,
+      kasko_tip: rezForm.kasko_tip, kasko_ucesce: rezForm.kasko_ucesce,
+      granica: rezForm.granica, depozit: rezForm.depozit, napomena: rezForm.napomena,
+      bebi_sic_cijena: rezForm.bebi_sic_cijena,
+      dozvola_van_zemlje_cijena: rezForm.dozvola_van_zemlje_cijena,
+      dostava_cijena: rezForm.dostava_cijena,
+      dodatni_vozac_cijena: rezForm.dodatni_vozac_cijena,
+      dodatni_vozac_vozacka: rezForm.br_vozacke2, br_leta: rezForm.br_leta,
+      mjesto_preuzimanja: rezForm.mjesto_preuzimanja, mjesto_povratka: rezForm.mjesto_povratka,
+      izvor_rezervacije: rezForm.izvor_rezervacije, ko_je_izdao: rezForm.ko_je_izdao,
+      naplaceno: rezForm.naplaceno, ukupno_naplata: ukupno, broj_dana: dana,
+    }
+    if (rezForm.id) {
+      await supabase.from('rezervacije').update(payload).eq('id', rezForm.id)
+      await supabase.from('logovi').insert([{ akcija: `Izmijenjena REZ #${rezForm.id}` }])
+    } else {
+      await supabase.from('rezervacije').insert([payload])
+      await supabase.from('logovi').insert([{ akcija: `Kreirana rezervacija za ${rezForm.ime_prezime}` }])
+    }
+    setSaving(false)
+    setShowRezModal(false)
+    loadAll()
+  }
+
+  async function deleteRezervacija() {
+    if (!rezForm.id) return
+    const sifra = window.prompt('Admin lozinka za brisanje:')
+    if (sifra !== '810805') { alert('Pogrešna!'); return }
+    if (!confirm('Sigurno obrišete?')) return
+    await supabase.from('rezervacije').delete().eq('id', rezForm.id)
+    await supabase.from('logovi').insert([{ akcija: `Obrisana REZ #${rezForm.id}` }])
+    setShowRezModal(false)
+    loadAll()
+  }
+
+  // ─── AGENT AKCIJE ────────────────────────────────────────
+  function pokreniIzdaj(r: KalRezervacija) {
+    setAgentTip('izdavanje')
+    setAgentRezId(r.id)
+    setShowAgentModal(true)
+  }
+
+  function pokreniPreuzmi(r: KalRezervacija) {
+    setAgentTip('preuzimanje')
+    setAgentRezId(r.id)
+    setShowAgentModal(true)
+  }
+
+  async function izvrsiAgentAkciju(agent: string) {
+    if (!agentRezId) return
+    const rez = rezervacije.find(r => r.id === agentRezId) ||
+                overdueRez.find(r => r.id === agentRezId)
+    if (!rez) return
+
+    if (agentTip === 'izdavanje') {
+      const naplataStr = window.prompt('Iznos naplaćen (€) na licu mjesta:', String(rez.ukupno_naplata || 0))
+      if (naplataStr === null) return
+      const naplata = parseFloat(naplataStr) || 0
+
+      const depozit = rez.depozit || 0
+      let depozitUzet = false
+      if (depozit > 0) {
+        depozitUzet = confirm(`Ovaj ugovor ima DEPOZIT od ${depozit}€.\nDa li ste preuzeli depozit od klijenta?`)
+      }
+
+      await supabase.from('rezervacije').update({
+        daily_status: 'Izdato',
+        ko_je_izdao: agent,
+        naplaceno: naplata,
+        depozit_uzet: depozitUzet,
+      }).eq('id', agentRezId)
+
+      await supabase.from('logovi').insert([{
+        akcija: `${agent} izdao vozilo REZ #${agentRezId}. Naplaćeno: ${naplata}€`
+      }])
+
+      // Automatski generišemo ugovor — prikaži prompt za upload
+      setShowAgentModal(false)
+      alert(`Vozilo izdato! Otvorite ugovor iz detaljnog prikaza rezervacije i uploadujte sliku ugovora.`)
+
+    } else {
+      // PREUZIMANJE
+      const ukupno = rez.ukupno_naplata || 0
+      const naplaceno = rez.naplaceno || 0
+      const dug = ukupno - naplaceno
+      const depozit = rez.depozit || 0
+
+      let naplataDuga = 0
+      if (dug > 0) {
+        const dugStr = window.prompt(
+          `Ovaj ugovor ima nepokriven iznos od ${dug.toFixed(2)}€.\nKoliko naplaćujete na licu mjesta? (0 ako ništa)`,
+          dug.toFixed(2)
+        )
+        if (dugStr === null) return
+        naplataDuga = parseFloat(dugStr) || 0
+      }
+
+      let vracenDepozit = 0
+      if (depozit > 0 && !rez.depozit_vracen) {
+        const depStr = window.prompt(
+          `Depozit: ${depozit}€.\nKoliko vraćate klijentu? (0 ako zadržavate)`,
+          String(depozit)
+        )
+        if (depStr === null) return
+        vracenDepozit = parseFloat(depStr) || 0
+      }
+
+      let napomenaDepozit = ''
+      if (vracenDepozit < depozit && depozit > 0) {
+        napomenaDepozit = window.prompt('Razlog zadržavanja depozita:') || 'Zadržan depozit.'
+      }
+
+      const novoNaplaceno = naplaceno + naplataDuga
+      const preostaliDug = ukupno - novoNaplaceno
+      let novaNapomena = rez.napomena || ''
+      if (napomenaDepozit) novaNapomena += ` | Zadržan depozit: ${napomenaDepozit}`
+
+      await supabase.from('rezervacije').update({
+        ko_je_preuzeo: agent,
+        naplaceno: novoNaplaceno,
+        depozit_vracen: true,
+        vraceni_depozit_iznos: vracenDepozit,
+        napomena: novaNapomena,
+      }).eq('id', agentRezId)
+
+      await supabase.from('logovi').insert([{
+        akcija: `${agent} preuzeo vozilo REZ #${agentRezId}. Naplaćeno duga: ${naplataDuga}€`
+      }])
+
+      // Automatski zaduži dužnika ako ima preostali dug
+      if (preostaliDug > 0 && rez.br_vozacke) {
+        const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
+        const istorija = [...(dData?.istorija || []), {
+          datum: new Date().toLocaleString('sr-RS'),
+          iznos: preostaliDug,
+          komentar: `Ostao dug sa ugovora REZ #${agentRezId}`,
+          tip: 'zaduzenje'
+        }]
+        if (dData) {
+          await supabase.from('duznici').update({
+            ukupan_dug: (dData.ukupan_dug || 0) + preostaliDug,
+            istorija,
+            telefon: rez.telefon || dData.telefon,
+          }).eq('br_vozacke', rez.br_vozacke)
+        } else {
+          await supabase.from('duznici').insert([{
+            br_vozacke: rez.br_vozacke,
+            ime_prezime: rez.ime_prezime,
+            telefon: rez.telefon || '',
+            ukupan_dug: preostaliDug,
+            istorija,
+          }])
+        }
+        alert(`Vozilo preuzeto! Klijent je ostao dužan ${preostaliDug.toFixed(2)}€ — automatski dodat u listu dužnika.`)
+      } else {
+        alert('Vozilo uspješno preuzeto!')
+      }
+    }
+
+    setShowAgentModal(false)
+    loadAll()
+    loadOverdue()
+  }
+
+  async function otkaziIzdavanje() {
+    if (!agentRezId) return
+    await supabase.from('rezervacije').update({ daily_status: 'Nije izdato' }).eq('id', agentRezId)
+    await supabase.from('logovi').insert([{ akcija: `Otkazano izdavanje REZ #${agentRezId}` }])
+    setShowAgentModal(false)
+    loadAll()
+  }
+
+  // ─── PRODUŽI RENTU ───────────────────────────────────────
+  function otvoriProduzi(r: KalRezervacija) {
+    setProduziRezId(r.id)
+    setProduziDana('')
+    setProduziCijena(String(r.cijena_dan || 0))
+    setProduziNaplaceno('')
+    setShowProduziModal(true)
+  }
+
+  async function sacuvajProduzi() {
+    if (!produziRezId) return
+    const dani = parseInt(produziDana)
+    const cijena = parseFloat(produziCijena)
+    const naplacenoProduzenje = parseFloat(produziNaplaceno || '0')
+    if (isNaN(dani) || dani <= 0 || isNaN(cijena)) { alert('Unesite ispravne podatke!'); return }
+
+    const rez = rezervacije.find(r => r.id === produziRezId) || overdueRez.find(r => r.id === produziRezId)
+    if (!rez) return
+
+    setProduziSaving(true)
+    const doplata = dani * cijena
+    const novoDo = addDays(rez.do_datuma, dani)
+    const novoUkupno = (rez.ukupno_naplata || 0) + doplata
+    const novoNaplaceno = (rez.naplaceno || 0) + naplacenoProduzenje
+    const noviBrojDana = Math.ceil((new Date(novoDo).getTime() - new Date(rez.od_datuma).getTime()) / 86400000)
+
+    await supabase.from('rezervacije').update({
+      do_datuma: novoDo,
+      ukupno_naplata: novoUkupno,
+      naplaceno: novoNaplaceno,
+      broj_dana: noviBrojDana,
+    }).eq('id', produziRezId)
+
+    await supabase.from('logovi').insert([{
+      akcija: `Produžena renta REZ #${produziRezId} za ${dani} dana. Doplata: ${doplata}€. Naplaćeno sad: ${naplacenoProduzenje}€.`
+    }])
+
+    setProduziSaving(false)
+    setShowProduziModal(false)
+    loadAll()
+    loadOverdue()
+    alert(`Renta produžena! Novo do datuma: ${toDMY(novoDo)}`)
+  }
+
+  // ─── UPLOAD UGOVORA ──────────────────────────────────────
+  function otvoriUpload(r: KalRezervacija) {
+    setUploadRezId(r.id)
+    setUploadUrl(r.ugovor_slika || '')
+    setShowUploadModal(true)
+  }
+
+  async function sacuvajUpload() {
+    if (!uploadRezId || !uploadUrl.trim()) return
+    setUploadSaving(true)
+    await supabase.from('rezervacije').update({ ugovor_slika: uploadUrl.trim() }).eq('id', uploadRezId)
+    await supabase.from('logovi').insert([{ akcija: `Upload ugovora za REZ #${uploadRezId}` }])
+    setUploadSaving(false)
+    setShowUploadModal(false)
+    loadAll()
+  }
+
+  // ─── KARTICA REZERVACIJE ─────────────────────────────────
+  const ReservationCard = ({ r, tip }: { r: KalRezervacija; tip: 'out' | 'in' }) => {
+    const st = STATUS_COLORS[r.daily_status] || STATUS_COLORS['Na čekanju']
+    const sat = tip === 'out'
+      ? (r.vreme_izdavanja || '10:00').slice(0, 5)
+      : (r.vreme_povratka || '10:00').slice(0, 5)
+    const vozilo = vozila.find(v => v.license_plate === r.br_tablica)
+    const vozNaziv = vozilo?.agregirani_2 || r.br_tablica
+
+    const ukupno = r.ukupno_naplata || 0
+    const naplaceno = r.naplaceno || 0
+    const dug = ukupno - naplaceno
+    const depozit = r.depozit || 0
+
+    const isDone = tip === 'out'
+      ? (r.daily_status === 'Izdato' || r.daily_status === 'Nije izdato')
+      : !!r.ko_je_preuzeo
+
+    const isEarlyReturn = tip === 'in' && r.do_datuma > selectedDate
+
+    const borderColor = tip === 'out' ? '#1D9E75' : '#185FA5'
+    const timeColor = tip === 'out' ? '#1D9E75' : '#185FA5'
+    const timeBg = tip === 'out' ? '#E1F5EE' : '#E6F1FB'
+
     return (
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', background: '#fff', borderLeft: `3px solid ${type === 'pickup' ? '#1D9E75' : '#185FA5'}` }}>
+      <div style={{
+        border: `1px solid #e5e7eb`,
+        borderLeft: `4px solid ${borderColor}`,
+        borderRadius: 10,
+        padding: 16,
+        background: isDone ? '#fafafa' : '#fff',
+        opacity: isDone && !showDone ? 0.7 : 1,
+        transition: 'opacity 0.2s',
+      }}>
+        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: '#111' }}>{r.guest_name}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{r.guest_phone}</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>{r.ime_prezime}</div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{r.telefon}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ background: type === 'pickup' ? '#E1F5EE' : '#E6F1FB', color: type === 'pickup' ? '#085041' : '#0C447C', padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-              {timeLabel}
+            <div style={{ background: timeBg, color: timeColor, padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+              🕒 {sat}h
             </div>
-            <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '3px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
+            <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+              {st.label}
+            </span>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+
+        {/* Info grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
           <div style={{ background: '#f9fafb', borderRadius: 6, padding: '8px 10px' }}>
-            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 2 }}>Vozilo</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#111' }}>{r.vehicles?.name || '—'}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>Vozilo</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{vozNaziv}</div>
           </div>
           <div style={{ background: '#f9fafb', borderRadius: 6, padding: '8px 10px' }}>
-            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 2 }}>Lokacija</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#111' }}>{r.pickup_location}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{tip === 'out' ? 'Preuzimanje' : 'Povratak'}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+              {tip === 'out' ? r.mjesto_preuzimanja : r.mjesto_povratka}
+            </div>
           </div>
         </div>
-        {reservationExtras[r.id] && reservationExtras[r.id].length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-            {reservationExtras[r.id].map((e, i) => (
-              <span key={i} style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>
-                {e.name}{e.days > 1 ? ` ×${e.days}` : ''} · {e.total_price}€
-              </span>
-            ))}
+
+        {/* Finansije */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          {tip === 'out' && (
+            <span style={{ fontSize: 12, background: '#E1F5EE', color: '#085041', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+              💰 Za zaduženje: {ukupno}€
+            </span>
+          )}
+          {tip === 'in' && dug > 0 && (
+            <span style={{ fontSize: 12, background: '#FCEBEB', color: '#791F1F', padding: '3px 8px', borderRadius: 20, fontWeight: 700 }}>
+              ⚠️ DUG ZA NAPLATU: {dug.toFixed(2)}€
+            </span>
+          )}
+          {tip === 'in' && dug <= 0 && (
+            <span style={{ fontSize: 12, background: '#E1F5EE', color: '#085041', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+              ✅ Naplaćeno sve ({naplaceno}€)
+            </span>
+          )}
+          {depozit > 0 && (
+            <span style={{ fontSize: 12, background: '#FAEEDA', color: '#633806', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+              🛡️ DEP: {depozit}€
+            </span>
+          )}
+          {r.br_leta && (
+            <span style={{ fontSize: 12, background: '#E6F1FB', color: '#0C447C', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+              ✈️ LET: {r.br_leta}
+            </span>
+          )}
+        </div>
+
+        {/* Agent info */}
+        {r.ko_je_izdao && (
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
+            🚗 Izdao: <strong>{r.ko_je_izdao}</strong>
+            {r.ko_je_preuzeo && <span> · 🔙 Preuzeo: <strong>{r.ko_je_preuzeo}</strong></span>}
           </div>
         )}
-        {r.payment_status === 'debt' && (
-          <div style={{ background: '#FCEBEB', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontSize: 12, fontWeight: 600, color: '#791F1F' }}>
-            DUG: {r.amount_debt?.toFixed(2)}€
+
+        {/* Ugovor */}
+        {r.ugovor_slika && (
+          <div style={{ marginBottom: 8 }}>
+            <a href={r.ugovor_slika} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 12, color: '#1D9E75', fontWeight: 600, textDecoration: 'none' }}>
+              📄 Pogledaj ugovor →
+            </a>
           </div>
         )}
-        {r.payment_status === 'prepaid' && (
-          <div style={{ background: '#E6F1FB', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontSize: 12, fontWeight: 600, color: '#0C447C' }}>
-            PRETPLATA: {r.amount_prepaid?.toFixed(2)}€
+
+        {isEarlyReturn && (
+          <div style={{ background: '#fef9c3', border: '1px solid #fbbf24', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontSize: 12, color: '#713f12' }}>
+            ⚡ Prijevremeni povratak (do: {toDMY(r.do_datuma)})
           </div>
         )}
+
+        {/* Ref */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>{r.ref_code}</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#1D9E75' }}>{r.total_price}€</span>
-          </div>
+          <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>REZ #{r.id}</span>
+
+          {/* Akcije */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {(r.status === 'confirmed' || r.status === 'pending') && type === 'pickup' && (
-              <>
-                <button onClick={() => openIssue(r)}
-                  style={{ padding: '8px 14px', fontSize: 13, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', color: '#185FA5', cursor: 'pointer', fontWeight: 600 }}>
-                  Izdaj i naplati
-                </button>
-                <button onClick={() => { setCancelModal(r.id); setCancelReason('') }}
-                  style={{ padding: '8px 12px', fontSize: 13, border: '1px solid #fecaca', borderRadius: 8, background: 'transparent', color: '#dc2626', cursor: 'pointer' }}>
-                  Otkaži
-                </button>
-              </>
+            {/* UPLOAD UGOVORA */}
+            <button onClick={() => otvoriUpload(r)}
+              style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', color: '#6b7280' }}>
+              📎 Ugovor
+            </button>
+
+            {/* DETALJI */}
+            <button onClick={() => openRez(r)}
+              style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', color: '#374151' }}>
+              Detalji
+            </button>
+
+            {/* PRODUŽI — samo za IN */}
+            {tip === 'in' && r.daily_status === 'Izdato' && (
+              <button onClick={() => otvoriProduzi(r)}
+                style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #0ea5e9', borderRadius: 8, background: '#e0f2fe', cursor: 'pointer', color: '#0369a1', fontWeight: 600 }}>
+                🔄 Produži
+              </button>
             )}
-            {r.status === 'issued' && (
-              <>
-                <button onClick={() => openCharge(r)}
-                  style={{ padding: '8px 14px', fontSize: 13, border: '1px solid #EF9F27', borderRadius: 8, background: '#FAEEDA', color: '#633806', cursor: 'pointer', fontWeight: 500 }}>
-                  + Naplati
-                </button>
-                {type === 'return' && (
-                  <button onClick={() => openClose(r)}
-                    style={{ padding: '8px 14px', fontSize: 13, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 600 }}>
-                    Preuzmi vozilo
-                  </button>
-                )}
-              </>
+
+            {/* IZDAJ — samo OUT, nije još izdano */}
+            {tip === 'out' && r.daily_status === 'Na čekanju' && (
+              <button onClick={() => pokreniIzdaj(r)}
+                style={{ padding: '6px 14px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', cursor: 'pointer', color: '#185FA5', fontWeight: 700 }}>
+                🚗 Izdaj
+              </button>
+            )}
+
+            {/* PREUZMI — samo IN, izdano ali nije preuzeto */}
+            {tip === 'in' && r.daily_status === 'Izdato' && !r.ko_je_preuzeo && (
+              <button onClick={() => pokreniPreuzmi(r)}
+                style={{ padding: '6px 14px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 700 }}>
+                🔙 Preuzmi
+              </button>
             )}
           </div>
         </div>
@@ -584,105 +668,75 @@ function toggleLocation(id: string) {
     )
   }
 
+  // ─── RENDER ───────────────────────────────────────────────
   return (
     <div>
+      {/* HEADER */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? 12 : 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <h1 style={{ fontSize: isMobile ? 17 : 20, fontWeight: 600, color: '#111' }}>Dnevni pregled</h1>
-            {!isMobile && (
-              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2, textTransform: 'capitalize' }}>
-                {formatDate(selectedDate)}
-                {isToday() && <span style={{ marginLeft: 8, background: '#E1F5EE', color: '#0F6E56', fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Danas</span>}
-                {isFuture() && <span style={{ marginLeft: 8, background: '#E6F1FB', color: '#0C447C', fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Predstojeći</span>}
-              </div>
-            )}
-          </div>
-          {!isMobile && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button onClick={prevDay} style={{ padding: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16, color: '#374151' }}>←</button>
-              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#111', background: '#fff' }} />
-              <button onClick={() => setSelectedDate(today)} style={{ padding: '8px 14px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', fontSize: 12, color: '#0F6E56', fontWeight: 600 }}>Danas</button>
-              <button onClick={nextDay} style={{ padding: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16, color: '#374151' }}>→</button>
+            <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Dnevni pregled obaveza</h1>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4, textTransform: 'capitalize' }}>
+              {formatDate(selectedDate)}
+              {selectedDate === today && (
+                <span style={{ marginLeft: 8, background: '#E1F5EE', color: '#0F6E56', fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Danas</span>
+              )}
+              {selectedDate > today && (
+                <span style={{ marginLeft: 8, background: '#E6F1FB', color: '#0C447C', fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Predstojeći</span>
+              )}
             </div>
-          )}
-        </div>
-        {isMobile && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button onClick={prevDay} style={{ padding: '10px 16px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 18, color: '#374151' }}>←</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={prevDay}
+              style={{ padding: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16 }}>←</button>
             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              style={{ flex: 1, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, color: '#111', background: '#fff' }} />
-            <button onClick={() => setSelectedDate(today)} style={{ padding: '10px 14px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', fontSize: 12, color: '#0F6E56', fontWeight: 600 }}>Danas</button>
-            <button onClick={nextDay} style={{ padding: '10px 16px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 18, color: '#374151' }}>→</button>
+              style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, color: '#111', background: '#fff' }} />
+            <button onClick={() => setSelectedDate(today)}
+              style={{ padding: '8px 14px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', fontSize: 12, color: '#0F6E56', fontWeight: 600 }}>Danas</button>
+            <button onClick={nextDay}
+              style={{ padding: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 16 }}>→</button>
           </div>
-        )}
-        {isMobile && (
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6, textTransform: 'capitalize' }}>
-            {formatDate(selectedDate)}
-            {isToday() && <span style={{ marginLeft: 6, background: '#E1F5EE', color: '#0F6E56', fontSize: 10, padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>Danas</span>}
-          </div>
-        )}
+        </div>
+
+        {/* LOKACIJE */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {LOKACIJE.map(l => (
+            <button key={l} onClick={() => setLokacija(l)}
+              style={{ padding: '7px 16px', fontSize: 12, fontWeight: 600, border: `1px solid ${currentLok === l ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#fff', color: currentLok === l ? '#085041' : '#6b7280', cursor: 'pointer' }}>
+              {l === 'CRNA GORA' ? '🇲🇪' : l === 'BiH' ? '🇧🇦' : l === 'SRBIJA' ? '🇷🇸' : '🇦🇱'} {l}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Metrike */}
-      {/* Location filter */}
-      <div style={{ position: 'relative', marginBottom: 12 }}>
-        <button onClick={() => setShowLocationFilter(o => !o)}
-          style={{ padding: '7px 14px', fontSize: 13, border: `1px solid ${selectedLocations.length > 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: selectedLocations.length > 0 ? '#E1F5EE' : '#fff', color: selectedLocations.length > 0 ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: selectedLocations.length > 0 ? 600 : 400, display: 'flex', alignItems: 'center', gap: 6 }}>
-          📍 {selectedLocations.length === 0 ? 'Sve lokacije' : selectedLocations.map(id => locations.find(l => l.id === id)?.name).filter(Boolean).join(', ')}
-          <span style={{ fontSize: 10 }}>▼</span>
+      {/* NOVA REZERVACIJA */}
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
+          style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          + Nova rezervacija
         </button>
-        {showLocationFilter && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 200, marginTop: 4, padding: 8 }}>
-            <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 8px', marginBottom: 4 }}>Odaberi lokacije</div>
-            {locations.map(loc => {
-              const vCount = (vehiclesByLocation[loc.id] || []).length
-              const isSelected = selectedLocations.includes(loc.id)
-              return (
-                <div key={loc.id} onClick={() => toggleLocation(loc.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', background: isSelected ? '#f0fdf8' : 'transparent' }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSelected ? '#1D9E75' : '#d1d5db'}`, background: isSelected ? '#1D9E75' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', flexShrink: 0 }}>
-                    {isSelected ? '✓' : ''}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, color: '#374151' }}>{loc.name}</div>
-                    {vCount > 0 && <div style={{ fontSize: 10, color: '#9ca3af' }}>{vCount} vozila</div>}
-                  </div>
-                </div>
-              )
-            })}
-            {selectedLocations.length > 0 && (
-              <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 6, paddingTop: 6 }}>
-                <button onClick={() => { setSelectedLocations([]); localStorage.removeItem('avtorent-agent-locations') }}
-                  style={{ width: '100%', padding: '6px', fontSize: 12, border: 'none', background: 'transparent', color: '#9ca3af', cursor: 'pointer', textAlign: 'left' as const }}>
-                  Poništi filter
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        {showLocationFilter && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setShowLocationFilter(false)} />}
       </div>
 
-      {newResAlert && (
-        <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'pulse 1s ease-in-out' }}>
+      {/* NOVA REZ ALERT */}
+      {newAlert && (
+        <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🔔</span>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#085041' }}>NOVA REZERVACIJA!</div>
-              <div style={{ fontSize: 12, color: '#0F6E56' }}>{newResAlert}</div>
+              <div style={{ fontSize: 12, color: '#0F6E56' }}>{newAlert}</div>
             </div>
           </div>
-          <button onClick={() => setNewResAlert(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#085041' }}>✕</button>
+          <button onClick={() => setNewAlert(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#085041' }}>✕</button>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, minmax(0,1fr))' : 'repeat(3, minmax(0,1fr))', gap: isMobile ? 8 : 12, marginBottom: isMobile ? 16 : 20 }}>
+      {/* METRIKE */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Izdavanja', value: `${pickups.filter(r => r.status === 'issued' || r.status === 'closed').length}/${pickups.length}`, color: '#1D9E75', bg: '#E1F5EE', sub: 'završeno/ukupno' },
-          { label: 'Preuzimanja', value: `${returns.filter(r => r.status === 'closed').length}/${returns.length}`, color: '#185FA5', bg: '#E6F1FB', sub: 'završeno/ukupno' },
-          { label: 'Preostale obaveze', value: pendingCount, color: pendingCount === 0 ? '#085041' : '#BA7517', bg: pendingCount === 0 ? '#E1F5EE' : '#FAEEDA', sub: pendingCount === 0 ? 'sve završeno!' : 'čeka na akciju' },
+          { label: 'Izdavanja', value: `${izdavanja.filter(r => r.daily_status === 'Izdato' || r.daily_status === 'Nije izdato').length}/${izdavanja.length}`, color: '#1D9E75', bg: '#E1F5EE', sub: 'završeno/ukupno' },
+          { label: 'Vraćanja', value: `${povratci.filter(r => !!r.ko_je_preuzeo).length}/${povratci.length}`, color: '#185FA5', bg: '#E6F1FB', sub: 'završeno/ukupno' },
+          { label: 'Preostale obaveze', value: pendingCount, color: pendingCount === 0 ? '#085041' : '#BA7517', bg: pendingCount === 0 ? '#E1F5EE' : '#FAEEDA', sub: pendingCount === 0 ? 'sve završeno! ✓' : 'čeka na akciju' },
         ].map(m => (
           <div key={m.label} style={{ background: m.bg, borderRadius: 10, padding: 16 }}>
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>{m.label}</div>
@@ -694,11 +748,9 @@ function toggleLocation(id: string) {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: '#9ca3af', fontSize: 13 }}>Učitavanje...</div>
-      ) : reservations.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 48, color: '#9ca3af', fontSize: 14, border: '1px dashed #e5e7eb', borderRadius: 12 }}>Nema rezervacija za ovaj dan.</div>
       ) : (
         <>
-          {/* Status banner */}
+          {/* STATUS BANNER */}
           <div style={{ background: pendingCount === 0 ? '#E1F5EE' : '#f9fafb', border: `1px solid ${pendingCount === 0 ? '#5DCAA5' : '#e5e7eb'}`, borderRadius: 10, padding: '14px 20px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: pendingCount === 0 ? '#085041' : '#374151' }}>
               {pendingCount === 0 ? '✓ NEMA OBAVEZA NA ČEKANJU' : `Obaveze: ${doneCount}/${totalCount} završeno`}
@@ -712,506 +764,301 @@ function toggleLocation(id: string) {
               )}
               {doneCount > 0 && (
                 <button onClick={() => setShowDone(s => !s)}
-                  style={{ fontSize: 11, padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: 20, background: '#fff', cursor: 'pointer', color: '#6b7280', whiteSpace: 'nowrap' as const }}>
+                  style={{ fontSize: 11, padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: 20, background: '#fff', cursor: 'pointer', color: '#6b7280' }}>
                   {showDone ? 'Sakrij završene' : 'Prikaži završene'}
                 </button>
               )}
             </div>
           </div>
 
-          {/* Kolone */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 20 : 24 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#1D9E75' }} />
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>Preuzimanja danas</div>
-                <div style={{ background: '#E1F5EE', color: '#085041', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{pickups.length}</div>
-              </div>
-              {pickups.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema preuzimanja</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[...pickups].sort((a, b) => {
-                  const aDone = a.status === 'issued' || a.status === 'closed'
-                  const bDone = b.status === 'issued' || b.status === 'closed'
-                  if (aDone !== bDone) return aDone ? 1 : -1
-                  return (a.pickup_time || '').localeCompare(b.pickup_time || '')
-                }).filter(r => showDone || !(r.status === 'issued' || r.status === 'closed')).map((r, i, arr) => {
-                  const prevDone = i > 0 && (arr[i-1].status === 'issued' || arr[i-1].status === 'closed')
-                  const currDone = r.status === 'issued' || r.status === 'closed'
-                  return (
-                    <div key={r.id}>
-                      {showDone && !prevDone && currDone && i > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 8px', color: '#9ca3af', fontSize: 11 }}>
-                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                          <span>Završeno</span>
-                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                        </div>
-                      )}
-                      <ReservationCard r={r} type="pickup" />
-                    </div>
-                  )
-                })}
+          {/* KOLONE */}
+          {(izdavanja.length > 0 || povratci.length > 0) ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+              {/* OUT */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#1D9E75' }} />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>🚗 IZDAVANJA (OUT)</div>
+                  <div style={{ background: '#E1F5EE', color: '#085041', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{izdavanja.length}</div>
                 </div>
-              )}
-            </div>
+                {izdavanja.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema izdavanja</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[...izdavanja]
+                      .sort((a, b) => {
+                        const aDone = a.daily_status !== 'Na čekanju'
+                        const bDone = b.daily_status !== 'Na čekanju'
+                        if (aDone !== bDone) return aDone ? 1 : -1
+                        return (a.vreme_izdavanja || '').localeCompare(b.vreme_izdavanja || '')
+                      })
+                      .filter(r => showDone || r.daily_status === 'Na čekanju')
+                      .map(r => <ReservationCard key={r.id} r={r} tip="out" />)}
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#185FA5' }} />
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>Vraćanja danas</div>
-                <div style={{ background: '#E6F1FB', color: '#0C447C', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{returns.length}</div>
+              {/* IN */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#185FA5' }} />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>🔙 POVRATAK (IN)</div>
+                  <div style={{ background: '#E6F1FB', color: '#0C447C', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{povratci.length}</div>
+                </div>
+                {povratci.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema vraćanja</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[...povratci]
+                      .sort((a, b) => {
+                        const aDone = !!a.ko_je_preuzeo
+                        const bDone = !!b.ko_je_preuzeo
+                        if (aDone !== bDone) return aDone ? 1 : -1
+                        return (a.vreme_povratka || '').localeCompare(b.vreme_povratka || '')
+                      })
+                      .filter(r => showDone || !r.ko_je_preuzeo)
+                      .map(r => <ReservationCard key={r.id} r={r} tip="in" />)}
+                  </div>
+                )}
               </div>
-              {returns.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema vraćanja</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[...returns].sort((a, b) => {
-                  const aDone = a.status === 'closed'
-                  const bDone = b.status === 'closed'
-                  if (aDone !== bDone) return aDone ? 1 : -1
-                  return (a.return_time || '').localeCompare(b.return_time || '')
-                }).filter(r => showDone || r.status !== 'closed').map((r, i, arr) => {
-                  const prevDone = i > 0 && arr[i-1].status === 'closed'
-                  const currDone = r.status === 'closed'
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 48, color: '#9ca3af', fontSize: 14, border: '1px dashed #e5e7eb', borderRadius: 12, marginBottom: 32 }}>
+              Nema rezervacija za ovaj dan.
+            </div>
+          )}
+
+          {/* NEIZMIRENE OBAVEZE IZ PROŠLIH DANA */}
+          {overdueFiltered.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#dc2626' }} />
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>⚠️ Neizmirene obaveze</div>
+                <div style={{ background: '#FCEBEB', color: '#791F1F', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{overdueFiltered.length}</div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>iz prethodnih dana</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {overdueFiltered.map(r => {
+                  const isOverduePickup = r.daily_status === 'Na čekanju'
+                  const vozilo = vozila.find(v => v.license_plate === r.br_tablica)
+                  const vozNaziv = vozilo?.agregirani_2 || r.br_tablica
+                  const dug = (r.ukupno_naplata || 0) - (r.naplaceno || 0)
                   return (
-                    <div key={r.id}>
-                      {showDone && !prevDone && currDone && i > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 8px', color: '#9ca3af', fontSize: 11 }}>
-                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                          <span>Završeno</span>
-                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                    <div key={r.id} style={{ border: '1px solid #fecaca', borderLeft: '4px solid #dc2626', borderRadius: 10, padding: 16, background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>{r.ime_prezime}</div>
+                          <div style={{ fontSize: 12, color: '#9ca3af' }}>{r.telefon}</div>
                         </div>
-                      )}
-                      <ReservationCard r={r} type="return" />
+                        <span style={{ fontSize: 11, background: '#FCEBEB', color: '#791F1F', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
+                          {isOverduePickup ? 'Nije preuzeto' : 'Nije vraćeno'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+                        <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
+                          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>Vozilo</div>
+                          <div style={{ fontSize: 12, fontWeight: 600 }}>{vozNaziv}</div>
+                        </div>
+                        <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
+                          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>{isOverduePickup ? 'Trebalo preuzimanje' : 'Trebalo vraćanje'}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#dc2626' }}>{toDMY(isOverduePickup ? r.od_datuma : r.do_datuma)}</div>
+                        </div>
+                        <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
+                          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>Dug</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: dug > 0 ? '#dc2626' : '#1D9E75' }}>{dug > 0 ? `${dug.toFixed(2)}€` : 'Plaćeno'}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>REZ #{r.id}</span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => otvoriUpload(r)}
+                            style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', color: '#6b7280' }}>
+                            📎 Ugovor
+                          </button>
+                          <button onClick={() => openRez(r)}
+                            style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', color: '#374151' }}>
+                            Detalji
+                          </button>
+                          {isOverduePickup && (
+                            <button onClick={() => pokreniIzdaj(r)}
+                              style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', color: '#185FA5', cursor: 'pointer', fontWeight: 600 }}>
+                              🚗 Izdaj
+                            </button>
+                          )}
+                          {!isOverduePickup && (
+                            <>
+                              <button onClick={() => otvoriProduzi(r)}
+                                style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #0ea5e9', borderRadius: 8, background: '#e0f2fe', color: '#0369a1', cursor: 'pointer', fontWeight: 600 }}>
+                                🔄 Produži
+                              </button>
+                              <button onClick={() => pokreniPreuzmi(r)}
+                                style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 600 }}>
+                                🔙 Preuzmi
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )
                 })}
-                </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
-      {/* Neizmirene obaveze iz prethodnih dana */}
-      {overdueReservations.filter(locationFilter).length > 0 && (
-        <div style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#dc2626' }} />
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>Neizmirene obaveze</div>
-            <div style={{ background: '#FCEBEB', color: '#791F1F', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{overdueReservations.filter(locationFilter).length}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af' }}>iz prethodnih dana</div>
+      {/* ─── REZ MODAL ─── */}
+      {showRezModal && (
+        <RezervacijaModal
+          form={rezForm}
+          setForm={setRezForm}
+          vozila={vozilaLok}
+          onSave={saveRezervacija}
+          onClose={() => setShowRezModal(false)}
+          onDelete={!isNewRez ? deleteRezervacija : undefined}
+          saving={saving}
+          isNew={isNewRez}
+          onIzdaj={!isNewRez && !rezForm.ko_je_izdao ? () => {
+            setShowRezModal(false)
+            const r = rezervacije.find(x => x.id === rezForm.id) || overdueRez.find(x => x.id === rezForm.id)
+            if (r) { setAgentTip('izdavanje'); setAgentRezId(r.id); setShowAgentModal(true) }
+          } : undefined}
+          onPreuzmi={!isNewRez && rezForm.ko_je_izdao && !rezForm.ko_je_preuzeo ? () => {
+            setShowRezModal(false)
+            const r = rezervacije.find(x => x.id === rezForm.id) || overdueRez.find(x => x.id === rezForm.id)
+            if (r) { setAgentTip('preuzimanje'); setAgentRezId(r.id); setShowAgentModal(true) }
+          } : undefined}
+        />
+      )}
+
+      {/* ─── AGENT MODAL ─── */}
+      {showAgentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 420, width: '100%' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>
+              {agentTip === 'izdavanje' ? '🚗 Ko izdaje vozilo?' : '🔙 Ko preuzima vozilo?'}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              {AGENTI.map(a => (
+                <button key={a} onClick={() => izvrsiAgentAkciju(a)}
+                  style={{ padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151', textAlign: 'left' }}>
+                  {a}
+                </button>
+              ))}
+            </div>
+            {agentTip === 'izdavanje' && (
+              <button onClick={otkaziIzdavanje}
+                style={{ width: '100%', padding: 10, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', cursor: 'pointer', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 8 }}>
+                🚫 Označi: NIJE IZDATO
+              </button>
+            )}
+            <button onClick={() => setShowAgentModal(false)}
+              style={{ width: '100%', padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
+              Odustani
+            </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {overdueReservations.filter(locationFilter).map(r => {
-              const st = STATUS_COLORS[r.status] || STATUS_COLORS.pending
-              const isOverduePickup = r.status === 'confirmed' || r.status === 'pending'
+        </div>
+      )}
+
+      {/* ─── PRODUŽI RENTU MODAL ─── */}
+      {showProduziModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 400, width: '100%' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>🔄 Produži rentu</h3>
+            {(() => {
+              const rez = rezervacije.find(r => r.id === produziRezId) || overdueRez.find(r => r.id === produziRezId)
+              const doplata = (parseInt(produziDana) || 0) * (parseFloat(produziCijena) || 0)
               return (
-                <div key={r.id} style={{ border: '1px solid #fecaca', borderRadius: 10, padding: '14px 16px', background: '#fff', borderLeft: '3px solid #dc2626' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#111' }}>{r.guest_name}</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{r.guest_phone}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, background: '#FCEBEB', color: '#791F1F', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>
-                        {isOverduePickup ? 'Nije preuzeto' : 'Nije vraćeno'}
-                      </span>
-                      <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '3px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
-                      <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>Vozilo</div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: '#111' }}>{r.vehicles?.name || '—'}</div>
-                    </div>
-                    <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
-                      <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>{isOverduePickup ? 'Trebalo preuzimanje' : 'Trebalo vraćanje'}</div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: '#dc2626' }}>{isOverduePickup ? r.pickup_date : r.return_date}</div>
-                    </div>
-                    <div style={{ background: '#f9fafb', borderRadius: 6, padding: '7px 10px' }}>
-                      <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 1 }}>Iznos</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1D9E75' }}>{r.total_price}€</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>{r.ref_code}</span>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {isOverduePickup && (
-                        <>
-                          <button onClick={() => openIssue(r)}
-                            style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', color: '#185FA5', cursor: 'pointer', fontWeight: 600 }}>
-                            Izdaj i naplati
-                          </button>
-                          <button onClick={() => { setCancelModal(r.id); setCancelReason('') }}
-                            style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: 'transparent', color: '#dc2626', cursor: 'pointer' }}>
-                            Otkaži
-                          </button>
-                        </>
-                      )}
-                      {!isOverduePickup && (
-                        <button onClick={() => openClose(r)}
-                          style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 600 }}>
-                          Preuzmi vozilo
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* MODALI */}
-      {modal && selected && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
-
-          {modal === 'issue' && (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>Izdaj vozilo</div>
-              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>{selected.ref_code} — {selected.guest_name} — {selected.vehicles?.name}</div>
-              <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: '#6b7280' }}>Ukupno za naplatu</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#1D9E75' }}>{selected.total_price}€</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                <button onClick={() => setIssueMode('quick')} style={{ flex: 1, padding: '10px', border: `2px solid ${issueMode === 'quick' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: issueMode === 'quick' ? '#E1F5EE' : '#fff', color: issueMode === 'quick' ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 13, fontWeight: issueMode === 'quick' ? 600 : 400 }}>Brzo izdavanje</button>
-                <button onClick={() => setIssueMode('full')} style={{ flex: 1, padding: '10px', border: `2px solid ${issueMode === 'full' ? '#185FA5' : '#e5e7eb'}`, borderRadius: 8, background: issueMode === 'full' ? '#E6F1FB' : '#fff', color: issueMode === 'full' ? '#0C447C' : '#6b7280', cursor: 'pointer', fontSize: 13, fontWeight: issueMode === 'full' ? 600 : 400 }}>Prilagođeno</button>
-              </div>
-              {issueMode === 'quick' && (
                 <>
-                  <div style={{ background: '#E1F5EE', border: '1px solid #5DCAA5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#085041' }}>
-                    Pun iznos naplaćen ({selected.total_price}€). Odaberi način plaćanja.
+                  {rez && (
+                    <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
+                      <strong>{rez.ime_prezime}</strong> · {rez.br_tablica}<br />
+                      <span style={{ color: '#6b7280', fontSize: 12 }}>Trenutno do: {toDMY(rez.do_datuma)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Broj dana produženja *</label>
+                      <input type="number" value={produziDana} onChange={e => setProduziDana(e.target.value)} placeholder="Npr. 3"
+                        style={{ width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Cijena €/dan *</label>
+                      <input type="number" value={produziCijena} onChange={e => setProduziCijena(e.target.value)}
+                        style={{ width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' }} />
+                    </div>
+                    {doplata > 0 && (
+                      <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#085041' }}>
+                        Ukupno za produženje: <strong>{doplata}€</strong>
+                      </div>
+                    )}
+                    <div>
+                      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Naplaćeno za produženje (€)</label>
+                      <input type="number" value={produziNaplaceno} onChange={e => setProduziNaplaceno(e.target.value)} placeholder={String(doplata || 0)}
+                        style={{ width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' }} />
+                    </div>
                   </div>
-                  <PaymentMethodSelector total={selected.total_price} value={issuePayment} onChange={setIssuePayment} />
+                  <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                    <button onClick={() => setShowProduziModal(false)}
+                      style={{ flex: 1, padding: 10, border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                      Odustani
+                    </button>
+                    <button onClick={sacuvajProduzi} disabled={produziSaving || !produziDana || !produziCijena}
+                      style={{ flex: 2, padding: 10, background: produziSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      {produziSaving ? '...' : '✓ Produži rentu'}
+                    </button>
+                  </div>
                 </>
-              )}
-              {issueMode === 'full' && (
-                <div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => { setIssuePaymentMode('full'); setIssueAmount(String(selected.total_price)) }}
-                      style={{ flex: 1, padding: '9px', border: `1px solid ${issuePaymentMode === 'full' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: issuePaymentMode === 'full' ? '#E1F5EE' : '#fff', color: issuePaymentMode === 'full' ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 12 }}>
-                      Pun iznos ({selected.total_price}€)
-                    </button>
-                    <button onClick={() => { setIssuePaymentMode('other'); setIssueAmount('') }}
-                      style={{ flex: 1, padding: '9px', border: `1px solid ${issuePaymentMode === 'other' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: issuePaymentMode === 'other' ? '#E1F5EE' : '#fff', color: issuePaymentMode === 'other' ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 12 }}>
-                      Drugi iznos
-                    </button>
-                  </div>
-                  {issuePaymentMode === 'other' && (
-                    <input type="number" step="0.01" value={issueAmount} onChange={e => setIssueAmount(e.target.value)} placeholder="Naplaćeni iznos"
-                      style={{ width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 8, boxSizing: 'border-box' as const, color: '#111', marginBottom: 8 }} />
-                  )}
-                  {issuePaymentMode === 'other' && issueAmount && Math.abs(issueDiff) > 0.01 && (
-                    <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10, background: issueDiff < 0 ? '#FCEBEB' : '#E6F1FB', fontSize: 13, fontWeight: 500, color: issueDiff < 0 ? '#791F1F' : '#0C447C' }}>
-                      {issueDiff < 0 ? `DUG: ${Math.abs(issueDiff).toFixed(2)}€` : `PRETPLATA: ${issueDiff.toFixed(2)}€`}
-                    </div>
-                  )}
-                  <PaymentMethodSelector total={fullIssueAmount} value={issuePayment} onChange={setIssuePayment} />
-                </div>
-              )}
-              <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', margin: '16px 0', fontSize: 12, color: '#0C447C' }}>
-                Agent <strong>{agentName || 'Agent'}</strong> se zadužuje za naplaćeni iznos.
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setModal(null)} style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
-                <button onClick={issueMode === 'quick' ? handleQuickIssue : handleFullIssue} disabled={issueSaving}
-                  style={{ flex: 2, padding: '10px', background: issueSaving ? '#5DCAA5' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  {issueSaving ? '...' : 'Potvrdi i izdaj vozilo'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {modal === 'close' && (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 500, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>Preuzmi vozilo</div>
-              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>{selected.ref_code} — {selected.guest_name}</div>
-              {isEarlyReturn && (
-                <div style={{ background: '#fef9c3', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#713f12' }}>
-                  Vozilo se vraća prije isteka roka ({selected.return_date}).
-                </div>
-              )}
-              {!hasDebtOrPrepaid(selected) && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                  <button onClick={() => setCloseMode('quick')} style={{ flex: 1, padding: '10px', border: `2px solid ${closeMode === 'quick' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: closeMode === 'quick' ? '#E1F5EE' : '#fff', color: closeMode === 'quick' ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 13, fontWeight: closeMode === 'quick' ? 600 : 400 }}>Brzo preuzimanje</button>
-                  <button onClick={() => setCloseMode('full')} style={{ flex: 1, padding: '10px', border: `2px solid ${closeMode === 'full' ? '#185FA5' : '#e5e7eb'}`, borderRadius: 8, background: closeMode === 'full' ? '#E6F1FB' : '#fff', color: closeMode === 'full' ? '#0C447C' : '#6b7280', cursor: 'pointer', fontSize: 13, fontWeight: closeMode === 'full' ? 600 : 400 }}>Sa dopuni</button>
-                </div>
-              )}
-              {closeMode === 'quick' && !hasDebtOrPrepaid(selected) && (
-                <div>
-                  <div style={{ background: '#E1F5EE', border: '1px solid #5DCAA5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#085041' }}>
-                    Nema duga, pretplate ni doplata. Vozilo se zatvara odmah.
-                  </div>
-                  {isEarlyReturn && (
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Razlog prijevremenog povratka *</label>
-                      <textarea value={earlyReturnNote} onChange={e => setEarlyReturnNote(e.target.value)} placeholder="Unesite razlog..."
-                        style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, minHeight: 60, resize: 'vertical' as const, boxSizing: 'border-box' as const, color: '#111' }} />
-                    </div>
-                  )}
-                </div>
-              )}
-              {(closeMode === 'full' || hasDebtOrPrepaid(selected)) && (
-                <div>
-                  {selected.payment_status === 'debt' && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#791F1F' }}>DUG: {selected.amount_debt?.toFixed(2)}€</div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Da li je dug naplaćen?</div>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                        <button onClick={() => setDebtCollected(true)} style={{ flex: 1, padding: '9px', border: `1px solid ${debtCollected === true ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: debtCollected === true ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13 }}>Da</button>
-                        <button onClick={() => setDebtCollected(false)} style={{ flex: 1, padding: '9px', border: `1px solid ${debtCollected === false ? '#dc2626' : '#e5e7eb'}`, borderRadius: 8, background: debtCollected === false ? '#FCEBEB' : '#fff', cursor: 'pointer', fontSize: 13 }}>Ne</button>
-                      </div>
-                      {debtCollected === true && <PaymentMethodSelector total={selected.amount_debt} value={debtPayment} onChange={setDebtPayment} />}
-                    </div>
-                  )}
-                  {selected.payment_status === 'prepaid' && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0C447C' }}>PRETPLATA: {selected.amount_prepaid?.toFixed(2)}€</div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Da li je pretplata vraćena?</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setPrepaidReturned(true)} style={{ flex: 1, padding: '9px', border: `1px solid ${prepaidReturned === true ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: prepaidReturned === true ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13 }}>Da</button>
-                        <button onClick={() => setPrepaidReturned(false)} style={{ flex: 1, padding: '9px', border: `1px solid ${prepaidReturned === false ? '#dc2626' : '#e5e7eb'}`, borderRadius: 8, background: prepaidReturned === false ? '#FCEBEB' : '#fff', cursor: 'pointer', fontSize: 13 }}>Ne</button>
-                      </div>
-                    </div>
-                  )}
-                  {isEarlyReturn && (
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Razlog prijevremenog povratka *</label>
-                      <textarea value={earlyReturnNote} onChange={e => setEarlyReturnNote(e.target.value)} placeholder="Unesite razlog..."
-                        style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, minHeight: 60, resize: 'vertical' as const, boxSizing: 'border-box' as const, color: '#111' }} />
-                    </div>
-                  )}
-                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Da li postoje doplate?</div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                    <button onClick={() => setHasSurcharges(true)} style={{ flex: 1, padding: '9px', border: `1px solid ${hasSurcharges === true ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: hasSurcharges === true ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13 }}>Da</button>
-                    <button onClick={() => setHasSurcharges(false)} style={{ flex: 1, padding: '9px', border: `1px solid ${hasSurcharges === false ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: hasSurcharges === false ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13 }}>Ne</button>
-                  </div>
-                  {hasSurcharges === true && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-                      {surchargeTypes.map(st => (
-                        <div key={st.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: surchargeAmounts[st.id] && parseFloat(surchargeAmounts[st.id]) > 0 ? 8 : 0 }}>
-                            <span style={{ flex: 1, fontSize: 13, color: '#374151' }}>{st.name}</span>
-                            <input type="number" step="0.01" placeholder="0" value={surchargeAmounts[st.id] || ''}
-                              onChange={e => setSurchargeAmounts(s => ({ ...s, [st.id]: e.target.value }))}
-                              style={{ width: 80, padding: '5px 8px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 6, textAlign: 'right' as const, color: '#111' }} />
-                            <span style={{ fontSize: 12, color: '#9ca3af' }}>€</span>
-                          </div>
-                          {surchargeAmounts[st.id] && parseFloat(surchargeAmounts[st.id]) > 0 && (
-                            <PaymentMethodSelector
-                              total={parseFloat(surchargeAmounts[st.id])}
-                              value={surchargePayments[st.name] || { method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' }}
-                              onChange={v => setSurchargePayments(s => ({ ...s, [st.name]: v }))}
-                            />
-                          )}
-                        </div>
-                      ))}
-                      <div style={{ border: '1px dashed #d1d5db', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: customSurchargeAmount && parseFloat(customSurchargeAmount) > 0 ? 8 : 0 }}>
-                          <input placeholder="Naziv doplate" value={customSurcharge} onChange={e => setCustomSurcharge(e.target.value)}
-                            style={{ flex: 1, padding: '5px 8px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 6, color: '#111' }} />
-                          <input type="number" step="0.01" placeholder="0" value={customSurchargeAmount} onChange={e => setCustomSurchargeAmount(e.target.value)}
-                            style={{ width: 80, padding: '5px 8px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 6, textAlign: 'right' as const, color: '#111' }} />
-                          <span style={{ fontSize: 12, color: '#9ca3af' }}>€</span>
-                        </div>
-                        {customSurchargeAmount && parseFloat(customSurchargeAmount) > 0 && (
-                          <PaymentMethodSelector
-                            total={parseFloat(customSurchargeAmount)}
-                            value={surchargePayments['custom'] || { method: 'cash', cashAmount: '', cardAmount: '', wireAmount: '' }}
-                            onChange={v => setSurchargePayments(s => ({ ...s, custom: v }))}
-                          />
-                        )}
-                      </div>
-                      {surchargesSum > 0 && (
-                        <div style={{ background: '#FAEEDA', border: '1px solid #EF9F27', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#633806', fontWeight: 500 }}>
-                          Ukupno doplate: {surchargesSum.toFixed(2)}€
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button onClick={() => setModal(null)} style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
-                <button
-                  onClick={closeMode === 'quick' && !hasDebtOrPrepaid(selected) ? handleQuickClose : handleFullClose}
-                  disabled={closeSaving || ((closeMode === 'full' || hasDebtOrPrepaid(selected)) && hasSurcharges === null)}
-                  style={{ flex: 2, padding: '10px', background: closeSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  {closeSaving ? '...' : 'Zatvori rezervaciju'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {modal === 'charge' && (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '24px', width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#111' }}>Dodaj naplatu</div>
-                  <div style={{ fontSize: 12, color: '#9ca3af' }}>{selected.ref_code} — {selected.guest_name}</div>
-                </div>
-                <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Tip naplate</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {[['extra', 'Dodatak'], ['surcharge', 'Doplata'], ['custom', 'Slobodan unos']].map(([val, lbl]) => (
-                    <button key={val} onClick={() => { setChargeType(val as any); setChargeItemId(''); setChargeItemName(''); setChargeAmount('') }}
-                      style={{ flex: 1, padding: '7px', fontSize: 12, border: `1px solid ${chargeType === val ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: chargeType === val ? '#E1F5EE' : '#fff', color: chargeType === val ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: chargeType === val ? 600 : 400 }}>
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {chargeType === 'extra' && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Odaberi dodatak</div>
-                  <select value={chargeItemId} onChange={e => {
-                    const ex = extras.find(x => x.id === e.target.value)
-                    setChargeItemId(e.target.value); setChargeItemName(ex?.name || ''); setChargeAmount(ex ? String(ex.price) : '')
-                  }} style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111' }}>
-                    <option value="">-- Odaberi --</option>
-                    {extras.map(ex => <option key={ex.id} value={ex.id}>{ex.name} — {ex.price}€</option>)}
-                  </select>
-                </div>
-              )}
-              {chargeType === 'surcharge' && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Odaberi doplatu</div>
-                  <select value={chargeItemId} onChange={e => {
-                    const st = surchargeTypes.find(x => x.id === e.target.value)
-                    setChargeItemId(e.target.value); setChargeItemName(st?.name || '')
-                  }} style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111' }}>
-                    <option value="">-- Odaberi --</option>
-                    {surchargeTypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {chargeType === 'custom' && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Naziv stavke</div>
-                  <input value={chargeItemName} onChange={e => setChargeItemName(e.target.value)} placeholder="npr. Dječija sjedalica"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111' }} />
-                </div>
-              )}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Iznos (€)</div>
-                <input type="number" step="0.01" value={chargeAmount} onChange={e => setChargeAmount(e.target.value)} placeholder="0.00"
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111' }} />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <PaymentMethodSelector total={parseFloat(chargeAmount || '0')} value={chargePayment} onChange={setChargePayment} />
-              </div>
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Komentar (opciono)</div>
-                <input value={chargeComment} onChange={e => setChargeComment(e.target.value)} placeholder="Napomena..."
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleCharge} disabled={chargeSaving || !chargeItemName || !chargeAmount}
-                  style={{ flex: 2, padding: '10px', background: chargeSaving || !chargeItemName || !chargeAmount ? '#9ca3af' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                  {chargeSaving ? 'Snimanje...' : 'Naplati'}
-                </button>
-                <button onClick={() => setModal(null)} style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
-                  Odustani
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* CANCEL MODAL */}
-      {cancelModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '24px', maxWidth: 420, width: '100%' }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>Otkazivanje rezervacije</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 18 }}>Unesite razlog otkazivanja</div>
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Razlog *</label>
-              <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                placeholder="npr. Klijent otkazao, dupla rezervacija..."
-                style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, minHeight: 80, resize: 'vertical' as const, color: '#111', boxSizing: 'border-box' as const }} />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleCancel} disabled={cancelSaving || !cancelReason.trim()}
-                style={{ flex: 2, padding: '10px', background: !cancelReason.trim() ? '#9ca3af' : '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                {cancelSaving ? '...' : 'Otkaži rezervaciju'}
-              </button>
-              <button onClick={() => { setCancelModal(null); setCancelReason('') }}
-                style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
-                Odustani
-              </button>
-            </div>
+              )
+            })()}
           </div>
         </div>
       )}
 
-      {/* WASH MODAL */}
-      {showWashModal && washReservation && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 460, width: '100%' }}>
-            <div style={{ fontSize: 20, marginBottom: 8, textAlign: 'center' }}>🚗💦</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4, textAlign: 'center' }}>Potrebno pranje vozila?</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20, textAlign: 'center' }}>{washReservation.vehicles?.name}</div>
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Tip pranja</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {WASH_TYPES.map(w => (
-                  <button key={w.key} onClick={() => setWashType(w.key)}
-                    style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', border: `1px solid ${washType === w.key ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: washType === w.key ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, color: washType === w.key ? '#085041' : '#374151', fontWeight: washType === w.key ? 600 : 400, textAlign: 'left' as const }}>
-                    <span>{w.label}</span>
-                    <span style={{ color: washType === w.key ? '#1D9E75' : '#9ca3af', fontWeight: 600 }}>{w.price > 0 ? `${w.price}€` : 'unesi cijenu'}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {washType === 'specific' && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Cijena (€)</div>
-                <input type="number" step="0.01" value={washCustomPrice} onChange={e => setWashCustomPrice(e.target.value)} placeholder="0.00"
-                  style={{ width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+      {/* ─── UPLOAD UGOVORA MODAL ─── */}
+      {showUploadModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 480, width: '100%' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>📎 Upload ugovora</h3>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+              Unesite URL slike ugovora (Google Drive, Dropbox, ili direktan link).
+            </p>
+            {uploadUrl && (
+              <div style={{ marginBottom: 12 }}>
+                <a href={uploadUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 13, color: '#1D9E75', fontWeight: 600, textDecoration: 'none' }}>
+                  📄 Trenutni ugovor →
+                </a>
               </div>
             )}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Ko pere?</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setWashAssignedTo('partner')}
-                  style={{ flex: 1, padding: '9px', border: `1px solid ${washAssignedTo === 'partner' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: washAssignedTo === 'partner' ? '#E1F5EE' : '#fff', color: washAssignedTo === 'partner' ? '#085041' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: washAssignedTo === 'partner' ? 600 : 400 }}>
-                  Praonica
-                </button>
-                <button onClick={() => setWashAssignedTo('agent')}
-                  style={{ flex: 1, padding: '9px', border: `1px solid ${washAssignedTo === 'agent' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: washAssignedTo === 'agent' ? '#E1F5EE' : '#fff', color: washAssignedTo === 'agent' ? '#085041' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: washAssignedTo === 'agent' ? 600 : 400 }}>
-                  Agent sam
-                </button>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>URL slike / dokumenta *</label>
+              <input
+                value={uploadUrl}
+                onChange={e => setUploadUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' }}
+              />
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                💡 Google Drive: klik desno na fajl → Dijeli → Kopiraj link
               </div>
             </div>
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Napomena (opciono)</div>
-              <input value={washNotes} onChange={e => setWashNotes(e.target.value)} placeholder="Posebne napomene..."
-                style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => handleWashOrder(false)} disabled={!washType || washSaving || (washType === 'specific' && !washCustomPrice)}
-                style={{ flex: 2, padding: '11px', background: !washType ? '#9ca3af' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                {washSaving ? '...' : 'Naruči pranje'}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowUploadModal(false)}
+                style={{ flex: 1, padding: 10, border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                Odustani
               </button>
-              <button onClick={() => handleWashOrder(true)}
-                style={{ flex: 1, padding: '11px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#6b7280' }}>
-                Preskoči
+              <button onClick={sacuvajUpload} disabled={uploadSaving || !uploadUrl.trim()}
+                style={{ flex: 2, padding: 10, background: uploadSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                {uploadSaving ? '...' : '💾 Snimi URL ugovora'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }`}</style>
     </div>
   )
 }
