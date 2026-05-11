@@ -67,9 +67,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .then(({ data }) => {
           const r = data?.role || 'agent'
           setRole(r)
-          // Agent ne smije koristiti /admin — preusmjeri na /agent
-          if (r !== 'admin') {
-            window.location.href = '/agent/finansije'
+          // Agent ne smije koristiti /admin direktno
+          if (r !== 'admin' && typeof window !== 'undefined') {
+            const path = window.location.pathname
+            // Dozvoli samo /admin/login i /admin/dan, /admin/pranje itd. za agente
+            // ali ne /admin samo (root) ni /admin/agenti itd.
+            const dozvoljeniZaAgente = [
+              '/admin/dan', '/admin/rezervacije', '/admin/kalendar',
+              '/admin/moji-partneri', '/admin/pranje', '/admin/provjera',
+              '/admin/kvarovi', '/admin/servis', '/admin/login'
+            ]
+            const jeDozvoljeno = dozvoljeniZaAgente.some(p => path.startsWith(p))
+            if (!jeDozvoljeno) {
+              window.location.href = '/agent/finansije'
+            }
           }
         })
 
