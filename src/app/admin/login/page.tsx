@@ -18,37 +18,32 @@ export default function AdminLoginPage() {
   useEffect(() => {
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        await processSession(session)
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('email', session.user.email)
+          .eq('is_active', true)
+          .single()
+
+        if (!agent) {
+          await supabase.auth.signOut()
+          setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
+          setGoogleLoading(false)
+          return
+        }
+
+        document.cookie = `avtorent-admin-token=${session.access_token}; path=/; max-age=86400`
+        document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || session.user.email)}; path=/; max-age=86400`
+
+        // Admin → /admin, Agent → /agent
+        if (agent.role === 'admin') {
+          window.location.href = '/admin'
+        } else {
+          window.location.href = '/agent'
+        }
       }
     })
   }, [])
-
-  async function processSession(session: any) {
-    const { data: agent } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('email', session.user.email)
-      .eq('is_active', true)
-      .single()
-
-    if (!agent) {
-      await supabase.auth.signOut()
-      setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-      setGoogleLoading(false)
-      setLoading(false)
-      return
-    }
-
-    document.cookie = `avtorent-admin-token=${session.access_token}; path=/; max-age=86400`
-    document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || session.user.email)}; path=/; max-age=86400`
-
-    // Admin → /admin, Agent → /agent
-    if (agent.role === 'admin') {
-      window.location.href = '/admin'
-    } else {
-      window.location.href = '/agent'
-    }
-  }
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -64,7 +59,29 @@ export default function AdminLoginPage() {
       return
     }
 
-    await processSession(data.session)
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('*')
+      .eq('email', email)
+      .eq('is_active', true)
+      .single()
+
+    if (!agent) {
+      await supabase.auth.signOut()
+      setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
+      setLoading(false)
+      return
+    }
+
+    document.cookie = `avtorent-admin-token=${data.session.access_token}; path=/; max-age=86400`
+    document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || email)}; path=/; max-age=86400`
+
+    // Admin → /admin, Agent → /agent
+    if (agent.role === 'admin') {
+      window.location.href = '/admin'
+    } else {
+      window.location.href = '/agent'
+    }
   }
 
   async function handleGoogleLogin() {
