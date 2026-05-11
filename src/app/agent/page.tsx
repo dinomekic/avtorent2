@@ -1,15 +1,5 @@
-'use client'
-
-import { useEffect } from 'react'
+import { redirect } from 'next/navigation'
 
 export default function AgentPage() {
-  useEffect(() => {
-    window.location.replace('/agent/finansije')
-  }, [])
-
-  return (
-    <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>
-      Učitavanje...
-    </div>
-  )
+  redirect('/agent/finansije')
 }
