@@ -6,15 +6,15 @@ import { useEffect, useState } from 'react'
 
 const AGENT_NAV = [
   { href: '/agent', label: '📊 Pregled' },
-  { href: '/agent/dan', label: '📅 Dnevni pregled' },
-  { href: '/agent/rezervacije', label: '🚗 Rezervacije' },
-  { href: '/agent/kalendar', label: '🗓 Kalendar' },
+  { href: '/admin/dan', label: '📅 Dnevni pregled' },
+  { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
+  { href: '/admin/kalendar', label: '🗓 Kalendar' },
   { href: '/agent/finansije', label: '💰 Finansije' },
-  { href: '/agent/moji-partneri', label: '🤝 Moji partneri' },
-  { href: '/agent/pranje', label: '💦 Pranje vozila' },
-  { href: '/agent/provjera', label: '🔍 Provjera vozila' },
-  { href: '/agent/kvarovi', label: '⚠️ Kvarovi' },
-  { href: '/agent/servis', label: '🔧 Servis' },
+  { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
+  { href: '/admin/pranje', label: '💦 Pranje vozila' },
+  { href: '/admin/provjera', label: '🔍 Provjera vozila' },
+  { href: '/admin/kvarovi', label: '⚠️ Kvarovi' },
+  { href: '/admin/servis', label: '🔧 Servis' },
 ]
 
 function getCookie(name: string): string {
