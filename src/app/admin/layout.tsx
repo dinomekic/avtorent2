@@ -4,6 +4,19 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
+const AGENT_NAV = [
+  { href: '/admin', label: '📊 Pregled' },
+  { href: '/admin/dan', label: '📅 Dnevni pregled' },
+  { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
+  { href: '/admin/kalendar', label: '🗓 Kalendar' },
+  { href: '/admin/finansije', label: '💰 Finansije' },
+  { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
+  { href: '/admin/pranje', label: '💦 Pranje vozila' },
+  { href: '/admin/provjera', label: '🔍 Provjera vozila' },
+  { href: '/admin/kvarovi', label: '⚠️ Kvarovi' },
+  { href: '/admin/servis', label: '🔧 Servis' },
+]
+
 const ADMIN_NAV = [
   { href: '/admin', label: '📊 Pregled' },
   { href: '/admin/dan', label: '📅 Dnevni pregled' },
@@ -62,29 +75,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       )
-
       supabase.from('agents').select('role').eq('full_name', name).single()
-        .then(({ data }) => {
-          const r = data?.role || 'agent'
-          setRole(r)
-          // Agent ne smije koristiti /admin direktno
-          if (r !== 'admin' && typeof window !== 'undefined') {
-            const path = window.location.pathname
-            // Dozvoli samo /admin/login i /admin/dan, /admin/pranje itd. za agente
-            // ali ne /admin samo (root) ni /admin/agenti itd.
-            const dozvoljeniZaAgente = [
-              '/admin/dan', '/admin/rezervacije', '/admin/kalendar',
-              '/admin/moji-partneri', '/admin/pranje', '/admin/provjera',
-              '/admin/kvarovi', '/admin/servis', '/admin/login'
-            ]
-            const jeDozvoljeno = dozvoljeniZaAgente.some(p => path.startsWith(p))
-            if (!jeDozvoljeno) {
-              window.location.href = '/agent/finansije'
-            }
-          }
-        })
+        .then(({ data }) => setRole(data?.role || 'agent'))
 
-      // Log session start
       supabase.from('agent_sessions').insert({ agent_name: name })
         .select().single().then(({ data: sess }) => {
           if (sess) {
@@ -102,6 +95,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (pathname === '/admin/login') return <>{children}</>
 
+  const navItems = role === 'admin' ? ADMIN_NAV : AGENT_NAV
+
   async function handleLogout() {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -113,14 +108,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.href = '/admin/login'
   }
 
-  // MOBILE LAYOUT
   if (isMobile) {
     return (
       <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>
             Avto<span style={{ color: '#1D9E75' }}>Rent</span>
-            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>admin</span>
+            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>{role === 'admin' ? 'admin' : 'agent'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {agentName && <span style={{ fontSize: 12, color: '#6b7280' }}>{agentName.split(' ')[0]}</span>}
@@ -136,7 +130,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div style={{ position: 'absolute', top: 52, right: 0, width: 240, background: '#fff', borderLeft: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', borderBottomLeftRadius: 12, boxShadow: '-4px 4px 20px rgba(0,0,0,0.1)', maxHeight: 'calc(100vh - 52px)', overflowY: 'auto' }}
               onClick={e => e.stopPropagation()}>
               <nav style={{ paddingTop: 8, paddingBottom: 8 }}>
-                {ADMIN_NAV.map(item => {
+                {navItems.map(item => {
                   const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
                   return (
                     <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
@@ -162,16 +156,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  // DESKTOP LAYOUT
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ width: 210, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '20px 16px', borderBottom: '1px solid #e5e7eb', fontSize: 16, fontWeight: 700, color: '#111' }}>
           Avto<span style={{ color: '#1D9E75' }}>Rent</span>
-          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>admin</span>
+          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>
+            {role === 'admin' ? 'admin' : 'agent'}
+          </span>
         </div>
         <nav style={{ flex: 1, paddingTop: 8 }}>
-          {ADMIN_NAV.map(item => {
+          {navItems.map(item => {
             const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
             return (
               <a key={item.href} href={item.href}
@@ -183,8 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
         <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb' }}>
           {agentName && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500, marginBottom: 4 }}>{agentName}</div>}
-          <button onClick={handleLogout}
-            style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#9ca3af', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button onClick={handleLogout} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#9ca3af', cursor: 'pointer', textDecoration: 'underline' }}>
             Odjavi se
           </button>
         </div>
