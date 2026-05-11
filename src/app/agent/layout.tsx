@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
 const AGENT_NAV = [
-  { href: '/agent', label: '📊 Pregled' },
+  { href: '/agent/finansije', label: '📊 Pregled' },
   { href: '/admin/dan', label: '📅 Dnevni pregled' },
   { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
