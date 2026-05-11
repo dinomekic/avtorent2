@@ -45,12 +45,8 @@ export default function AdminLoginPage() {
     document.cookie = `avtorent-admin-token=${accessToken}; path=/; max-age=86400`
     document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || userEmail)}; path=/; max-age=86400`
 
-    // Admin → /admin, Agent → /agent/finansije
-    if (agent.role === 'admin') {
-      window.location.href = '/admin'
-    } else {
-      window.location.href = '/agent/finansije'
-    }
+    // Svi idu na /admin — layout odlučuje šta prikazati
+    window.location.href = '/admin'
   }
 
   async function handleEmailLogin(e: React.FormEvent) {
