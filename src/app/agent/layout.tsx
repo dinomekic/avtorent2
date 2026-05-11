@@ -5,15 +5,15 @@ import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
 const AGENT_NAV = [
-  { href: '/agent/finansije', label: '💰 Finansije', external: false },
-  { href: '/admin/dan', label: '📅 Dnevni pregled', external: true },
-  { href: '/admin/rezervacije', label: '🚗 Rezervacije', external: true },
-  { href: '/admin/kalendar', label: '🗓 Kalendar', external: true },
-  { href: '/admin/moji-partneri', label: '🤝 Moji partneri', external: true },
-  { href: '/admin/pranje', label: '💦 Pranje vozila', external: true },
-  { href: '/admin/provjera', label: '🔍 Provjera vozila', external: true },
-  { href: '/admin/kvarovi', label: '⚠️ Kvarovi', external: true },
-  { href: '/admin/servis', label: '🔧 Servis', external: true },
+  { href: '/agent/finansije', label: '💰 Finansije' },
+  { href: '/admin/dan', label: '📅 Dnevni pregled' },
+  { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
+  { href: '/admin/kalendar', label: '🗓 Kalendar' },
+  { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
+  { href: '/admin/pranje', label: '💦 Pranje vozila' },
+  { href: '/admin/provjera', label: '🔍 Provjera vozila' },
+  { href: '/admin/kvarovi', label: '⚠️ Kvarovi' },
+  { href: '/admin/servis', label: '🔧 Servis' },
 ]
 
 function getCookie(name: string): string {
@@ -97,8 +97,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
                   const isActive = pathname.startsWith(item.href)
                   return (
                     <a key={item.href} href={item.href}
-                      target={item.external ? '_blank' : '_self'}
-                      rel={item.external ? 'noopener noreferrer' : undefined}
                       onClick={() => setMenuOpen(false)}
                       style={{ display: 'block', padding: '11px 18px', fontSize: 14, textDecoration: 'none', color: isActive ? '#1D9E75' : '#374151', fontWeight: isActive ? 600 : 400, background: isActive ? '#f0fdf8' : 'transparent', borderLeft: isActive ? '3px solid #1D9E75' : '3px solid transparent' }}>
                       {item.label}
@@ -135,8 +133,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             const isActive = pathname.startsWith(item.href)
             return (
               <a key={item.href} href={item.href}
-                target={item.external ? '_blank' : '_self'}
-                rel={item.external ? 'noopener noreferrer' : undefined}
                 style={{ display: 'block', padding: '9px 16px', fontSize: 13, textDecoration: 'none', color: isActive ? '#1D9E75' : '#6b7280', fontWeight: isActive ? 600 : 400, background: isActive ? '#f0fdf8' : 'transparent', borderRight: isActive ? '2px solid #1D9E75' : '2px solid transparent' }}>
                 {item.label}
               </a>
