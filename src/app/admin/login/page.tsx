@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -14,30 +14,6 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-
-  useEffect(() => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const { data: agent } = await supabase
-          .from('agents')
-          .select('*')
-          .eq('email', session.user.email)
-          .eq('is_active', true)
-          .single()
-
-        if (!agent) {
-          await supabase.auth.signOut()
-          setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-          setGoogleLoading(false)
-          return
-        }
-
-        document.cookie = `avtorent-admin-token=${session.access_token}; path=/; max-age=86400`
-        document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || session.user.email)}; path=/; max-age=86400`
-        window.location.href = '/agent'
-      }
-    })
-  }, [])
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -78,7 +54,7 @@ export default function AdminLoginPage() {
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/admin/login`,
+        redirectTo: `${window.location.origin}/agent/auth`,
         queryParams: { prompt: 'select_account' }
       },
     })
