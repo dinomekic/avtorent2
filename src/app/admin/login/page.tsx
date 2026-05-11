@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -14,6 +14,40 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+
+  useEffect(() => {
+    // Samo hvata Google OAuth callback (hash u URL-u)
+    const hash = window.location.hash
+    if (!hash || !hash.includes('access_token')) return
+
+    setGoogleLoading(true)
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setGoogleLoading(false); return }
+      await processLogin(session.user.email!, session.access_token)
+    })
+  }, [])
+
+  async function processLogin(userEmail: string, accessToken: string) {
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('*')
+      .eq('email', userEmail)
+      .eq('is_active', true)
+      .single()
+
+    if (!agent) {
+      await supabase.auth.signOut()
+      setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
+      setGoogleLoading(false)
+      setLoading(false)
+      return
+    }
+
+    document.cookie = `avtorent-admin-token=${accessToken}; path=/; max-age=86400`
+    document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || userEmail)}; path=/; max-age=86400`
+    window.location.href = '/agent'
+  }
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -29,23 +63,7 @@ export default function AdminLoginPage() {
       return
     }
 
-    const { data: agent } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('email', email)
-      .eq('is_active', true)
-      .single()
-
-    if (!agent) {
-      await supabase.auth.signOut()
-      setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-      setLoading(false)
-      return
-    }
-
-    document.cookie = `avtorent-admin-token=${data.session.access_token}; path=/; max-age=86400`
-    document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || email)}; path=/; max-age=86400`
-    window.location.href = '/agent'
+    await processLogin(email, data.session.access_token)
   }
 
   async function handleGoogleLogin() {
@@ -54,7 +72,7 @@ export default function AdminLoginPage() {
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/agent/auth`,
+        redirectTo: `${window.location.origin}/admin/login`,
         queryParams: { prompt: 'select_account' }
       },
     })
@@ -72,9 +90,15 @@ export default function AdminLoginPage() {
         </div>
         <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 28 }}>Admin panel — prijava</div>
 
+        {googleLoading && (
+          <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#085041', marginBottom: 16, textAlign: 'center' }}>
+            Prijava u toku...
+          </div>
+        )}
+
         <button
           onClick={handleGoogleLogin}
-          disabled={googleLoading}
+          disabled={googleLoading || loading}
           style={{ width: '100%', padding: '11px', background: '#fff', color: '#374151', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18">
@@ -121,7 +145,7 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleLoading}
             style={{ display: 'block', width: '100%', padding: 11, background: loading ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
             {loading ? 'Prijava...' : 'Prijavi se'}
