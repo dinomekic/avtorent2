@@ -51,20 +51,36 @@ export default function AdminFinansijePanelPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: t }, { data: r }, { data: a }] = await Promise.all([
-      supabase.from('transakcije').select('*').order('timestamp_upisa', { ascending: false }),
+
+    // Učitaj SVE transakcije straničenjem (Supabase limit je 1000 po pozivu)
+    let allTrans: any[] = []
+    let from = 0
+    const step = 1000
+    while (true) {
+      const { data } = await supabase
+        .from('transakcije')
+        .select('*')
+        .order('timestamp_upisa', { ascending: false })
+        .range(from, from + step - 1)
+      if (!data || data.length === 0) break
+      allTrans = [...allTrans, ...data]
+      if (data.length < step) break
+      from += step
+    }
+
+    const [{ data: r }, { data: a }] = await Promise.all([
       supabase.from('rezervacije').select('id, br_tablica, ime_prezime, telefon, od_datuma, do_datuma, ukupno_naplata, naplaceno, ko_je_izdao, ko_je_preuzeo, daily_status, ugovor_slika, nacin_placanja, depozit').order('id', { ascending: false }),
       supabase.from('agents').select('id, email, full_name').eq('is_active', true).order('full_name'),
     ])
 
-    // Sortiraj transakcije po timestamp_upisa — format je "M/D/YYYY HH:MM:SS" ili ISO
-    const sorted = (t || []).sort((a: any, b: any) => {
+    // Sortiraj po timestamp desc
+    allTrans.sort((a: any, b: any) => {
       const pa = new Date(a.timestamp_upisa || a.datum || 0).getTime()
       const pb = new Date(b.timestamp_upisa || b.datum || 0).getTime()
-      return pb - pa // desc — najnoviji prvi
+      return pb - pa
     })
 
-    setTransakcije(sorted)
+    setTransakcije(allTrans)
     setRezervacije(r || [])
     setAgents(a || [])
     setLoading(false)
