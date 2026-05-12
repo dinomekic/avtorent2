@@ -122,13 +122,16 @@ export default function FinansijePage() {
 
   const loadAll = useCallback(async (email: string, ime: string) => {
     setLoading(true)
-    let trans: Transakcija[] = []
-    let from = 0; let hasMore = true
-    while (hasMore) {
-      const { data } = await supabase.from('transakcije').select('*').range(from, from + 999)
-      if (data && data.length > 0) { trans = [...trans, ...data]; from += 1000; if (data.length < 1000) hasMore = false } else hasMore = false
-    }
-    trans.sort((a, b) => new Date(b.timestamp_upisa || 0).getTime() - new Date(a.timestamp_upisa || 0).getTime())
+
+    // Učitaj samo transakcije ovog agenta — mnogo brže
+    const { data: transMoje } = await supabase
+      .from('transakcije')
+      .select('*')
+      .or(`osobaemail.eq.${email},primaocemail.eq.${email}`)
+      .order('timestamp_upisa', { ascending: false })
+      .limit(200)
+
+    const trans = transMoje || []
     setAllTrans(trans)
 
     const { data: v } = await supabase.from('vozila_fleet').select('id, license_plate, agregirani_2').order('agregirani_2')
