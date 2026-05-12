@@ -360,19 +360,8 @@ function HomePageContent() {
                   </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: '#111' }}>{v.name}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5, display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span>{v.category}</span>
-                      {v.year && <span>· {v.year}</span>}
-                      {v.slobodnih && v.slobodnih > 1 && (
-                        <span style={{ background: '#E1F5EE', color: '#085041', padding: '1px 6px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
-                          {v.slobodnih} dostupna
-                        </span>
-                      )}
-                      {v.category_name && (
-                        <span style={{ background: '#E6F1FB', color: '#0C447C', padding: '1px 6px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
-                          {v.category_name}
-                        </span>
-                      )}
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
+                      {v.category}{v.year ? ` · ${v.year}` : ''}
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                       {[
