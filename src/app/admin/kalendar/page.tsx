@@ -126,10 +126,10 @@ export default function AdminKalendarPage() {
         .fc .fc-resource-group .fc-timeline-lane { background: #1a1f2e !important; }
         
         /* ROW HEIGHT — kritično za poravnanje */
-        .fc .fc-datagrid-body tr, .fc .fc-timeline-body tr { height: 40px !important; }
-        .fc .fc-datagrid-cell-frame { height: 40px !important; min-height: 40px !important; max-height: 40px !important; display: flex !important; align-items: center !important; }
-        .fc .fc-timeline-lane-frame { height: 40px !important; min-height: 40px !important; }
-        .fc .fc-timeline-lane { height: 40px !important; min-height: 40px !important; max-height: 40px !important; }
+        .fc .fc-datagrid-body tr, .fc .fc-timeline-body tr { height: 48px !important; }
+        .fc .fc-datagrid-cell-frame { height: 48px !important; min-height: 48px !important; max-height: 48px !important; display: flex !important; align-items: center !important; }
+        .fc .fc-timeline-lane-frame { height: 48px !important; min-height: 48px !important; }
+        .fc .fc-timeline-lane { height: 48px !important; min-height: 48px !important; max-height: 48px !important; }
 
         /* Events */
         .fc .fc-event { border-radius: 3px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 1px 4px !important; cursor: pointer !important; margin: 1px 0 !important; }
@@ -139,7 +139,7 @@ export default function AdminKalendarPage() {
         .ev-nije-izdato { background-color: #dc2626 !important; color: #fff !important; }
         
         /* Timeline slot */
-        .fc .fc-timeline-slot-frame { height: 40px !important; }
+        .fc .fc-timeline-slot-frame { height: 48px !important; }
         .fc .fc-timeline-slot { min-width: 28px !important; }
 
         /* Scrollbar */
@@ -246,17 +246,16 @@ export default function AdminKalendarPage() {
       nowIndicator: true,
       lazyFetching: true,
       eventMinWidth: 3,
-      resourceAreaWidth: '200px',
+      resourceAreaWidth: '220px',
       resourceGroupField: 'building',
       resourceLabelContent: (arg: any) => {
         const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
         const naziv = v?.agregirani_2 || arg.resource.title
         const plate = v?.license_plate || ''
-        // Ukloni tablice iz naziva
         const kratko = naziv.replace(plate, '').replace(/\s+/g, ' ').trim()
-        return { html: `<div style="padding:1px 0;overflow:hidden;max-width:196px;">
-          <div style="font-size:9.5px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${naziv}">${kratko}</div>
-          <div style="font-size:9px;color:#6b7280;font-family:monospace;font-weight:700;letter-spacing:0.3px;">${plate.toUpperCase()}</div>
+        return { html: `<div style="padding:2px 0;max-width:212px;">
+          <div style="font-size:9px;font-weight:700;color:#111;white-space:normal;word-break:break-word;line-height:1.3;">${kratko}</div>
+          <div style="font-size:9px;color:#6b7280;font-family:monospace;font-weight:700;letter-spacing:0.3px;margin-top:1px;">${plate.toUpperCase()}</div>
         </div>` }
       },
       locale: 'sr-Latn',
