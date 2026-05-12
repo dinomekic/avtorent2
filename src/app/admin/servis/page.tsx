@@ -20,7 +20,21 @@ const SERVICE_TYPES = [
   { key: 'kvarovi', label: 'Kvar', icon: '⚠️' },
   { key: 'gume', label: 'Gume', icon: '🛞' },
   { key: 'registracija', label: 'Registracija', icon: '📋' },
+  { key: 'provjera', label: 'Provjera vozila', icon: '🔍' },
   { key: 'ostalo', label: 'Ostalo', icon: '📝' },
+]
+
+const CHECKLIST = [
+  { key: 'check_ulje', label: '🛢️ Ulje' },
+  { key: 'check_voda', label: '💧 Rashladna tečnost' },
+  { key: 'check_tecnost_brisaci', label: '🪣 Tečnost za brisače' },
+  { key: 'check_svetla', label: '💡 Signalizacija / Svjetla' },
+  { key: 'check_klima', label: '❄️ Klima uređaj' },
+  { key: 'check_brave', label: '🔒 Brave / Vrata / Gepek' },
+  { key: 'check_enterijer', label: '🪑 Enterijer / Čistoća' },
+  { key: 'check_brisaci', label: '🌧️ Brisači' },
+  { key: 'check_prskalice', label: '💦 Prskalice' },
+  { key: 'check_podizaci', label: '🪟 Podizači stakala' },
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -64,6 +78,10 @@ export default function ServisPage() {
     mileage_at_service: '', description: '', cost: '',
     performed_by: '', external_shop: '', next_service_date: '',
     next_service_mileage: '', status: 'completed', notes: '',
+    // Checklist
+    check_ulje: true, check_voda: true, check_tecnost_brisaci: true,
+    check_svetla: true, check_klima: true, check_brave: true,
+    check_enterijer: true, check_brisaci: true, check_prskalice: true, check_podizaci: true,
   }
   const [form, setForm] = useState<any>(emptyForm)
   const [editForm, setEditForm] = useState<any>({})
@@ -123,7 +141,11 @@ export default function ServisPage() {
       next_service_date: form.next_service_date || null,
       next_service_mileage: form.next_service_mileage ? parseInt(form.next_service_mileage) : null,
       status: form.status,
-      notes: form.notes || null,
+      notes: [
+        form.notes,
+        // Dodaj checklist probleme u notes
+        ...CHECKLIST.filter(c => form[c.key] === false).map(c => `❌ ${c.label}`)
+      ].filter(Boolean).join(' | ') || null,
     }])
     if (error) { alert('Greška: ' + error.message); setSaving(false); return }
 
@@ -321,6 +343,33 @@ export default function ServisPage() {
                     placeholder="Šta je rađeno..." style={{ ...inp, minHeight: 70, resize: 'vertical' as const }} />
                 </div>
 
+                {/* CHECKLIST PROVJERE */}
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ ...lbl, marginBottom: 8 }}>Checklist provjere vozila</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {CHECKLIST.map(item => (
+                      <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${form[item.key] === false ? '#fecaca' : '#e5e7eb'}`, borderRadius: 8, background: form[item.key] === false ? '#fff5f5' : '#f9fafb' }}>
+                        <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{item.label}</span>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button onClick={() => setForm((f: any) => ({ ...f, [item.key]: true }))}
+                            style={{ padding: '4px 10px', fontSize: 11, border: `1px solid ${form[item.key] !== false ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 6, background: form[item.key] !== false ? '#E1F5EE' : '#fff', color: form[item.key] !== false ? '#085041' : '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
+                            ✓ OK
+                          </button>
+                          <button onClick={() => setForm((f: any) => ({ ...f, [item.key]: false }))}
+                            style={{ padding: '4px 10px', fontSize: 11, border: `1px solid ${form[item.key] === false ? '#dc2626' : '#e5e7eb'}`, borderRadius: 6, background: form[item.key] === false ? '#FCEBEB' : '#fff', color: form[item.key] === false ? '#dc2626' : '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
+                            ✗ NE
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {CHECKLIST.some(c => form[c.key] === false) && (
+                    <div style={{ marginTop: 8, background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                      ⚠️ Problemi: {CHECKLIST.filter(c => form[c.key] === false).map(c => c.label).join(', ')}
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <div>
                     <label style={lbl}>Ko je radio</label>
@@ -399,6 +448,12 @@ export default function ServisPage() {
                       </div>
                     </div>
                     {s.description && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{s.description}</div>}
+                    {/* Prikaži checklist probleme iz notes */}
+                    {s.notes && s.notes.includes('❌') && (
+                      <div style={{ fontSize: 11, color: '#dc2626', background: '#fff5f5', borderRadius: 6, padding: '4px 8px', marginBottom: 4 }}>
+                        {s.notes.split(' | ').filter((n: string) => n.includes('❌')).join(' ')}
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, color: '#9ca3af', display: 'flex', gap: 12 }}>
                       {s.mileage_at_service && <span>📏 {s.mileage_at_service.toLocaleString()} km</span>}
                       {s.performed_by && <span>👤 {s.performed_by}</span>}
