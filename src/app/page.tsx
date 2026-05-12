@@ -8,7 +8,8 @@ import { calculateDays } from '@/lib/pricing'
 type Vehicle = {
   id: string; name: string; category: string; price_per_day: number
   original_price?: number; seats: number; transmission: string
-  features: string[]; year?: number; image_url?: string; season_name?: string
+  fuel_type?: string; features: string[]; year?: number; image_url?: string
+  season_name?: string; category_name?: string; slobodnih?: number; lokacija?: string
   vehicle_locations?: { location_id: string; locations?: { name: string; city: string } }[]
 }
 type Partner = { id: string; name: string; qr_code: string; client_discount_percent: number; location_id?: string; location_name?: string }
@@ -309,18 +310,18 @@ function HomePageContent() {
           )}
         </div>
 
-        {/* ─── KLASE VOZILA (zamjena za stare kategorije) ─── */}
+        {/* ─── KLASE VOZILA ─── */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
-            ['all', '🚗 Sve klase'],
-            ['Hatchback', '🚗 Hatchback'],
-            ['Medium', '🚗 Medium'],
-            ['Sedan', '🚗 Sedan'],
+            ['all', '🚗 Sve'],
+            ['Hatchback', 'Hatchback'],
+            ['Medium', 'Medium'],
+            ['Sedan', 'Sedan'],
             ['SUV', '🚙 SUV'],
-            ['Station Wagon', '🚗 Station Wagon'],
+            ['Station Wagon', 'Karavan'],
             ['Luxury', '🏎️ Luxury'],
             ['Van', '🚐 Van'],
-            ['Convertible', '🚘 Convertible'],
+            ['Convertible', '🚘 Cabrio'],
           ].map(([val, label]) => (
             <button key={val} onClick={() => setCategory(val)}
               style={{ padding: '6px 14px', fontSize: 13, borderRadius: 20, border: '1px solid', borderColor: category === val ? primaryColor : '#e5e7eb', background: category === val ? `${primaryColor}22` : '#fff', color: category === val ? primaryColor : '#6b7280', cursor: 'pointer', fontWeight: category === val ? 600 : 400 }}>
@@ -359,8 +360,19 @@ function HomePageContent() {
                   </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: '#111' }}>{v.name}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
-                      {v.category}{v.year ? ` · ${v.year}` : ''}
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span>{v.category}</span>
+                      {v.year && <span>· {v.year}</span>}
+                      {v.slobodnih && v.slobodnih > 1 && (
+                        <span style={{ background: '#E1F5EE', color: '#085041', padding: '1px 6px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
+                          {v.slobodnih} dostupna
+                        </span>
+                      )}
+                      {v.category_name && (
+                        <span style={{ background: '#E6F1FB', color: '#0C447C', padding: '1px 6px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
+                          {v.category_name}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                       {[
