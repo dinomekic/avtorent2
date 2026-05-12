@@ -192,7 +192,7 @@ export default function AdminDanPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: r }] = await Promise.all([
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija, mjenjac').order('marka'),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
       supabase.from('rezervacije').select('*')
         .or(`od_datuma.eq.${selectedDate},do_datuma.eq.${selectedDate},and(od_datuma.lt.${selectedDate},do_datuma.gt.${selectedDate})`)
         .order('vreme_izdavanja'),
