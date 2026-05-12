@@ -20,7 +20,21 @@ type SiteConfig = {
   price_modifier: number
 }
 
-const ICONS: Record<string, string> = { mini: '🚗', economy: '🚗', compact: '🚗', intermediate: '🚗', standard: '🚗', fullsize: '🚗', suv: '🚙', minivan: '🚐', van: '🚐', premium: '🏎️', convertible: '🚘', sport: '🏎️', electric: '⚡', offroad: '🛻' }
+// Ikone po klasi vozila
+const CLASS_ICONS: Record<string, string> = {
+  'Hatchback': '🚗',
+  'Medium': '🚗',
+  'Sedan': '🚗',
+  'SUV': '🚙',
+  'Station Wagon': '🚗',
+  'Luxury': '🏎️',
+  'Van': '🚐',
+  'Convertible': '🚘',
+}
+
+function getVehicleIcon(category: string): string {
+  return CLASS_ICONS[category] || '🚗'
+}
 
 function HomePageContent() {
   const searchParams = useSearchParams()
@@ -45,7 +59,6 @@ function HomePageContent() {
   const [site, setSite] = useState<SiteConfig | null>(null)
   const tr = translations[lang]
 
-  // Učitaj Soro blog embed skriptu
   useEffect(() => {
     const script = document.createElement('script')
     script.src = 'https://app.trysoro.com/api/embed/16773211-0733-4454-87cc-ebd145c43c1b'
@@ -54,7 +67,6 @@ function HomePageContent() {
     return () => { document.body.removeChild(script) }
   }, [])
 
-  // Detektuj sajt po domeni ili ?site= parametru
   useEffect(() => {
     const siteParam = searchParams.get('site')
     const domain = siteParam || (typeof window !== 'undefined' ? window.location.hostname : 'avtorent2-bvkv.vercel.app')
@@ -190,9 +202,7 @@ function HomePageContent() {
           <a href="/kontakt" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>
             {lang === 'sr' ? 'Kontakt' : lang === 'de' ? 'Kontakt' : 'Contact'}
           </a>
-          <a href="/blog" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none', fontWeight: 500 }}>
-            Blog
-          </a>
+          <a href="/blog" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none', fontWeight: 500 }}>Blog</a>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {(['sr', 'en', 'de'] as Lang[]).map(l => (
@@ -203,7 +213,6 @@ function HomePageContent() {
         </div>
       </nav>
 
-      {/* Korporativni banner */}
       {isCorporate && (
         <div style={{ background: site?.primary_color || '#1a1a2e', padding: '10px 16px', fontSize: 13, color: '#fff', textAlign: 'center', fontWeight: 500 }}>
           Dobrodošli na {site?.name} — direktne cijene bez posrednika
@@ -221,7 +230,6 @@ function HomePageContent() {
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, color: '#111' }}>{site?.tagline || tr.heroTitle}</h1>
           <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>{tr.heroSub}</p>
 
-          {/* Lokacije */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 10 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3 }}>{tr.pickupLoc}</label>
@@ -269,7 +277,6 @@ function HomePageContent() {
             )}
           </div>
 
-          {/* Datumi */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3 }}>{tr.pickupDate}</label>
@@ -302,10 +309,21 @@ function HomePageContent() {
           )}
         </div>
 
-        {/* Kategorije */}
+        {/* ─── KLASE VOZILA (zamjena za stare kategorije) ─── */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {[['all', tr.allCats], ['mini', 'Mini'], ['economy', 'Economy'], ['compact', 'Compact'], ['intermediate', 'Intermediate'], ['standard', 'Standard'], ['fullsize', 'Full-size'], ['suv', 'SUV'], ['minivan', 'Minivan'], ['van', 'Van'], ['premium', 'Premium'], ['convertible', 'Convertible'], ['sport', 'Sportska'], ['electric', 'Električna (EV)'], ['offroad', '4x4 / Off-road']].map(([val, label]) => (
-            <button key={val} onClick={() => setCategory(val)} style={{ padding: '6px 14px', fontSize: 13, borderRadius: 20, border: '1px solid', borderColor: category === val ? primaryColor : '#e5e7eb', background: category === val ? `${primaryColor}22` : '#fff', color: category === val ? primaryColor : '#6b7280', cursor: 'pointer', fontWeight: category === val ? 600 : 400 }}>
+          {[
+            ['all', '🚗 Sve klase'],
+            ['Hatchback', '🚗 Hatchback'],
+            ['Medium', '🚗 Medium'],
+            ['Sedan', '🚗 Sedan'],
+            ['SUV', '🚙 SUV'],
+            ['Station Wagon', '🚗 Station Wagon'],
+            ['Luxury', '🏎️ Luxury'],
+            ['Van', '🚐 Van'],
+            ['Convertible', '🚘 Convertible'],
+          ].map(([val, label]) => (
+            <button key={val} onClick={() => setCategory(val)}
+              style={{ padding: '6px 14px', fontSize: 13, borderRadius: 20, border: '1px solid', borderColor: category === val ? primaryColor : '#e5e7eb', background: category === val ? `${primaryColor}22` : '#fff', color: category === val ? primaryColor : '#6b7280', cursor: 'pointer', fontWeight: category === val ? 600 : 400 }}>
               {label}
             </button>
           ))}
@@ -315,15 +333,14 @@ function HomePageContent() {
           <div style={{ textAlign: 'center', padding: 48, color: '#9ca3af' }}>Učitavanje...</div>
         ) : vehicles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>{'🚗'}</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>🚗</div>
             <div style={{ fontSize: 14, color: '#374151' }}>Nema dostupnih vozila za odabrani period i lokaciju</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {vehicles.map(v => {
               const displayPrice = getDisplayPrice(v.price_per_day)
-              const originalPrice = v.price_per_day // osnovna cijena bez modifikatora
-              const corporateOriginal = Math.round(originalPrice * 1.0) // cijena bez popusta
+              const originalPrice = v.price_per_day
               const showCorporateDiscount = isCorporate
               const originalTotal = days ? displayPrice * days : null
               const totalWithTransfer = originalTotal ? originalTotal + transferFee : null
@@ -336,17 +353,21 @@ function HomePageContent() {
                       <img src={v.image_url} alt={v.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 52 }}>
-                        {ICONS[v.category] || '🚗'}
+                        {getVehicleIcon(v.category)}
                       </div>
                     )}
                   </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: '#111' }}>{v.name}</div>
                     <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
-                      {v.category} {v.year && `· ${v.year}`}
+                      {v.category}{v.year ? ` · ${v.year}` : ''}
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                      {[v.transmission === 'automatic' ? tr.automatic : tr.manual, `${v.seats} ${tr.seats}`, ...(v.features || []).slice(0, 1)].map(f => (
+                      {[
+                        v.transmission === 'automatic' ? tr.automatic : tr.manual,
+                        `${v.seats} ${tr.seats}`,
+                        ...(v.features || []).slice(0, 1),
+                      ].map(f => (
                         <span key={f} style={{ fontSize: 11, padding: '3px 8px', background: '#f3f4f6', borderRadius: 20, color: '#6b7280' }}>{f}</span>
                       ))}
                     </div>
@@ -365,7 +386,7 @@ function HomePageContent() {
                         {days && totalWithTransfer && (
                           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
                             {days} {tr.days} = <strong style={{ color: '#111' }}>{totalWithTransfer}€</strong>
-                            {transferFee > 0 && <span style={{ fontSize: 10, color: '#BA7517' }}>{' '}(+{transferFee}€)</span>}
+                            {transferFee > 0 && <span style={{ fontSize: 10, color: '#BA7517' }}> (+{transferFee}€)</span>}
                           </div>
                         )}
                       </div>
@@ -379,7 +400,7 @@ function HomePageContent() {
             })}
           </div>
         )}
-        {/* Blog — link ka blog stranici */}
+
         <div style={{ marginTop: 40, marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
@@ -396,7 +417,6 @@ function HomePageContent() {
           </div>
         </div>
 
-        {/* Trust section */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 40, marginBottom: 24 }}>
           {[
             { icon: '🛡️', title: lang === 'sr' ? 'Bez skrivenih troškova' : lang === 'en' ? 'No hidden fees' : 'Keine versteckten Kosten', desc: lang === 'sr' ? 'Cijena je konačna. Bez iznenađenja.' : lang === 'en' ? 'Final price. No surprises.' : 'Endpreis. Keine Überraschungen.' },
@@ -413,7 +433,6 @@ function HomePageContent() {
         </div>
       </main>
 
-      {/* Blog — sve objave */}
       <div style={{ background: '#f3f7fd', borderTop: '1px solid #e5e7eb', padding: '48px 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -428,7 +447,6 @@ function HomePageContent() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer style={{ background: '#0e2d5e', padding: '32px 24px', marginTop: 40 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div>
