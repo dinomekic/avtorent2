@@ -32,6 +32,7 @@ type VehicleGroup = {
 type PriceCategory = {
   id: string; name: string; description: string | null
   base_multiplier: number; is_active: boolean; sort_order: number
+  default_price: number | null
 }
 
 type SeasonalPricing = {
@@ -88,7 +89,7 @@ export default function AdminVozilaPage() {
   // Kategorije CRUD
   const [showCatModal, setShowCatModal] = useState(false)
   const [editCat, setEditCat] = useState<PriceCategory | null>(null)
-  const [catForm, setCatForm] = useState({ name: '', description: '', base_multiplier: '1.0', sort_order: '0' })
+  const [catForm, setCatForm] = useState({ name: '', description: '', base_multiplier: '1.0', sort_order: '0', default_price: '' })
   const [catSaving, setCatSaving] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
@@ -96,7 +97,7 @@ export default function AdminVozilaPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: vozila }, { data: rezervacije }, { data: cats }, { data: seas }, { data: dyns }] = await Promise.all([
-      supabase.from('vozila_fleet').select('*').order('marka'),
+      supabase.from('vozila_fleet').select('*').eq('fleet_status', 'available').order('marka'),
       supabase.from('rezervacije').select('br_tablica').neq('daily_status', 'Nije izdato').lte('od_datuma', today).gt('do_datuma', today),
       supabase.from('price_categories').select('*').order('sort_order'),
       supabase.from('seasonal_pricing').select('*').order('date_from'),
@@ -197,7 +198,14 @@ export default function AdminVozilaPage() {
     const updates: any = {}
     if (bulkAction === 'price' && bulkPrice) updates.price_per_day = parseFloat(bulkPrice)
     if (bulkAction === 'class' && bulkClass) updates.vehicle_class = bulkClass
-    if (bulkAction === 'category') updates.price_category_id = bulkCatId || null
+    if (bulkAction === 'category') {
+      updates.price_category_id = bulkCatId || null
+      // Primijeni default_price iz kategorije ako postoji
+      if (bulkCatId) {
+        const cat = priceCategories.find(c => c.id === bulkCatId)
+        if (cat?.default_price) updates.price_per_day = cat.default_price
+      }
+    }
     if (bulkAction === 'site') updates.show_on_site = bulkSite
     if (Object.keys(updates).length > 0) await supabase.from('vozila_fleet').update(updates).in('id', allIds)
     setBulkSaving(false); setShowBulk(false); setBulkAction(null)
@@ -242,11 +250,16 @@ export default function AdminVozilaPage() {
   // Kategorije CRUD
   async function saveCat() {
     setCatSaving(true)
-    const payload = { name: catForm.name, description: catForm.description || null, base_multiplier: parseFloat(catForm.base_multiplier), sort_order: parseInt(catForm.sort_order), is_active: true }
+    const payload = {
+      name: catForm.name, description: catForm.description || null,
+      base_multiplier: parseFloat(catForm.base_multiplier),
+      sort_order: parseInt(catForm.sort_order), is_active: true,
+      default_price: catForm.default_price ? parseFloat(catForm.default_price) : null,
+    }
     if (editCat) await supabase.from('price_categories').update(payload).eq('id', editCat.id)
     else await supabase.from('price_categories').insert(payload)
     setCatSaving(false); setEditCat(null); setShowCatModal(false)
-    setCatForm({ name: '', description: '', base_multiplier: '1.0', sort_order: '0' }); loadData()
+    setCatForm({ name: '', description: '', base_multiplier: '1.0', sort_order: '0', default_price: '' }); loadData()
   }
 
   async function deleteCat(id: string) {
@@ -675,7 +688,12 @@ export default function AdminVozilaPage() {
                       <span style={{ fontSize: 16, fontWeight: 700, color: c.base_multiplier > 1 ? '#dc2626' : c.base_multiplier < 1 ? '#1D9E75' : '#374151' }}>
                         ×{c.base_multiplier}
                       </span>
-                      <button onClick={() => { setEditCat(c); setCatForm({ name: c.name, description: c.description || '', base_multiplier: String(c.base_multiplier), sort_order: String(c.sort_order) }) }}
+                      {c.default_price ? (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#1D9E75', background: '#E1F5EE', padding: '2px 8px', borderRadius: 20 }}>
+                          {c.default_price}€/dan
+                        </span>
+                      ) : null}
+                      <button onClick={() => { setEditCat(c); setCatForm({ name: c.name, description: c.description || '', base_multiplier: String(c.base_multiplier), sort_order: String(c.sort_order), default_price: String(c.default_price || '') }) }}
                         style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#374151' }}>Uredi</button>
                       <button onClick={() => deleteCat(c.id)}
                         style={{ padding: '3px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
@@ -703,6 +721,12 @@ export default function AdminVozilaPage() {
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={lbl}>Opis (opciono)</label>
                     <input value={catForm.description} onChange={e => setCatForm(f => ({ ...f, description: e.target.value }))} placeholder="npr. Ekonomična vozila do 1600cc" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>💰 Podrazumijevana cijena (€/dan)</label>
+                    <input type="number" step="1" value={catForm.default_price} onChange={e => setCatForm(f => ({ ...f, default_price: e.target.value }))}
+                      placeholder="npr. 40" style={{ ...inp, fontWeight: 700, color: '#1D9E75', border: '1px solid #1D9E75' }} />
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>Automatski se primijeni kad dodijeliš ovu kategoriju vozilima</div>
                   </div>
                 </div>
                 <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 12, padding: '8px 10px', background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb' }}>
