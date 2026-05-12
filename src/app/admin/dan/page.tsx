@@ -418,6 +418,34 @@ export default function AdminDanPage() {
         depozit_vracen: true, vraceni_depozit_iznos: vracenDepozit, napomena: novaNapomena,
       }).eq('id', rezId)
       await supabase.from('logovi').insert([{ akcija: `${agent} preuzeo vozilo REZ #${rezId}. Naplaćeno duga: ${naplataDuga}€` }])
+
+      // Kreiraj transakcije
+      const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
+      const agentEmail = agentData?.email || ''
+      const tranInsert: any[] = []
+      if (naplataDuga > 0) {
+        tranInsert.push({
+          id: Date.now().toString() + 'r1',
+          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
+          kategorija: 'Naplata Duga', iznos: naplataDuga,
+          vozilo: rez.br_tablica,
+          komentar: `Naplata duga pri preuzimanju (REZ #${rezId})`,
+          osoba: agent, osobaemail: agentEmail,
+          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
+        })
+      }
+      if (vracenDepozit > 0) {
+        tranInsert.push({
+          id: Date.now().toString() + 'r2',
+          tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0],
+          kategorija: 'Povrat Depozita', iznos: vracenDepozit,
+          vozilo: rez.br_tablica,
+          komentar: `Vraćen depozit pri preuzimanju (REZ #${rezId})`,
+          osoba: agent, osobaemail: agentEmail,
+          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
+        })
+      }
+      if (tranInsert.length > 0) await supabase.from('transakcije').insert(tranInsert)
       if (preostaliDug > 0 && rez.br_vozacke) {
         const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
         const istorija = [...(dData?.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos: preostaliDug, komentar: `Ostao dug sa ugovora REZ #${rezId}`, tip: 'zaduzenje' }]
