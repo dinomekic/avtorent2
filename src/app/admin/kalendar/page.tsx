@@ -180,7 +180,7 @@ export default function AdminKalendarPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: r }, { data: d }] = await Promise.all([
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija, mjenjac').order('marka'),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
       supabase.from('rezervacije').select('*'),
       supabase.from('duznici').select('*').order('ukupan_dug', { ascending: false }),
     ])
