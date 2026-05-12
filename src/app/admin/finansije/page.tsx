@@ -179,19 +179,24 @@ export default function FinansijePage() {
     setSaldo(s); setFirmaDug(df)
     setPrikazTrans(prikazano); setPendingTrans(pending); setPendingCount(pending.length)
 
-    // KM dug — sve KM koje je agent prešao
-    const { data: km } = await supabase.from('koristenje').select('*').order('timestamp_upisa', { ascending: false })
+    // KM dug — čitaj samo za ovog agenta
+    const { data: km } = await supabase
+      .from('koristenje')
+      .select('*')
+      .ilike('email', email)
+      .order('timestamp_upisa', { ascending: false })
     const svaKor = km || []
     let totalPredjeno = 0
     svaKor.forEach((k: any) => {
-      if (k.email?.toLowerCase() === email && k.status !== 'Aktivno') {
+      const st = (k.status || '').replace(/'/g, '').trim()
+      if (st !== 'Aktivno') {
         totalPredjeno += parseFloat(k.predjena_km || k.kilometraza || 0)
       }
     })
-    // Formula iz HTML: (totalPredjeno / 100) * 1.44 * 8 - uplate
     setKmDug(((totalPredjeno / 100) * 1.44 * 8) - uKm)
-    setAktivnoKor(svaKor.find((k: any) => k.email?.toLowerCase() === email && k.status === 'Aktivno') || null)
-    setKorHistory(svaKor.filter((k: any) => k.email?.toLowerCase() === email && k.status !== 'Aktivno').slice(0, 10))
+    const aktivno = svaKor.find((k: any) => (k.status || '').replace(/'/g, '').trim() === 'Aktivno') || null
+    setAktivnoKor(aktivno)
+    setKorHistory(svaKor.filter((k: any) => (k.status || '').replace(/'/g, '').trim() !== 'Aktivno').slice(0, 10))
     setLoading(false)
   }, [])
 
@@ -352,6 +357,7 @@ export default function FinansijePage() {
     await supabase.from('koristenje').insert([{
       id: genId(), email: agentEmail, ime_prezime: agentIme,
       tablice, km_start: parseFloat(kmStart),
+      kilometraza: 0,
       destinacija: privDest, status: 'Aktivno',
       vreme_zaduzenja: new Date().toLocaleString('sr-RS'),
       timestamp_upisa: new Date().toISOString(),
@@ -363,7 +369,14 @@ export default function FinansijePage() {
   async function finishPrivate(id: string, kmS: number) {
     if (!kmEnd) { alert('Unesite krajnje KM!'); return }
     const km_end = parseFloat(kmEnd)
-    await supabase.from('koristenje').update({ km_end, predjena_km: km_end - kmS, status: 'Završeno', vreme_povratka: new Date().toLocaleString('sr-RS') }).eq('id', id)
+    const predjena = kmS > 0 ? km_end - kmS : km_end
+    await supabase.from('koristenje').update({
+      km_end,
+      predjena_km: predjena,
+      kilometraza: predjena,
+      status: 'Završeno',
+      vreme_povratka: new Date().toLocaleString('sr-RS')
+    }).eq('id', id)
     setKmEnd(''); loadAll(agentEmail, agentIme)
   }
 
