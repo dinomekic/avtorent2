@@ -41,6 +41,7 @@ export type VoziloOption = {
   marka: string | null
   model: string | null
   agregirani_2: string | null
+  fleet_status: string | null
   lokacija: string
 }
 
