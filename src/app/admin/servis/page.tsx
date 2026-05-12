@@ -14,62 +14,48 @@ function getCookie(name: string): string {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
-type Vozilo = {
-  id: number; license_plate: string; agregirani_2: string; marka: string
-  model: string; fleet_status: string; current_mileage: number
-  istek_reg: string; lokacija: string; dana_do_isteka: number
-}
-
-type Servis = {
-  id: string; vehicle_id: string; service_type: string; service_date: string
-  mileage_at_service: number; description: string; cost: number
-  performed_by: string; external_shop: string; next_service_date: string
-  next_service_mileage: number; status: string; notes: string; created_at: string
-}
-
 const SERVICE_TYPES = [
   { key: 'mali_servis', label: 'Mali servis', icon: '🔧' },
   { key: 'veliki_servis', label: 'Veliki servis', icon: '⚙️' },
-  { key: 'kocnice', label: 'Kočnice', icon: '🛑' },
+  { key: 'kvarovi', label: 'Kvar', icon: '⚠️' },
   { key: 'gume', label: 'Gume', icon: '🛞' },
-  { key: 'ulje', label: 'Ulje', icon: '🛢️' },
-  { key: 'klima', label: 'Klima', icon: '❄️' },
   { key: 'registracija', label: 'Registracija', icon: '📋' },
-  { key: 'elektrika', label: 'Elektrika', icon: '⚡' },
-  { key: 'karoserija', label: 'Karoserija', icon: '🚗' },
   { key: 'ostalo', label: 'Ostalo', icon: '📝' },
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  'na_cekanju':  { label: 'Na čekanju', bg: '#FAEEDA', color: '#633806' },
-  'u_toku':      { label: 'U toku',     bg: '#E6F1FB', color: '#0C447C' },
-  'zavrseno':    { label: 'Završeno',   bg: '#E1F5EE', color: '#085041' },
-  'otkazano':    { label: 'Otkazano',   bg: '#f3f4f6', color: '#6b7280' },
+  pending:          { label: 'Na čekanju', bg: '#FAEEDA', color: '#633806' },
+  in_progress:      { label: 'U toku',     bg: '#E6F1FB', color: '#0C447C' },
+  completed:        { label: 'Završeno',   bg: '#E1F5EE', color: '#085041' },
+  cancelled:        { label: 'Otkazano',   bg: '#f3f4f6', color: '#6b7280' },
 }
 
-const FLEET_STATUS: Record<string, { label: string; color: string }> = {
-  'available':       { label: 'Dostupno',   color: '#085041' },
-  'rented':          { label: 'Izdato',     color: '#0C447C' },
-  'service':         { label: 'Servis',     color: '#633806' },
-  'service_planet':  { label: 'S. Planet',  color: '#7c3aed' },
-  'damaged':         { label: 'Oštećeno',   color: '#dc2626' },
-  'inactive':        { label: 'Neaktivno',  color: '#9ca3af' },
+type Vozilo = {
+  id: string; license_plate: string; agregirani_2: string
+  marka: string; model: string; fleet_status: string; lokacija: string
+  current_mileage?: number
 }
 
-const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', background: '#fff', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 500 }
+type Servis = {
+  id: string; vehicle_id: string; service_type: string; service_date: string
+  mileage_at_service?: number; description?: string; cost?: number
+  performed_by?: string; technician_id?: string; external_shop?: string
+  next_service_date?: string; next_service_mileage?: number
+  status: string; notes?: string; created_at: string
+}
 
 export default function ServisPage() {
   const [vozila, setVozila] = useState<Vozilo[]>([])
   const [servisi, setServisi] = useState<Servis[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedVozilo, setSelectedVozilo] = useState<Vozilo | null>(null)
-  const [voziloServisi, setVoziloServisi] = useState<Servis[]>([])
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [filterLok, setFilterLok] = useState('sve')
+  const [filterStatus, setFilterStatus] = useState('sve')
   const [search, setSearch] = useState('')
-  const [filterLok, setFilterLok] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
+  const [selectedServis, setSelectedServis] = useState<Servis | null>(null)
+  const [editMode, setEditMode] = useState(false)
 
   const agentName = getCookie('avtorent-agent-name')
 
@@ -77,42 +63,56 @@ export default function ServisPage() {
     service_type: 'mali_servis', service_date: new Date().toISOString().split('T')[0],
     mileage_at_service: '', description: '', cost: '',
     performed_by: '', external_shop: '', next_service_date: '',
-    next_service_mileage: '', status: 'zavrseno', notes: '',
+    next_service_mileage: '', status: 'completed', notes: '',
   }
   const [form, setForm] = useState<any>(emptyForm)
+  const [editForm, setEditForm] = useState<any>({})
 
-  const lokacije = Array.from(new Set(vozila.map(v => v.lokacija).filter(Boolean)))
-
-  const fetchData = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: s }] = await Promise.all([
-      supabase.from('vozila_fleet').select('*').order('agregirani_2'),
-      supabase.from('vehicle_services').select('*').order('service_date', { ascending: false }),
+      supabase.from('vozila_fleet')
+        .select('id, license_plate, agregirani_2, marka, model, fleet_status, lokacija, current_mileage')
+        .order('agregirani_2'),
+      supabase.from('vehicle_services')
+        .select('*')
+        .order('service_date', { ascending: false }),
     ])
     setVozila(v || [])
     setServisi(s || [])
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
-  useEffect(() => {
-    if (selectedVozilo) {
-      setVoziloServisi(servisi.filter(s => String(s.vehicle_id) === String(selectedVozilo.id)))
-    }
-  }, [selectedVozilo, servisi])
+  const lokacije = ['sve', ...Array.from(new Set(vozila.map(v => v.lokacija).filter(Boolean)))]
 
-  function selectVozilo(v: Vozilo) {
-    setSelectedVozilo(v)
-    setShowForm(false)
-    setForm({ ...emptyForm, mileage_at_service: v.current_mileage || '' })
+  const filteredVozila = vozila.filter(v => {
+    if (filterLok !== 'sve' && v.lokacija !== filterLok) return false
+    if (search && !v.agregirani_2?.toLowerCase().includes(search.toLowerCase()) &&
+        !v.license_plate?.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  function getVoziloServisi(voziloId: string) {
+    return servisi.filter(s => s.vehicle_id === voziloId)
+      .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
+  }
+
+  function getZadnjiServis(voziloId: string) {
+    const s = getVoziloServisi(voziloId)
+    return s.length > 0 ? s[0] : null
+  }
+
+  function getAktivniServis(voziloId: string) {
+    return servisi.find(s => s.vehicle_id === voziloId && s.status === 'in_progress')
   }
 
   async function saveServis() {
-    if (!selectedVozilo) return
+    if (!selectedVozilo || !form.service_type) { alert('Odaberi vozilo i tip servisa!'); return }
     setSaving(true)
     const { error } = await supabase.from('vehicle_services').insert([{
-      vehicle_id: String(selectedVozilo.id),
+      vehicle_id: selectedVozilo.id,
       service_type: form.service_type,
       service_date: form.service_date,
       mileage_at_service: form.mileage_at_service ? parseInt(form.mileage_at_service) : null,
@@ -127,223 +127,215 @@ export default function ServisPage() {
     }])
     if (error) { alert('Greška: ' + error.message); setSaving(false); return }
 
-    // Ažuriraj trenutnu kilometražu vozila
-    if (form.mileage_at_service && parseInt(form.mileage_at_service) > (selectedVozilo.current_mileage || 0)) {
-      await supabase.from('vozila_fleet').update({
-        current_mileage: parseInt(form.mileage_at_service),
-        fleet_status: form.status === 'u_toku' ? 'service' : selectedVozilo.fleet_status,
-      }).eq('id', selectedVozilo.id)
+    // Ažuriraj fleet_status vozila ako je servis u toku
+    if (form.status === 'in_progress' || form.status === 'pending') {
+      await supabase.from('vozila_fleet').update({ fleet_status: 'service' }).eq('id', selectedVozilo.id)
+    }
+    // Ažuriraj kilometražu
+    if (form.mileage_at_service) {
+      await supabase.from('vozila_fleet').update({ current_mileage: parseInt(form.mileage_at_service) }).eq('id', selectedVozilo.id)
     }
 
     setSaving(false)
     setShowForm(false)
-    setForm({ ...emptyForm, mileage_at_service: form.mileage_at_service })
-    fetchData()
-    alert('✅ Servis upisан!')
+    setForm(emptyForm)
+    alert('Servis snimljen!')
+    fetchAll()
   }
 
-  async function updateStatus(servisId: string, newStatus: string) {
-    await supabase.from('vehicle_services').update({ status: newStatus }).eq('id', servisId)
-    if (newStatus === 'zavrseno' && selectedVozilo) {
-      await supabase.from('vozila_fleet').update({ fleet_status: 'available' }).eq('id', selectedVozilo.id)
+  async function saveEdit() {
+    if (!selectedServis) return
+    const { error } = await supabase.from('vehicle_services').update({
+      service_type: editForm.service_type,
+      service_date: editForm.service_date,
+      mileage_at_service: editForm.mileage_at_service ? parseInt(editForm.mileage_at_service) : null,
+      description: editForm.description || null,
+      cost: editForm.cost ? parseFloat(editForm.cost) : null,
+      performed_by: editForm.performed_by || null,
+      external_shop: editForm.external_shop || null,
+      next_service_date: editForm.next_service_date || null,
+      next_service_mileage: editForm.next_service_mileage ? parseInt(editForm.next_service_mileage) : null,
+      status: editForm.status,
+      notes: editForm.notes || null,
+    }).eq('id', selectedServis.id)
+    if (error) { alert('Greška: ' + error.message); return }
+
+    // Ako završen — vrati vozilo u available
+    if (editForm.status === 'completed') {
+      await supabase.from('vozila_fleet').update({ fleet_status: 'available' }).eq('id', selectedServis.vehicle_id)
     }
-    fetchData()
+
+    setEditMode(false)
+    setSelectedServis({ ...selectedServis, ...editForm })
+    fetchAll()
   }
 
-  const filteredVozila = vozila.filter(v => {
-    const q = search.toLowerCase()
-    const matchSearch = !search ||
-      (v.agregirani_2 || '').toLowerCase().includes(q) ||
-      (v.license_plate || '').toLowerCase().includes(q) ||
-      (v.marka || '').toLowerCase().includes(q)
-    const matchLok = !filterLok || v.lokacija === filterLok
-    const matchStatus = !filterStatus || v.fleet_status === filterStatus
-    return matchSearch && matchLok && matchStatus
-  })
+  async function deleteServis(id: string) {
+    if (!confirm('Obrisati ovaj servisni zapis?')) return
+    await supabase.from('vehicle_services').delete().eq('id', id)
+    setSelectedServis(null)
+    fetchAll()
+  }
 
-  // Statistike
-  const ukupnoServisa = servisi.length
-  const ovogMjeseca = servisi.filter(s => {
-    const d = new Date(s.service_date)
-    const n = new Date()
-    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear()
-  }).length
-  const uTokuServisa = vozila.filter(v => v.fleet_status === 'service' || v.fleet_status === 'service_planet').length
-  const ukupnoTroskova = servisi.reduce((sum, s) => sum + (parseFloat(s.cost as any) || 0), 0)
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', background: '#fff', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
+
+  const totalAktivnih = servisi.filter(s => s.status === 'in_progress' || s.status === 'pending').length
 
   return (
     <div>
-      {/* HEADER */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Servis vozila</h1>
-          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, margin: 0 }}>Istorija servisa po vozilu</p>
-        </div>
-      </div>
-
-      {/* STATISTIKE */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
-        {[
-          { label: 'Ukupno servisa', value: ukupnoServisa, bg: '#E6F1FB', color: '#0C447C' },
-          { label: 'Ovog mjeseca', value: ovogMjeseca, bg: '#E1F5EE', color: '#085041' },
-          { label: 'Na servisu', value: uTokuServisa, bg: '#FAEEDA', color: '#633806' },
-          { label: 'Ukupni troškovi', value: `${ukupnoTroskova.toFixed(0)}€`, bg: '#FCEBEB', color: '#791F1F' },
-        ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '14px 18px' }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+          <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+            {vozila.length} vozila · {totalAktivnih > 0 && <span style={{ color: '#d97706', fontWeight: 600 }}>{totalAktivnih} aktivnih servisa</span>}
           </div>
-        ))}
+        </div>
+        {selectedVozilo && (
+          <button onClick={() => { setShowForm(s => !s); setSelectedServis(null); setEditMode(false) }}
+            style={{ padding: '8px 16px', background: showForm ? '#f3f4f6' : '#1D9E75', color: showForm ? '#374151' : '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {showForm ? 'Zatvori' : '+ Novi servis'}
+          </button>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: selectedVozilo ? '340px 1fr' : '1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: selectedVozilo ? '300px 1fr' : '1fr', gap: 20 }}>
 
         {/* LISTA VOZILA */}
         <div>
           {/* Filteri */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Pretraži vozilo..." style={{ ...inp, width: 200 }} />
-            <select value={filterLok} onChange={e => setFilterLok(e.target.value)}
-              style={{ padding: '8px 12px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111' }}>
-              <option value="">Sve lokacije</option>
-              {lokacije.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              style={{ padding: '8px 12px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111' }}>
-              <option value="">Svi statusi</option>
-              {Object.entries(FLEET_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
+          <div style={{ marginBottom: 12 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pretraži vozilo..." style={{ ...inp, marginBottom: 8 }} />
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {lokacije.map(l => (
+                <button key={l} onClick={() => setFilterLok(l)}
+                  style={{ padding: '4px 12px', fontSize: 11, border: `1px solid ${filterLok === l ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: filterLok === l ? '#E1F5EE' : '#fff', color: filterLok === l ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: filterLok === l ? 600 : 400 }}>
+                  {l === 'sve' ? 'Sve lokacije' : l}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
-              {filteredVozila.map(v => {
-                const st = FLEET_STATUS[v.fleet_status] || { label: v.fleet_status, color: '#9ca3af' }
-                const brServisa = servisi.filter(s => String(s.vehicle_id) === String(v.id)).length
-                const zadnji = servisi.filter(s => String(s.vehicle_id) === String(v.id))[0]
-                const isSelected = selectedVozilo?.id === v.id
-                const regIstice = v.dana_do_isteka !== null && v.dana_do_isteka < 30
+          ) : filteredVozila.map(v => {
+            const zadnji = getZadnjiServis(v.id)
+            const aktivan = getAktivniServis(v.id)
+            const isSelected = selectedVozilo?.id === v.id
+            const voziloServisi = getVoziloServisi(v.id)
 
-                return (
-                  <div key={v.id} onClick={() => selectVozilo(v)}
-                    style={{ background: '#fff', border: `2px solid ${isSelected ? '#1D9E75' : regIstice ? '#fecaca' : '#e5e7eb'}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.15s' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{v.agregirani_2 || v.license_plate}</div>
-                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{v.lokacija} {v.current_mileage ? `· ${v.current_mileage.toLocaleString()} km` : ''}</div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                        <span style={{ fontSize: 11, color: st.color, fontWeight: 600 }}>{st.label}</span>
-                        {brServisa > 0 && <span style={{ fontSize: 10, background: '#E6F1FB', color: '#0C447C', padding: '1px 6px', borderRadius: 20, fontWeight: 600 }}>{brServisa} servisa</span>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {regIstice && (
-                        <span style={{ fontSize: 10, background: '#FCEBEB', color: '#791F1F', padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>
-                          ⚠️ Reg: {v.istek_reg}
-                        </span>
-                      )}
-                      {zadnji && (
-                        <span style={{ fontSize: 10, color: '#9ca3af' }}>
-                          Zadnji: {zadnji.service_date} · {SERVICE_TYPES.find(t => t.key === zadnji.service_type)?.label || zadnji.service_type}
-                        </span>
-                      )}
-                    </div>
+            return (
+              <div key={v.id} onClick={() => { setSelectedVozilo(isSelected ? null : v); setShowForm(false); setSelectedServis(null); setEditMode(false) }}
+                style={{ background: '#fff', border: `2px solid ${isSelected ? '#1D9E75' : aktivan ? '#fbbf24' : '#e5e7eb'}`, borderRadius: 10, padding: 14, marginBottom: 8, cursor: 'pointer', transition: 'border-color 0.15s' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{v.agregirani_2}</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af' }}>{v.lokacija}</div>
                   </div>
-                )
-              })}
-              {filteredVozila.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema vozila</div>
-              )}
-            </div>
-          )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                    {aktivan && (
+                      <span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '2px 7px', borderRadius: 20, fontWeight: 700 }}>
+                        U servisu
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: '#9ca3af' }}>{voziloServisi.length} servisa</span>
+                  </div>
+                </div>
+                {zadnji && (
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>
+                    Zadnji: {SERVICE_TYPES.find(t => t.key === zadnji.service_type)?.icon} {SERVICE_TYPES.find(t => t.key === zadnji.service_type)?.label} · {zadnji.service_date}
+                    {zadnji.cost && <span style={{ color: '#1D9E75', fontWeight: 600, marginLeft: 6 }}>{zadnji.cost}€</span>}
+                  </div>
+                )}
+                {v.current_mileage && (
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>📏 {v.current_mileage.toLocaleString()} km</div>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        {/* DESNA STRANA — istorija servisa odabranog vozila */}
+        {/* DESNA STRANA — istorija + forma */}
         {selectedVozilo && (
           <div>
-            {/* Vozilo info header */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#111' }}>{selectedVozilo.agregirani_2}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  {selectedVozilo.current_mileage && <span>📏 {selectedVozilo.current_mileage.toLocaleString()} km</span>}
-                  {selectedVozilo.istek_reg && <span>📋 Reg: {selectedVozilo.istek_reg}</span>}
-                  {selectedVozilo.lokacija && <span>📍 {selectedVozilo.lokacija}</span>}
-                  {selectedVozilo.fleet_status && (
-                    <span style={{ color: FLEET_STATUS[selectedVozilo.fleet_status]?.color || '#9ca3af', fontWeight: 600 }}>
-                      {FLEET_STATUS[selectedVozilo.fleet_status]?.label || selectedVozilo.fleet_status}
-                    </span>
-                  )}
+            {/* Vozilo header */}
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: '#111' }}>{selectedVozilo.agregirani_2}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                    {selectedVozilo.lokacija} · {selectedVozilo.fleet_status}
+                    {selectedVozilo.current_mileage && ` · ${selectedVozilo.current_mileage.toLocaleString()} km`}
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setShowForm(s => !s); setForm({ ...emptyForm, mileage_at_service: selectedVozilo.current_mileage || '' }) }}
-                  style={{ padding: '7px 14px', background: showForm ? '#f3f4f6' : '#1D9E75', color: showForm ? '#374151' : '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  {showForm ? 'Zatvori' : '+ Novi servis'}
-                </button>
-                <button onClick={() => setSelectedVozilo(null)}
-                  style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
+                <div style={{ fontSize: 13, color: '#9ca3af' }}>
+                  {getVoziloServisi(selectedVozilo.id).length} servisnih zapisa
+                </div>
               </div>
             </div>
 
             {/* FORMA ZA NOVI SERVIS */}
             {showForm && (
-              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#111', marginBottom: 16 }}>Novi servis — {selectedVozilo.license_plate}</div>
+              <div style={{ background: '#fff', border: '1px solid #1D9E75', borderRadius: 10, padding: 20, marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 16 }}>Novi servisni zapis — {selectedVozilo.agregirani_2}</div>
 
-                {/* Tip servisa */}
-                <div style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 12 }}>
                   <label style={lbl}>Tip servisa *</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                     {SERVICE_TYPES.map(t => (
                       <button key={t.key} onClick={() => setForm((f: any) => ({ ...f, service_type: t.key }))}
-                        style={{ padding: '8px 4px', fontSize: 11, border: `1px solid ${form.service_type === t.key ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: form.service_type === t.key ? '#E1F5EE' : '#fff', color: form.service_type === t.key ? '#085041' : '#6b7280', cursor: 'pointer', textAlign: 'center' as const }}>
+                        style={{ padding: '8px 4px', fontSize: 11, border: `1px solid ${form.service_type === t.key ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: form.service_type === t.key ? '#E1F5EE' : '#fff', color: form.service_type === t.key ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: form.service_type === t.key ? 600 : 400, textAlign: 'center' as const }}>
                         {t.icon}<br /><span style={{ fontSize: 10 }}>{t.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <div>
-                    <label style={lbl}>Datum *</label>
+                    <label style={lbl}>Datum servisa *</label>
                     <input type="date" value={form.service_date} onChange={e => setForm((f: any) => ({ ...f, service_date: e.target.value }))} style={inp} />
                   </div>
                   <div>
-                    <label style={lbl}>KM pri servisu</label>
-                    <input type="number" value={form.mileage_at_service} onChange={e => setForm((f: any) => ({ ...f, mileage_at_service: e.target.value }))} placeholder={String(selectedVozilo.current_mileage || '')} style={inp} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Cijena (€)</label>
-                    <input type="number" step="0.01" value={form.cost} onChange={e => setForm((f: any) => ({ ...f, cost: e.target.value }))} placeholder="0.00" style={inp} />
+                    <label style={lbl}>Kilometraža</label>
+                    <input type="number" value={form.mileage_at_service} onChange={e => setForm((f: any) => ({ ...f, mileage_at_service: e.target.value }))} placeholder={selectedVozilo.current_mileage ? String(selectedVozilo.current_mileage) : 'npr. 45000'} style={inp} />
                   </div>
                 </div>
 
                 <div style={{ marginBottom: 12 }}>
-                  <label style={lbl}>Opis radova *</label>
+                  <label style={lbl}>Status</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                      <button key={key} onClick={() => setForm((f: any) => ({ ...f, status: key }))}
+                        style={{ flex: 1, padding: '7px 4px', fontSize: 11, border: `1px solid ${form.status === key ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: form.status === key ? cfg.bg : '#fff', color: form.status === key ? cfg.color : '#9ca3af', cursor: 'pointer', fontWeight: form.status === key ? 600 : 400 }}>
+                        {cfg.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={lbl}>Opis radova</label>
                   <textarea value={form.description} onChange={e => setForm((f: any) => ({ ...f, description: e.target.value }))}
-                    placeholder="Šta je urađeno..." style={{ ...inp, minHeight: 80, resize: 'vertical' as const }} />
+                    placeholder="Šta je rađeno..." style={{ ...inp, minHeight: 70, resize: 'vertical' as const }} />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <div>
-                    <label style={lbl}>Ko je servisirao</label>
-                    <input value={form.performed_by} onChange={e => setForm((f: any) => ({ ...f, performed_by: e.target.value }))} placeholder={agentName || 'Ime servisera...'} style={inp} />
+                    <label style={lbl}>Ko je radio</label>
+                    <input value={form.performed_by} onChange={e => setForm((f: any) => ({ ...f, performed_by: e.target.value }))} placeholder="Ime servisera..." style={inp} />
                   </div>
                   <div>
-                    <label style={lbl}>Radionica (vanjska)</label>
+                    <label style={lbl}>Radionica</label>
                     <input value={form.external_shop} onChange={e => setForm((f: any) => ({ ...f, external_shop: e.target.value }))} placeholder="Naziv radionice..." style={inp} />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <div>
-                    <label style={lbl}>Sljedeći servis (datum)</label>
-                    <input type="date" value={form.next_service_date} onChange={e => setForm((f: any) => ({ ...f, next_service_date: e.target.value }))} style={inp} />
+                    <label style={lbl}>Cijena (€)</label>
+                    <input type="number" step="0.01" value={form.cost} onChange={e => setForm((f: any) => ({ ...f, cost: e.target.value }))} placeholder="0.00" style={inp} />
                   </div>
                   <div>
                     <label style={lbl}>Sljedeći servis (km)</label>
@@ -351,32 +343,25 @@ export default function ServisPage() {
                   </div>
                 </div>
 
-                <div style={{ marginBottom: 12 }}>
-                  <label style={lbl}>Status</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                      <button key={k} onClick={() => setForm((f: any) => ({ ...f, status: k }))}
-                        style={{ flex: 1, padding: '8px', fontSize: 11, border: `1px solid ${form.status === k ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: form.status === k ? '#E1F5EE' : '#fff', color: form.status === k ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: form.status === k ? 600 : 400 }}>
-                        {v.label}
-                      </button>
-                    ))}
-                  </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Sljedeći servis (datum)</label>
+                  <input type="date" value={form.next_service_date} onChange={e => setForm((f: any) => ({ ...f, next_service_date: e.target.value }))} style={inp} />
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
                   <label style={lbl}>Napomena</label>
                   <textarea value={form.notes} onChange={e => setForm((f: any) => ({ ...f, notes: e.target.value }))}
-                    placeholder="Dodatne napomene..." style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} />
+                    style={{ ...inp, minHeight: 50, resize: 'vertical' as const }} />
                 </div>
 
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={saveServis} disabled={saving || !form.description}
-                    style={{ flex: 2, padding: '11px', background: saving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                    {saving ? '⏳ Snimam...' : '💾 Snimi servis'}
-                  </button>
-                  <button onClick={() => setShowForm(false)}
-                    style={{ flex: 1, padding: '11px', border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setShowForm(false); setForm(emptyForm) }}
+                    style={{ flex: 1, padding: 10, border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
                     Odustani
+                  </button>
+                  <button onClick={saveServis} disabled={saving}
+                    style={{ flex: 2, padding: 10, background: saving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    {saving ? '⏳ Snimam...' : '💾 Snimi servis'}
                   </button>
                 </div>
               </div>
@@ -384,84 +369,131 @@ export default function ServisPage() {
 
             {/* ISTORIJA SERVISA */}
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>
-                Istorija servisa ({voziloServisi.length})
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+                Istorija servisa ({getVoziloServisi(selectedVozilo.id).length})
               </div>
-              {voziloServisi.length === 0 ? (
+              {getVoziloServisi(selectedVozilo.id).length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10, fontSize: 13 }}>
-                  Nema upisanih servisa za ovo vozilo
+                  Nema servisnih zapisa za ovo vozilo.
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {voziloServisi.map(s => {
-                    const st = STATUS_CONFIG[s.status] || STATUS_CONFIG['zavrseno']
-                    const tip = SERVICE_TYPES.find(t => t.key === s.service_type)
-                    return (
-                      <div key={s.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <span style={{ fontSize: 22 }}>{tip?.icon || '🔧'}</span>
-                            <div>
-                              <div style={{ fontWeight: 600, fontSize: 14, color: '#111' }}>{tip?.label || s.service_type}</div>
-                              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                                📅 {s.service_date}
-                                {s.mileage_at_service && ` · 📏 ${s.mileage_at_service.toLocaleString()} km`}
+              ) : getVoziloServisi(selectedVozilo.id).map(s => {
+                const st = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending
+                const tip = SERVICE_TYPES.find(t => t.key === s.service_type)
+                const isSelected = selectedServis?.id === s.id
+
+                return (
+                  <div key={s.id}
+                    onClick={() => { setSelectedServis(isSelected ? null : s); setEditMode(false); setEditForm({ ...s }) }}
+                    style={{ background: '#fff', border: `2px solid ${isSelected ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 10, padding: 14, marginBottom: 8, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 20 }}>{tip?.icon}</span>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: '#111' }}>{tip?.label}</div>
+                          <div style={{ fontSize: 11, color: '#9ca3af' }}>{s.service_date}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {s.cost && <span style={{ fontSize: 13, fontWeight: 700, color: '#1D9E75' }}>{s.cost}€</span>}
+                        <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
+                      </div>
+                    </div>
+                    {s.description && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{s.description}</div>}
+                    <div style={{ fontSize: 11, color: '#9ca3af', display: 'flex', gap: 12 }}>
+                      {s.mileage_at_service && <span>📏 {s.mileage_at_service.toLocaleString()} km</span>}
+                      {s.performed_by && <span>👤 {s.performed_by}</span>}
+                      {s.external_shop && <span>🔧 {s.external_shop}</span>}
+                      {s.next_service_date && <span>📅 Sljedeći: {s.next_service_date}</span>}
+                    </div>
+
+                    {/* Detalji ako je selektovan */}
+                    {isSelected && (
+                      <div style={{ marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+                        {!editMode ? (
+                          <>
+                            {s.notes && (
+                              <div style={{ background: '#f9fafb', borderRadius: 6, padding: '8px 10px', fontSize: 12, color: '#374151', marginBottom: 10 }}>
+                                📝 {s.notes}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={e => { e.stopPropagation(); setEditMode(true) }}
+                                style={{ flex: 1, padding: '7px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#374151' }}>
+                                ✏️ Uredi
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); deleteServis(s.id) }}
+                                style={{ padding: '7px 12px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>
+                                🗑️
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                              <div>
+                                <label style={lbl}>Tip servisa</label>
+                                <select value={editForm.service_type} onChange={e => setEditForm((f: any) => ({ ...f, service_type: e.target.value }))} style={inp}>
+                                  {SERVICE_TYPES.map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={lbl}>Status</label>
+                                <select value={editForm.status} onChange={e => setEditForm((f: any) => ({ ...f, status: e.target.value }))} style={inp}>
+                                  {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={lbl}>Datum</label>
+                                <input type="date" value={editForm.service_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, service_date: e.target.value }))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Kilometraža</label>
+                                <input type="number" value={editForm.mileage_at_service || ''} onChange={e => setEditForm((f: any) => ({ ...f, mileage_at_service: e.target.value }))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Cijena (€)</label>
+                                <input type="number" value={editForm.cost || ''} onChange={e => setEditForm((f: any) => ({ ...f, cost: e.target.value }))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Ko je radio</label>
+                                <input value={editForm.performed_by || ''} onChange={e => setEditForm((f: any) => ({ ...f, performed_by: e.target.value }))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Radionica</label>
+                                <input value={editForm.external_shop || ''} onChange={e => setEditForm((f: any) => ({ ...f, external_shop: e.target.value }))} style={inp} />
+                              </div>
+                              <div>
+                                <label style={lbl}>Sljedeći datum</label>
+                                <input type="date" value={editForm.next_service_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, next_service_date: e.target.value }))} style={inp} />
                               </div>
                             </div>
-                          </div>
-                          <div style={{ display: 'flex', flex: 'column', alignItems: 'flex-end', gap: 4 }}>
-                            <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
-                            {s.cost > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: '#1D9E75', marginTop: 4 }}>{parseFloat(s.cost as any).toFixed(2)}€</div>}
-                          </div>
-                        </div>
-
-                        {s.description && (
-                          <div style={{ fontSize: 13, color: '#374151', marginBottom: 8, background: '#f9fafb', borderRadius: 6, padding: '8px 10px' }}>
-                            {s.description}
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 11, color: '#6b7280' }}>
-                          {s.performed_by && <span>👤 {s.performed_by}</span>}
-                          {s.external_shop && <span>🏪 {s.external_shop}</span>}
-                          {s.next_service_date && <span style={{ color: '#d97706', fontWeight: 600 }}>⏭️ Sljedeći: {s.next_service_date}</span>}
-                          {s.next_service_mileage && <span style={{ color: '#d97706' }}>⏭️ {s.next_service_mileage.toLocaleString()} km</span>}
-                          {s.notes && <span>📝 {s.notes}</span>}
-                        </div>
-
-                        {/* Akcije za promjenu statusa */}
-                        {s.status === 'u_toku' && (
-                          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                            <button onClick={() => updateStatus(s.id, 'zavrseno')}
-                              style={{ padding: '6px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                              ✓ Označi završeno
-                            </button>
-                          </div>
-                        )}
-                        {s.status === 'na_cekanju' && (
-                          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                            <button onClick={() => updateStatus(s.id, 'u_toku')}
-                              style={{ padding: '6px 14px', background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                              ▶ Počni servis
-                            </button>
-                            <button onClick={() => updateStatus(s.id, 'zavrseno')}
-                              style={{ padding: '6px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                              ✓ Završeno
-                            </button>
+                            <div style={{ marginBottom: 10 }}>
+                              <label style={lbl}>Opis</label>
+                              <textarea value={editForm.description || ''} onChange={e => setEditForm((f: any) => ({ ...f, description: e.target.value }))} style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} />
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                              <label style={lbl}>Napomena</label>
+                              <textarea value={editForm.notes || ''} onChange={e => setEditForm((f: any) => ({ ...f, notes: e.target.value }))} style={{ ...inp, minHeight: 50, resize: 'vertical' as const }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => setEditMode(false)}
+                                style={{ flex: 1, padding: 8, border: '1px solid #d1d5db', borderRadius: 8, background: 'transparent', fontSize: 12, cursor: 'pointer', color: '#374151' }}>
+                                Odustani
+                              </button>
+                              <button onClick={saveEdit}
+                                style={{ flex: 2, padding: 8, background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                💾 Sačuvaj
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
-        )}
-
-        {/* Ako nema odabranog vozila — info */}
-        {!selectedVozilo && !loading && (
-          <div style={{ display: 'none' }} />
         )}
       </div>
     </div>
