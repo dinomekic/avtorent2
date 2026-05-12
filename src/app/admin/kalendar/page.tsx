@@ -81,6 +81,18 @@ export default function AdminKalendarPage() {
   // Stats
   const [stats, setStats] = useState({ total: 0, zauzeto: 0 })
 
+  // Logovi
+  const [showLogovi, setShowLogovi] = useState(false)
+  const [logovi, setLogovi] = useState<any[]>([])
+
+  // Filteri
+  const [filterMenjac, setFilterMenjac] = useState('ALL')
+  const [filterOd, setFilterOd] = useState('')
+  const [filterDo, setFilterDo] = useState('')
+  const filterMenjacRef = useRef('ALL')
+  const filterOdRef = useRef('')
+  const filterDoRef = useRef('')
+
   // Učitaj FullCalendar + CSS
   useEffect(() => {
     const addStyle = () => {
@@ -172,7 +184,7 @@ export default function AdminKalendarPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: r }, { data: d }] = await Promise.all([
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija, mjenjac').order('marka'),
       supabase.from('rezervacije').select('*'),
       supabase.from('duznici').select('*').order('ukupan_dug', { ascending: false }),
     ])
@@ -211,14 +223,36 @@ export default function AdminKalendarPage() {
 
   function getResources() {
     const q = searchQRef.current.toLowerCase()
-    return vozilaRef.current
+    const menjac = filterMenjacRef.current
+    const od = filterOdRef.current
+    const doo = filterDoRef.current
+
+    let vozila = vozilaRef.current
       .filter(v => v.lokacija === currentLokRef.current && (v.fleet_status || '').toUpperCase() === 'ZA IZDAVANJE')
       .filter(v => !q || (v.agregirani_2 || '').toLowerCase().includes(q) || (v.license_plate || '').toLowerCase().includes(q))
-      .map(v => ({
-        id: v.license_plate || '',
-        building: (v.marka || 'Ostalo').toUpperCase(),
-        title: v.agregirani_2 || v.license_plate || '',
-      }))
+
+    if (menjac !== 'ALL') {
+      vozila = vozila.filter(v => {
+        const m = ((v as any).mjenjac || '').toUpperCase()
+        return menjac === 'AUTOMATIC' ? m.includes('AUTO') : m.includes('MAN') || m.includes('RUC')
+      })
+    }
+
+    // Filter slobodnih vozila u periodu
+    if (od && doo) {
+      const zauzete = new Set(
+        rezervacijeRef.current
+          .filter(r => r.daily_status !== 'Nije izdato' && r.od_datuma <= doo && r.do_datuma >= od)
+          .map(r => r.br_tablica)
+      )
+      vozila = vozila.filter(v => !zauzete.has(v.license_plate || ''))
+    }
+
+    return vozila.map(v => ({
+      id: v.license_plate || '',
+      building: (v.marka || 'Ostalo').toUpperCase(),
+      title: v.agregirani_2 || v.license_plate || '',
+    }))
   }
 
   function getEvents() {
@@ -389,6 +423,21 @@ export default function AdminKalendarPage() {
     loadAll()
   }
 
+  async function otvoriLogove() {
+    const sifra = window.prompt('Admin lozinka:')
+    if (sifra !== '810805') { alert('Pogrešna!'); return }
+    const { data } = await supabase.from('logovi').select('*').order('id', { ascending: false }).limit(150)
+    setLogovi(data || [])
+    setShowLogovi(true)
+  }
+
+  function resetFilteri() {
+    setFilterMenjac('ALL'); filterMenjacRef.current = 'ALL'
+    setFilterOd(''); filterOdRef.current = ''
+    setFilterDo(''); filterDoRef.current = ''
+    if (calInstanceRef.current) calInstanceRef.current.setOption('resources', getResources())
+  }
+
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok && (v.fleet_status || '').toUpperCase() === 'ZA IZDAVANJE')
 
   return (
@@ -413,7 +462,22 @@ export default function AdminKalendarPage() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži vozilo..."
-            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 170, outline: 'none' }} />
+            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 150, outline: 'none' }} />
+          {/* Filter mjenjač */}
+          {(['ALL','AUTOMATIC','MANUAL'] as const).map(m => (
+            <button key={m} onClick={() => { setFilterMenjac(m); filterMenjacRef.current = m; calInstanceRef.current?.setOption('resources', getResources()) }}
+              style={{ padding: '6px 10px', fontSize: 11, border: `1px solid ${filterMenjac === m ? '#185FA5' : '#e5e7eb'}`, borderRadius: 8, background: filterMenjac === m ? '#E6F1FB' : '#fff', color: filterMenjac === m ? '#0C447C' : '#6b7280', cursor: 'pointer', fontWeight: filterMenjac === m ? 700 : 400 }}>
+              {m === 'ALL' ? 'Svi' : m === 'AUTOMATIC' ? 'Auto' : 'Manual'}
+            </button>
+          ))}
+          {/* Filter slobodnih */}
+          <input type="date" value={filterOd} onChange={e => { setFilterOd(e.target.value); filterOdRef.current = e.target.value; calInstanceRef.current?.setOption('resources', getResources()) }}
+            style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 11, color: '#374151', width: 130 }} placeholder="Od" />
+          <input type="date" value={filterDo} onChange={e => { setFilterDo(e.target.value); filterDoRef.current = e.target.value; calInstanceRef.current?.setOption('resources', getResources()) }}
+            style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 11, color: '#374151', width: 130 }} placeholder="Do" />
+          {(filterOd || filterDo || filterMenjac !== 'ALL') && (
+            <button onClick={resetFilteri} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>✕ Reset</button>
+          )}
           <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
             style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Nova rezervacija
@@ -421,6 +485,10 @@ export default function AdminKalendarPage() {
           <button onClick={() => setShowDuznici(true)}
             style={{ padding: '8px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             📝 Dužnici ({duznici.length})
+          </button>
+          <button onClick={otvoriLogove}
+            style={{ padding: '8px 14px', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📜 Logovi
           </button>
         </div>
       </div>
@@ -496,6 +564,37 @@ export default function AdminKalendarPage() {
                     </tr>
                   ))}
                   {duznici.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nema dužnika.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOGOVI */}
+      {showLogovi && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📜 Sistemski logovi</h2>
+              <button onClick={() => setShowLogovi(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6b7280', borderBottom: '2px solid #e5e7eb', width: 40 }}>#</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6b7280', borderBottom: '2px solid #e5e7eb' }}>Akcija</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logovi.map(l => (
+                    <tr key={l.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '8px 12px', color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>{l.id}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 500, color: '#374151' }}>{l.akcija}</td>
+                    </tr>
+                  ))}
+                  {logovi.length === 0 && <tr><td colSpan={2} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nema logova.</td></tr>}
                 </tbody>
               </table>
             </div>
