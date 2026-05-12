@@ -668,7 +668,7 @@ export default function ServisPage() {
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={serviserForm.is_active} onChange={e => setServiserForm((f: any) => ({ ...f, is_active: e.target.checked })} />
+                  <input type="checkbox" checked={serviserForm.is_active} onChange={e => setServiserForm((f: any) => ({ ...f, is_active: e.target.checked }))} />
                   Serviser je aktivan
                 </label>
               </div>
