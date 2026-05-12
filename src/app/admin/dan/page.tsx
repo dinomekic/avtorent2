@@ -335,22 +335,59 @@ export default function AdminDanPage() {
       const naplataStr = window.prompt('Iznos naplaćen (€) na licu mjesta:', String(rez.ukupno_naplata || 0))
       if (naplataStr === null) return
       const naplata = parseFloat(naplataStr) || 0
+
       const depozit = rez.depozit || 0
-      let depozitUzet = false
       let depozitUzetIznos = 0
       if (depozit > 0) {
-        const depStr = window.prompt(`Depozit za ovaj ugovor je ${depozit}€.\nKoliko ste uzeli od klijenta? (0 ako niste uzeli)`, String(depozit))
+        const depStr = window.prompt(`Depozit za ovaj ugovor je ${depozit}€.\nKoliko ste uzeli depozita od klijenta?`, String(depozit))
         if (depStr === null) return
         depozitUzetIznos = parseFloat(depStr) || 0
-        depozitUzet = depozitUzetIznos > 0
       }
-      await supabase.from('rezervacije').update({
-        daily_status: 'Izdato', ko_je_izdao: agent, naplaceno: naplata,
-        depozit_uzet: depozitUzet,
+
+      // Update rezervacije
+      const { error } = await supabase.from('rezervacije').update({
+        daily_status: 'Izdato',
+        ko_je_izdao: agent,
+        naplaceno: naplata,
+        depozit_uzet: depozitUzetIznos > 0,
         depozit: depozitUzetIznos > 0 ? depozitUzetIznos : depozit,
       }).eq('id', rezId)
-      await supabase.from('logovi').insert([{ akcija: `${agent} izdao vozilo REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit uzet: ${depozitUzetIznos}€` }])
-      alert(`Vozilo izdato!\nAgent: ${agent}\nNaplaćeno: ${naplata}€${depozitUzetIznos > 0 ? `\nDepozit uzet: ${depozitUzetIznos}€` : ''}`)
+
+      if (error) { alert('Greška: ' + error.message); return }
+
+      // Pronađi email agenta
+      const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
+      const agentEmail = agentData?.email || ''
+
+      // Automatski kreiraj transakcije
+      const inserti: any[] = []
+      if (naplata > 0) {
+        const p = Math.max(0, (rez.ukupno_naplata || 0) - naplata)
+        inserti.push({
+          id: Date.now().toString() + '1',
+          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
+          kategorija: 'Izdavanje vozila', iznos: naplata,
+          vozilo: rez.br_tablica,
+          komentar: `Početna naplata pri izdavanju (Ugovor REZ #${rezId}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ' Isplaćeno u potpunosti.'}`,
+          osoba: agent, osobaemail: agentEmail,
+          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
+        })
+      }
+      if (depozitUzetIznos > 0) {
+        inserti.push({
+          id: Date.now().toString() + '2',
+          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
+          kategorija: 'Depozit', iznos: depozitUzetIznos,
+          vozilo: rez.br_tablica,
+          komentar: `Uzet depozit pri izdavanju (Ugovor REZ #${rezId})`,
+          osoba: agent, osobaemail: agentEmail,
+          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
+        })
+      }
+      if (inserti.length > 0) await supabase.from('transakcije').insert(inserti)
+
+      await supabase.from('logovi').insert([{ akcija: `${agent} izdao vozilo REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit: ${depozitUzetIznos}€` }])
+      alert(`✅ Vozilo izdato!\nAgent: ${agent}\nNaplaćeno: ${naplata}€${depozitUzetIznos > 0 ? `\nDepozit uzet: ${depozitUzetIznos}€` : ''}`)
     } else {
       const ukupno = rez.ukupno_naplata || 0
       const naplaceno = rez.naplaceno || 0
