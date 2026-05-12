@@ -62,7 +62,7 @@ export default function AdminReservationsPage() {
     setLoading(true)
     const [{ data: res }, { data: voz }, { data: st }] = await Promise.all([
       supabase.from('reservations').select('*, vehicles(name)').order('created_at', { ascending: false }),
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija, mjenjac').order('marka'),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
       supabase.from('surcharge_types').select('*').eq('is_active', true).order('sort_order'),
     ])
     setRezervacije(res || [])
