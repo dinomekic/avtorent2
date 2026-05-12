@@ -9,6 +9,7 @@ const supabase = createClient(
 )
 
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbwyCvobRS9l_19Kl45yYVspy4DZWEKXzIMM5vSAy_PLELYN7DSnRVug_K_XGfzzZSJ0/exec'
+const UPLOAD_URL = '/api/upload'
 
 export type RezForm = {
   id?: number
