@@ -429,7 +429,18 @@ export default function AdminDanPage() {
     const rez = rezervacije.find(r => r.id === agentRezId) || overdueRez.find(r => r.id === agentRezId)
     if (!rez || !agentRezId) return
     setShowAgentModal(false)
-    await izvrsiAgentAkcijuDirectly(agentRezId, agent, agentTip, rez)
+    // Otvori akcija modal sa odabranim agentom
+    if (agentTip === 'izdavanje') {
+      setAkcijaRez(rez); setAkcijaTip('izdavanje'); setAkcijaAgent(agent)
+      setIzdNaplata(String(rez.ukupno_naplata || 0)); setIzdDepozit(String(rez.depozit || 0)); setIzdNacinPlacanja('Keš')
+      setShowAkcijaModal(true)
+    } else {
+      const dug = Math.max(0, (rez.ukupno_naplata || 0) - (rez.naplaceno || 0))
+      setAkcijaRez(rez); setAkcijaTip('preuzimanje'); setAkcijaAgent(agent)
+      setPreuzDugNaplacen(dug > 0); setPreuzDugIznos(dug > 0 ? dug.toFixed(2) : '0'); setPreuzDugNacin('Keš')
+      setPreuzDepVracen((rez.depozit || 0) > 0); setPreuzDepIznos(String(rez.depozit || 0)); setPreuzDepRazlog('')
+      setShowAkcijaModal(true)
+    }
   }
 
   async function otkaziIzdavanje() {
