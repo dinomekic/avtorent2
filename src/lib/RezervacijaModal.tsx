@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -9,7 +9,6 @@ const supabase = createClient(
 )
 
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbwyCvobRS9l_19Kl45yYVspy4DZWEKXzIMM5vSAy_PLELYN7DSnRVug_K_XGfzzZSJ0/exec'
-const UPLOAD_URL = '/api/upload'
 
 export type RezForm = {
   id?: number
@@ -99,7 +98,6 @@ export function calcUkupno(f: Partial<RezForm>): number {
 export function useKlijenti() {
   const [klijenti, setKlijenti] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     fetch(SHEETS_API, {
       method: 'POST',
@@ -111,7 +109,6 @@ export function useKlijenti() {
         if (data.k) {
           setKlijenti(data.k.map((r: any[]) => ({
             vozacka: String(r[0] || '').trim(),
-            mjesto: String(r[1] || '').trim(),
             istek: String(r[2] || '').trim(),
             ime: String(r[3] || '').trim(),
             prezime: String(r[4] || '').trim(),
@@ -126,7 +123,6 @@ export function useKlijenti() {
       })
       .catch(() => setLoading(false))
   }, [])
-
   return { klijenti, loading }
 }
 
@@ -155,10 +151,7 @@ export function generateUgovor(f: RezForm, vozila: VoziloOption[]) {
     <div class="head">
       <div style="display:flex;align-items:center;gap:12px;">
         <img src="https://planetrentacar.me/wp-content/uploads/2023/03/logo-1.png" style="height:50px;">
-        <div>
-          <h2 style="margin:0;font-size:18px;">PLANET "RENT A CAR"</h2>
-          <p style="margin:2px 0;">${firma}<br>PIB: ${fd?.pib || ''}</p>
-        </div>
+        <div><h2 style="margin:0;font-size:18px;">PLANET "RENT A CAR"</h2><p style="margin:2px 0;">${firma}<br>PIB: ${fd?.pib || ''}</p></div>
       </div>
       <div style="text-align:right">
         <p style="margin:0;font-weight:bold;font-size:11px;">PODRŠKA: ${fd?.tel || ''}</p>
@@ -167,110 +160,39 @@ export function generateUgovor(f: RezForm, vozila: VoziloOption[]) {
       </div>
     </div>
     <table>
-      <tr>
-        <td colspan="2" class="gray">1. KORISNIK / RENTER</td>
-        <td colspan="3" class="gray">2. VOZILO / VEHICLE</td>
-      </tr>
-      <tr>
-        <td width="18%">Korisnik:</td>
-        <td width="32%" style="font-weight:bold">${f.ime_prezime}</td>
-        <td width="18%">Vozilo:</td>
-        <td colspan="2" style="font-weight:bold">${vozilo?.agregirani_2 || f.br_tablica}</td>
-      </tr>
-      <tr>
-        <td>Adresa:</td>
-        <td>${f.adresa || ''}</td>
-        <td>Reg br:</td>
-        <td colspan="2" style="font-weight:bold">${f.br_tablica}</td>
-      </tr>
-      <tr>
-        <td>Datum Rođ.:</td>
-        <td>${f.datum_rodjenja || ''} (${f.zemlja || ''})</td>
-        <td rowspan="2">Preuzimanje:</td>
-        <td>Datum / Mjesto:</td>
-        <td>${f.od_datuma} / ${f.mjesto_preuzimanja}</td>
-      </tr>
-      <tr>
-        <td>Vozačka/Istek:</td>
-        <td>${f.br_vozacke} (${f.istek_vozacke || ''})</td>
-        <td>Sat:</td>
-        <td>${f.vreme_izdavanja}</td>
-      </tr>
-      <tr>
-        <td>Email/Tel:</td>
-        <td>${f.email || ''} / ${f.telefon || ''}</td>
-        <td rowspan="2">Povratak:</td>
-        <td>Datum / Mjesto:</td>
-        <td>${f.do_datuma} / ${f.mjesto_povratka}</td>
-      </tr>
-      <tr>
-        <td>Drugi vozač:</td>
-        <td>${f.ime2 || ''} ${f.prezime2 || ''} (${f.br_vozacke2 || ''})</td>
-        <td>Sat:</td>
-        <td>${f.vreme_povratka}</td>
-      </tr>
-      <tr>
-        <td colspan="5" style="background:#eee;text-align:center;font-weight:bold;font-size:11px;">
-          IZDAO VOZILO: ${f.ko_je_izdao || '/'}
-        </td>
-      </tr>
+      <tr><td colspan="2" class="gray">1. KORISNIK / RENTER</td><td colspan="3" class="gray">2. VOZILO / VEHICLE</td></tr>
+      <tr><td width="18%">Korisnik:</td><td width="32%" style="font-weight:bold">${f.ime_prezime}</td><td width="18%">Vozilo:</td><td colspan="2" style="font-weight:bold">${vozilo?.agregirani_2 || f.br_tablica}</td></tr>
+      <tr><td>Adresa:</td><td>${f.adresa || ''}</td><td>Reg br:</td><td colspan="2" style="font-weight:bold">${f.br_tablica}</td></tr>
+      <tr><td>Datum Rođ.:</td><td>${f.datum_rodjenja || ''} (${f.zemlja || ''})</td><td rowspan="2">Preuzimanje:</td><td>Datum / Mjesto:</td><td>${f.od_datuma} / ${f.mjesto_preuzimanja}</td></tr>
+      <tr><td>Vozačka/Istek:</td><td>${f.br_vozacke} (${f.istek_vozacke || ''})</td><td>Sat:</td><td>${f.vreme_izdavanja}</td></tr>
+      <tr><td>Email/Tel:</td><td>${f.email || ''} / ${f.telefon || ''}</td><td rowspan="2">Povratak:</td><td>Datum / Mjesto:</td><td>${f.do_datuma} / ${f.mjesto_povratka}</td></tr>
+      <tr><td>Drugi vozač:</td><td>${f.ime2 || ''} ${f.prezime2 || ''} (${f.br_vozacke2 || ''})</td><td>Sat:</td><td>${f.vreme_povratka}</td></tr>
+      <tr><td colspan="5" style="background:#eee;text-align:center;font-weight:bold;font-size:11px;">IZDAO VOZILO: ${f.ko_je_izdao || '/'}</td></tr>
     </table>
     <div class="gray" style="padding:3px;margin-top:10px;">STANJE OPREME I VOZILA</div>
     <div class="check-grid">
-      <div><div class="box"></div> Dokumenta</div>
-      <div><div class="box"></div> Prva pomoć</div>
-      <div><div class="box"></div> Dizalica</div>
-      <div><div class="box"></div> Sijalice</div>
-      <div><div class="box"></div> Rezervni točak</div>
-      <div><div class="box"></div> Trougao</div>
-      <div><div class="box"></div> Ključ za točkove</div>
-      <div><div class="box"></div> Lanci</div>
-      <div><div class="box"></div> Bebi sjediste</div>
+      <div><div class="box"></div> Dokumenta</div><div><div class="box"></div> Prva pomoć</div><div><div class="box"></div> Dizalica</div>
+      <div><div class="box"></div> Sijalice</div><div><div class="box"></div> Rezervni točak</div><div><div class="box"></div> Trougao</div>
+      <div><div class="box"></div> Ključ za točkove</div><div><div class="box"></div> Lanci</div><div><div class="box"></div> Bebi sjediste</div>
     </div>
-    <div style="text-align:center;font-weight:bold;margin:8px 0;font-size:11px;">
-      DA LI ĆU VRATITI ČIST AUTO? &nbsp;&nbsp; DA <div class="box"></div> &nbsp; NE <div class="box"></div>
-    </div>
+    <div style="text-align:center;font-weight:bold;margin:8px 0;font-size:11px;">DA LI ĆU VRATITI ČIST AUTO? &nbsp;&nbsp; DA <div class="box"></div> &nbsp; NE <div class="box"></div></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin:8px 0;">
       <img style="width:62%;" src="https://planetrentacar.me/evidencija/ugovor/skica.jpg">
       <div style="width:35%;text-align:center;display:flex;flex-direction:column;gap:8px;">
         <img style="width:100%;max-width:170px;margin:0 auto;" src="https://planetrentacar.me/evidencija/ugovor/image1.jpg">
         <div style="border:2px solid #000;padding:5px;font-weight:bold;font-size:10px;">PRANJE VOZILA SE NAPLAĆUJE 10-20€</div>
         <div class="granica">GRANICA:<br>${f.granica}</div>
-        <div class="legal">
-          Renter je odgovoran za saobraćajne prekršaje. U slučaju oštećenja vozila, kada je krivac korisnik, 
-          potrebno je da nadoknadi štetu u potpunosti 100%. U slučaju da je krivica drugog vozača, pokriva se 
-          iz osiguranja. Pročitao sam i slažem se sa uslovima sa obje strane ugovora.<br><br>
-          Renter is liable for traffic violations. All charges are subject to final audit. In case of damage 
-          in case of drivers fault driver is charged 100% of damage. In case of others fault, it is on insurance. 
-          With this signature, renter agrees with terms and conditions on both sides of the agreement.
-        </div>
+        <div class="legal">Renter je odgovoran za saobraćajne prekršaje. U slučaju oštećenja vozila, kada je krivac korisnik, potrebno je da nadoknadi štetu u potpunosti 100%. Pročitao sam i slažem se sa uslovima sa obje strane ugovora.<br><br>Renter is liable for traffic violations. In case of damage in case of drivers fault driver is charged 100% of damage. With this signature, renter agrees with terms and conditions on both sides of the agreement.</div>
       </div>
     </div>
     <table>
       <tr><td colspan="4" class="gray">3. OBRAČUN I DODACI</td></tr>
-      <tr>
-        <td width="20%">Dani:</td>
-        <td width="30%">${dana} x ${f.cijena_dan}€</td>
-        <td width="20%">Dozvola/Dostava:</td>
-        <td width="30%">${f.dozvola_van_zemlje_cijena}€ / ${f.dostava_cijena}€</td>
-      </tr>
-      <tr>
-        <td>Sic/2. Vozač:</td>
-        <td>${(f.bebi_sic_cijena || 0) * dana}€ / ${f.dodatni_vozac_cijena}€</td>
-        <td>Osiguranje:</td>
-        <td>${f.tip_osiguranja?.includes('Kasko') ? f.kasko_tip + ' (' + f.kasko_ucesce + '€)' : 'AO (Standard)'}</td>
-      </tr>
-      <tr>
-        <td>Plaćanje:</td>
-        <td>${f.nacin_placanja}</td>
-        <td>Depozit:</td>
-        <td>${f.depozit}€</td>
-      </tr>
+      <tr><td width="20%">Dani:</td><td width="30%">${dana} x ${f.cijena_dan}€</td><td width="20%">Dozvola/Dostava:</td><td width="30%">${f.dozvola_van_zemlje_cijena}€ / ${f.dostava_cijena}€</td></tr>
+      <tr><td>Sic/2. Vozač:</td><td>${(f.bebi_sic_cijena || 0) * dana}€ / ${f.dodatni_vozac_cijena}€</td><td>Osiguranje:</td><td>${f.tip_osiguranja?.includes('Kasko') ? f.kasko_tip + ' (' + f.kasko_ucesce + '€)' : 'AO (Standard)'}</td></tr>
+      <tr><td>Plaćanje:</td><td>${f.nacin_placanja}</td><td>Depozit:</td><td>${f.depozit}€</td></tr>
       <tr style="background:#000;color:#fff;font-size:12px;">
         <td colspan="2" style="padding-left:10px;">UKUPNO ZA NAPLATU: ${ukupno.toFixed(2)} €</td>
-        <td colspan="2" style="text-align:right;padding-right:15px;">
-          NAPLAĆENO: ${(f.naplaceno || 0).toFixed(2)}€ &nbsp;|&nbsp; DUG: ${dug.toFixed(2)}€
-        </td>
+        <td colspan="2" style="text-align:right;padding-right:15px;">NAPLAĆENO: ${(f.naplaceno || 0).toFixed(2)}€ &nbsp;|&nbsp; DUG: ${dug.toFixed(2)}€</td>
       </tr>
     </table>
     <p style="font-size:10px;margin:5px 0;"><b>NAPOMENA:</b> ${f.napomena || 'Bez oštećenja.'}</p>
@@ -282,87 +204,83 @@ export function generateUgovor(f: RezForm, vozila: VoziloOption[]) {
   </div></body></html>`
 
   const win = window.open('', '_blank')
-  if (win) {
-    win.document.write(html)
-    win.document.close()
-    setTimeout(() => win.print(), 500)
-  }
+  if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 500) }
 }
 
 interface RezervacijaModalProps {
-  form: RezForm
-  setForm: (f: RezForm) => void
-  vozila: VoziloOption[]
-  onSave: () => void
-  onClose: () => void
-  onDelete?: () => void
-  saving: boolean
-  isNew: boolean
-  title?: string
-  onIzdaj?: () => void
-  onPreuzmi?: () => void
+  form: RezForm; setForm: (f: RezForm) => void
+  vozila: VoziloOption[]; onSave: () => void; onClose: () => void
+  onDelete?: () => void; saving: boolean; isNew: boolean; title?: string
+  onIzdaj?: () => void; onPreuzmi?: () => void
 }
 
-export function RezervacijaModal({
-  form, setForm, vozila, onSave, onClose, onDelete,
-  saving, isNew, title, onIzdaj, onPreuzmi
-}: RezervacijaModalProps) {
+export function RezervacijaModal({ form, setForm, vozila, onSave, onClose, onDelete, saving, isNew, title, onIzdaj, onPreuzmi }: RezervacijaModalProps) {
   const { klijenti, loading: kLoading } = useKlijenti()
   const [showDodaci, setShowDodaci] = useState(false)
   const [showAgentModal, setShowAgentModal] = useState(false)
   const [agentiLista, setAgentiLista] = useState<string[]>([])
   const [logovanAgent, setLogovanAgent] = useState('')
+  const [voziloSearch, setVoziloSearch] = useState('')
+  const [showVoziloDropdown, setShowVoziloDropdown] = useState(false)
+  const [klijentSearch, setKlijentSearch] = useState('')
+  const [showKlijentDropdown, setShowKlijentDropdown] = useState(false)
 
   const dana = calcDana(form)
   const ukupno = calcUkupno(form)
   const dug = ukupno - (form.naplaceno || 0)
-  const marke = Array.from(new Set(vozila.map(v => v.marka).filter(Boolean))).sort() as string[]
 
-  // Učitaj logovanog agenta i listu agenata iz baze
   useEffect(() => {
     const ime = getCookie('avtorent-agent-name')
     setLogovanAgent(ime || '')
-
     supabase.from('agents').select('full_name').eq('is_active', true)
-      .then(({ data }) => {
-        if (data) setAgentiLista(data.map(a => a.full_name).filter(Boolean))
-      })
+      .then(({ data }) => { if (data) setAgentiLista(data.map((a: any) => a.full_name).filter(Boolean)) })
   }, [])
 
-  // Ako je logovan agent i ko_je_izdao je prazan — automatski popuni
+  // Postavi naziv vozila u search kad se otvori postojeća rezervacija
   useEffect(() => {
-    if (logovanAgent && !form.ko_je_izdao && isNew) {
-      setForm({ ...form, ko_je_izdao: logovanAgent })
+    if (form.br_tablica && !isNew) {
+      const v = vozila.find(v => v.license_plate === form.br_tablica)
+      if (v) setVoziloSearch(v.agregirani_2 || v.license_plate || '')
     }
-  }, [logovanAgent])
+  }, [form.br_tablica, vozila])
 
-  function findKlijent(vozacka: string) {
-    const k = klijenti.find(k => k.vozacka === vozacka.trim())
-    if (k) {
-      setForm({
-        ...form,
-        ime_prezime: `${k.ime} ${k.prezime}`.trim(),
-        adresa: k.adresa, datum_rodjenja: k.rodjenje,
-        zemlja: k.zemlja, telefon: k.telefon,
-        email: k.email, istek_vozacke: k.istek,
-      })
-    }
+  // Filtriraj vozila po searchu
+  const filteredVozila = voziloSearch.length > 0
+    ? vozila.filter(v =>
+        (v.agregirani_2 || '').toLowerCase().includes(voziloSearch.toLowerCase()) ||
+        (v.license_plate || '').toLowerCase().includes(voziloSearch.toLowerCase())
+      )
+    : vozila
+
+  // Filtriraj klijente po searchu
+  const filteredKlijenti = klijentSearch.length >= 2
+    ? klijenti.filter(k =>
+        k.vozacka.toLowerCase().includes(klijentSearch.toLowerCase()) ||
+        `${k.ime} ${k.prezime}`.toLowerCase().includes(klijentSearch.toLowerCase())
+      ).slice(0, 8)
+    : []
+
+  function selectVozilo(v: VoziloOption) {
+    setForm({ ...form, br_tablica: v.license_plate || '' })
+    setVoziloSearch(v.agregirani_2 || v.license_plate || '')
+    setShowVoziloDropdown(false)
   }
 
-  function findKlijent2(vozacka: string) {
-    const k = klijenti.find(k => k.vozacka === vozacka.trim())
-    if (k) setForm({ ...form, br_vozacke2: vozacka, ime2: k.ime, prezime2: k.prezime })
+  function selectKlijent(k: any) {
+    setForm({
+      ...form,
+      br_vozacke: k.vozacka,
+      ime_prezime: `${k.ime} ${k.prezime}`.trim(),
+      adresa: k.adresa, datum_rodjenja: k.rodjenje,
+      zemlja: k.zemlja, telefon: k.telefon,
+      email: k.email, istek_vozacke: k.istek,
+    })
+    setKlijentSearch(k.vozacka)
+    setShowKlijentDropdown(false)
   }
 
-  const inp: React.CSSProperties = {
-    width: '100%', padding: '8px 10px', fontSize: 13,
-    border: '1px solid #d1d5db', borderRadius: 8,
-    background: '#fff', color: '#111', boxSizing: 'border-box',
-  }
-  const lbl: React.CSSProperties = {
-    fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500
-  }
-
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
   const isCustomLokPreuzimanja = !LOKACIJE_PREUZIMANJA.includes(form.mjesto_preuzimanja)
   const isCustomLokPovratka = !LOKACIJE_PREUZIMANJA.includes(form.mjesto_povratka)
   const isCustomIzvor = !IZVORI.includes(form.izvor_rezervacije)
@@ -374,19 +292,11 @@ export function RezervacijaModal({
 
           {/* HEADER */}
           <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>
-              {title || (isNew ? 'Nova rezervacija' : `REZ #${form.id}`)}
-            </h2>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>{title || (isNew ? 'Nova rezervacija' : `REZ #${form.id}`)}</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {!isNew && onDelete && (
-                <button onClick={onDelete} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>🗑️ Obriši</button>
-              )}
-              {!isNew && onIzdaj && !form.ko_je_izdao && (
-                <button onClick={onIzdaj} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>🚗 Izdaj</button>
-              )}
-              {!isNew && onPreuzmi && form.ko_je_izdao && !form.ko_je_preuzeo && (
-                <button onClick={onPreuzmi} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>🔙 Preuzmi</button>
-              )}
+              {!isNew && onDelete && <button onClick={onDelete} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>🗑️ Obriši</button>}
+              {!isNew && onIzdaj && !form.ko_je_izdao && <button onClick={onIzdaj} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>🚗 Izdaj</button>}
+              {!isNew && onPreuzmi && form.ko_je_izdao && !form.ko_je_preuzeo && <button onClick={onPreuzmi} style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>🔙 Preuzmi</button>}
               <button onClick={() => generateUgovor(form, vozila)} style={{ padding: '7px 14px', fontSize: 12, background: '#FAEEDA', color: '#633806', border: '1px solid #EF9F27', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>📄 Ugovor</button>
               <button onClick={onSave} disabled={saving} style={{ padding: '7px 16px', fontSize: 12, background: saving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>{saving ? '...' : '💾 Snimi'}</button>
               <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
@@ -399,21 +309,42 @@ export function RezervacijaModal({
             <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#1D9E75', textTransform: 'uppercase', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Klijent informacije</div>
 
-              <div style={{ marginBottom: 10 }}>
-                <label style={lbl}>Pretraga (Broj vozačke)</label>
-                <input list="rez-klijenti-list" style={{ ...inp, color: '#f59e0b', fontWeight: 700 }}
-                  value={form.br_vozacke}
-                  onChange={e => { setForm({ ...form, br_vozacke: e.target.value }); findKlijent(e.target.value) }}
-                  placeholder="Unesi broj vozačke..." />
-                <datalist id="rez-klijenti-list">
-                  {klijenti.map(k => <option key={k.vozacka} value={k.vozacka}>{k.ime} {k.prezime}</option>)}
-                </datalist>
-                {kLoading && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>Učitavam klijente...</div>}
+              {/* Pretraga klijenta */}
+              <div style={{ marginBottom: 10, position: 'relative' }}>
+                <label style={lbl}>Pretraga (vozačka ili ime) {kLoading && <span style={{ color: '#9ca3af' }}>učitavam...</span>}</label>
+                <input
+                  style={{ ...inp, color: '#f59e0b', fontWeight: 700 }}
+                  value={klijentSearch}
+                  onChange={e => { setKlijentSearch(e.target.value); setShowKlijentDropdown(true) }}
+                  onFocus={() => setShowKlijentDropdown(true)}
+                  placeholder="Kucaj broj vozačke ili ime..."
+                />
+                {showKlijentDropdown && filteredKlijenti.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: 200, overflowY: 'auto' }}>
+                    {filteredKlijenti.map(k => (
+                      <div key={k.vozacka} onClick={() => selectKlijent(k)}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf8')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                        <div style={{ fontWeight: 600, color: '#f59e0b' }}>{k.vozacka}</div>
+                        <div style={{ fontSize: 12, color: '#374151' }}>{k.ime} {k.prezime} · {k.zemlja}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {form.istek_vozacke && (
                   <div style={{ marginTop: 4, background: '#f0fdf8', border: '1px solid #1D9E75', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: '#085041' }}>
                     Istek vozačke: <strong>{form.istek_vozacke}</strong>
                   </div>
                 )}
+              </div>
+
+              {/* Broj vozačke — readonly, popunjava se iz pretrage */}
+              <div style={{ marginBottom: 8 }}>
+                <label style={lbl}>Broj vozačke</label>
+                <input style={{ ...inp, background: '#f9fafb' }} value={form.br_vozacke}
+                  onChange={e => setForm({ ...form, br_vozacke: e.target.value })}
+                  placeholder="Automatski iz pretrage..." />
               </div>
 
               <div style={{ marginBottom: 8 }}>
@@ -435,16 +366,8 @@ export function RezervacijaModal({
                 </select>
               </div>
 
-              {form.ko_je_izdao && (
-                <div style={{ background: '#f0fdf8', border: '1px solid #1D9E75', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#085041', marginBottom: 6 }}>
-                  🚗 Izdao: <strong>{form.ko_je_izdao}</strong>
-                </div>
-              )}
-              {form.ko_je_preuzeo && (
-                <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#0C447C', marginBottom: 6 }}>
-                  🔙 Preuzeo: <strong>{form.ko_je_preuzeo}</strong>
-                </div>
-              )}
+              {form.ko_je_izdao && <div style={{ background: '#f0fdf8', border: '1px solid #1D9E75', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#085041', marginBottom: 6 }}>🚗 Izdao: <strong>{form.ko_je_izdao}</strong></div>}
+              {form.ko_je_preuzeo && <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#0C447C', marginBottom: 6 }}>🔙 Preuzeo: <strong>{form.ko_je_preuzeo}</strong></div>}
 
               {/* Drugi vozač */}
               <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginTop: 10 }}>
@@ -452,15 +375,17 @@ export function RezervacijaModal({
                 <div style={{ marginBottom: 8 }}>
                   <label style={lbl}>Vozačka 2. vozača</label>
                   <input list="rez-klijenti-list2" style={inp} value={form.br_vozacke2}
-                    onChange={e => { setForm({ ...form, br_vozacke2: e.target.value }); findKlijent2(e.target.value) }}
+                    onChange={e => {
+                      const k = klijenti.find(k => k.vozacka === e.target.value.trim())
+                      if (k) setForm({ ...form, br_vozacke2: e.target.value, ime2: k.ime, prezime2: k.prezime })
+                      else setForm({ ...form, br_vozacke2: e.target.value })
+                    }}
                     placeholder="Broj vozačke..." />
-                  <datalist id="rez-klijenti-list2">
-                    {klijenti.map(k => <option key={k.vozacka} value={k.vozacka}>{k.ime} {k.prezime}</option>)}
-                  </datalist>
+                  <datalist id="rez-klijenti-list2">{klijenti.map(k => <option key={k.vozacka} value={k.vozacka}>{k.ime} {k.prezime}</option>)}</datalist>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div><label style={lbl}>Ime</label><input style={{ ...inp, opacity: 0.8 }} value={form.ime2} readOnly placeholder="Auto" /></div>
-                  <div><label style={lbl}>Prezime</label><input style={{ ...inp, opacity: 0.8 }} value={form.prezime2} readOnly placeholder="Auto" /></div>
+                  <div><label style={lbl}>Ime</label><input style={{ ...inp, opacity: 0.8 }} value={form.ime2} onChange={e => setForm({ ...form, ime2: e.target.value })} /></div>
+                  <div><label style={lbl}>Prezime</label><input style={{ ...inp, opacity: 0.8 }} value={form.prezime2} onChange={e => setForm({ ...form, prezime2: e.target.value })} /></div>
                 </div>
               </div>
             </div>
@@ -476,22 +401,33 @@ export function RezervacijaModal({
                 </select>
               </div>
 
-              <div style={{ marginBottom: 10 }}>
-                <label style={lbl}>Tablice *</label>
-                <select style={{ ...inp, color: '#f59e0b', fontWeight: 700 }} value={form.br_tablica}
-                  onChange={e => setForm({ ...form, br_tablica: e.target.value })}>
-                  <option value="">-- Izaberi vozilo --</option>
-                  {marke.map(m => (
-                    <optgroup key={m} label={m}>
-                      {vozila.filter(v => v.marka === m).map(v => (
-                        <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+              {/* Vozilo search */}
+              <div style={{ marginBottom: 10, position: 'relative' }}>
+                <label style={lbl}>Tablice / Vozilo *</label>
+                <input
+                  style={{ ...inp, color: '#f59e0b', fontWeight: 700 }}
+                  value={voziloSearch}
+                  onChange={e => { setVoziloSearch(e.target.value); setShowVoziloDropdown(true) }}
+                  onFocus={() => setShowVoziloDropdown(true)}
+                  placeholder="Pretraži po tablicama ili nazivu..."
+                />
+                {showVoziloDropdown && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: 220, overflowY: 'auto' }}>
+                    {filteredVozila.slice(0, 20).map(v => (
+                      <div key={v.id} onClick={() => selectVozilo(v)}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fffbeb')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>{v.license_plate}</span>
+                        <span style={{ color: '#374151', marginLeft: 8 }}>{v.agregirani_2}</span>
+                      </div>
+                    ))}
+                    {filteredVozila.length === 0 && <div style={{ padding: 12, color: '#9ca3af', fontSize: 12 }}>Nema rezultata</div>}
+                  </div>
+                )}
                 {form.br_tablica && (
                   <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4 }}>
-                    {vozila.find(v => v.license_plate === form.br_tablica)?.agregirani_2}
+                    ✓ Odabrano: {form.br_tablica}
                   </div>
                 )}
               </div>
@@ -515,62 +451,32 @@ export function RezervacijaModal({
               {form.tip_osiguranja.includes('Kasko') && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <label style={lbl}>Tip kaska</label>
-                      <select style={inp} value={form.kasko_tip} onChange={e => setForm({ ...form, kasko_tip: e.target.value })}>
-                        <option value="FULL KASKO">FULL KASKO</option>
-                        <option value="SA UČEŠĆEM">SA UČEŠĆEM</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={lbl}>Kasko €/dan</label>
-                      <input style={inp} type="number" value={form.kasko_cijena || ''} onChange={e => setForm({ ...form, kasko_cijena: parseFloat(e.target.value) || 0 })} />
-                    </div>
+                    <div><label style={lbl}>Tip kaska</label><select style={inp} value={form.kasko_tip} onChange={e => setForm({ ...form, kasko_tip: e.target.value })}><option value="FULL KASKO">FULL KASKO</option><option value="SA UČEŠĆEM">SA UČEŠĆEM</option></select></div>
+                    <div><label style={lbl}>Kasko €/dan</label><input style={inp} type="number" value={form.kasko_cijena || ''} onChange={e => setForm({ ...form, kasko_cijena: parseFloat(e.target.value) || 0 })} /></div>
                   </div>
-                  {form.kasko_tip === 'SA UČEŠĆEM' && (
-                    <div><label style={lbl}>Učešće €</label><input style={inp} type="number" value={form.kasko_ucesce || ''} onChange={e => setForm({ ...form, kasko_ucesce: parseFloat(e.target.value) || 0 })} /></div>
-                  )}
+                  {form.kasko_tip === 'SA UČEŠĆEM' && <div><label style={lbl}>Učešće €</label><input style={inp} type="number" value={form.kasko_ucesce || ''} onChange={e => setForm({ ...form, kasko_ucesce: parseFloat(e.target.value) || 0 })} /></div>}
                 </div>
               )}
 
-              {/* Ko je izdao — automatski ili ručni odabir */}
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ ...lbl, color: '#dc2626' }}>Ko je izdao vozilo?</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input style={{ ...inp, flex: 1, opacity: 0.7 }} value={form.ko_je_izdao}
-                    readOnly placeholder="Nije postavljeno..." />
-                  <button onClick={() => {
-                    if (logovanAgent) {
-                      setForm({ ...form, ko_je_izdao: logovanAgent })
-                    } else {
-                      setShowAgentModal(true)
-                    }
-                  }}
-                    style={{ padding: '7px 10px', background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, cursor: 'pointer', fontSize: 11, color: '#085041', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {logovanAgent ? '👤 Ja' : 'Izaberi'}
-                  </button>
-                  {form.ko_je_izdao && (
-                    <button onClick={() => setShowAgentModal(true)}
-                      style={{ padding: '7px 10px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', fontSize: 11, color: '#6b7280' }}>
-                      ✏️
+              {/* Ko je izdao — samo za postojeće rezervacije */}
+              {!isNew && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ ...lbl, color: '#dc2626' }}>Ko je izdao vozilo?</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input style={{ ...inp, flex: 1, opacity: 0.7 }} value={form.ko_je_izdao} readOnly placeholder="Nije postavljeno..." />
+                    <button onClick={() => logovanAgent ? setForm({ ...form, ko_je_izdao: logovanAgent }) : setShowAgentModal(true)}
+                      style={{ padding: '7px 10px', background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, cursor: 'pointer', fontSize: 11, color: '#085041', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {logovanAgent ? '👤 Ja' : 'Izaberi'}
                     </button>
-                  )}
-                </div>
-                {logovanAgent && !form.ko_je_izdao && (
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                    Klikni "👤 Ja" da postaviš sebe kao agenta koji izdaje
+                    {form.ko_je_izdao && <button onClick={() => setShowAgentModal(true)} style={{ padding: '7px 10px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', fontSize: 11, color: '#6b7280' }}>✏️</button>}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={lbl}>Broj leta</label>
-                <input style={inp} value={form.br_leta} onChange={e => setForm({ ...form, br_leta: e.target.value })} placeholder="Npr. FR1234" />
-              </div>
+              <div style={{ marginBottom: 8 }}><label style={lbl}>Broj leta</label><input style={inp} value={form.br_leta} onChange={e => setForm({ ...form, br_leta: e.target.value })} placeholder="Npr. FR1234" /></div>
               <div style={{ marginBottom: 8 }}>
                 <label style={lbl}>Napomena / Oštećenja</label>
-                <textarea value={form.napomena} onChange={e => setForm({ ...form, napomena: e.target.value })}
-                  style={{ ...inp, minHeight: 80, resize: 'vertical' as const }} />
+                <textarea value={form.napomena} onChange={e => setForm({ ...form, napomena: e.target.value })} style={{ ...inp, minHeight: 80, resize: 'vertical' as const }} />
               </div>
             </div>
 
@@ -580,41 +486,29 @@ export function RezervacijaModal({
 
               <div style={{ marginBottom: 10 }}>
                 <label style={lbl}>Mjesto preuzimanja</label>
-                <select style={inp} value={isCustomLokPreuzimanja ? 'custom' : form.mjesto_preuzimanja}
-                  onChange={e => setForm({ ...form, mjesto_preuzimanja: e.target.value === 'custom' ? '' : e.target.value })}>
+                <select style={inp} value={isCustomLokPreuzimanja ? 'custom' : form.mjesto_preuzimanja} onChange={e => setForm({ ...form, mjesto_preuzimanja: e.target.value === 'custom' ? '' : e.target.value })}>
                   {LOKACIJE_PREUZIMANJA.map(l => <option key={l} value={l}>{l}</option>)}
                   <option value="custom">Unesi sam...</option>
                 </select>
-                {isCustomLokPreuzimanja && (
-                  <input style={{ ...inp, marginTop: 4 }} value={form.mjesto_preuzimanja}
-                    onChange={e => setForm({ ...form, mjesto_preuzimanja: e.target.value })} placeholder="Unesi lokaciju..." />
-                )}
+                {isCustomLokPreuzimanja && <input style={{ ...inp, marginTop: 4 }} value={form.mjesto_preuzimanja} onChange={e => setForm({ ...form, mjesto_preuzimanja: e.target.value })} placeholder="Unesi lokaciju..." />}
               </div>
 
               <div style={{ marginBottom: 10 }}>
                 <label style={lbl}>Mjesto povratka</label>
-                <select style={inp} value={isCustomLokPovratka ? 'custom' : form.mjesto_povratka}
-                  onChange={e => setForm({ ...form, mjesto_povratka: e.target.value === 'custom' ? '' : e.target.value })}>
+                <select style={inp} value={isCustomLokPovratka ? 'custom' : form.mjesto_povratka} onChange={e => setForm({ ...form, mjesto_povratka: e.target.value === 'custom' ? '' : e.target.value })}>
                   {LOKACIJE_PREUZIMANJA.map(l => <option key={l} value={l}>{l}</option>)}
                   <option value="custom">Unesi sam...</option>
                 </select>
-                {isCustomLokPovratka && (
-                  <input style={{ ...inp, marginTop: 4 }} value={form.mjesto_povratka}
-                    onChange={e => setForm({ ...form, mjesto_povratka: e.target.value })} placeholder="Unesi lokaciju..." />
-                )}
+                {isCustomLokPovratka && <input style={{ ...inp, marginTop: 4 }} value={form.mjesto_povratka} onChange={e => setForm({ ...form, mjesto_povratka: e.target.value })} placeholder="Unesi lokaciju..." />}
               </div>
 
               <div style={{ marginBottom: 10 }}>
                 <label style={lbl}>Izvor rezervacije</label>
-                <select style={inp} value={isCustomIzvor ? 'custom' : form.izvor_rezervacije}
-                  onChange={e => setForm({ ...form, izvor_rezervacije: e.target.value === 'custom' ? '' : e.target.value })}>
+                <select style={inp} value={isCustomIzvor ? 'custom' : form.izvor_rezervacije} onChange={e => setForm({ ...form, izvor_rezervacije: e.target.value === 'custom' ? '' : e.target.value })}>
                   {IZVORI.map(i => <option key={i} value={i}>{i}</option>)}
                   <option value="custom">Unesi sam (hotel/apartman)...</option>
                 </select>
-                {isCustomIzvor && (
-                  <input style={{ ...inp, marginTop: 4 }} value={form.izvor_rezervacije}
-                    onChange={e => setForm({ ...form, izvor_rezervacije: e.target.value })} placeholder="Naziv hotela/apartmana..." />
-                )}
+                {isCustomIzvor && <input style={{ ...inp, marginTop: 4 }} value={form.izvor_rezervacije} onChange={e => setForm({ ...form, izvor_rezervacije: e.target.value })} placeholder="Naziv hotela/apartmana..." />}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
@@ -660,8 +554,7 @@ export function RezervacijaModal({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontSize: 12, color: '#6b7280' }}>Naplaćeno:</span>
-                  <input type="number" value={form.naplaceno || 0}
-                    onChange={e => setForm({ ...form, naplaceno: parseFloat(e.target.value) || 0 })}
+                  <input type="number" value={form.naplaceno || 0} onChange={e => setForm({ ...form, naplaceno: parseFloat(e.target.value) || 0 })}
                     style={{ width: 90, textAlign: 'right', fontSize: 16, fontWeight: 700, color: '#1D9E75', background: 'transparent', border: 'none', borderBottom: '1px dashed #1D9E75', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
@@ -674,24 +567,20 @@ export function RezervacijaModal({
         </div>
       </div>
 
-      {/* AGENT MODAL — za ručni odabir */}
+      {/* AGENT MODAL */}
       {showAgentModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}>
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 400, width: '100%' }}>
             <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>Ko izdaje vozilo?</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {agentiLista.map(a => (
-                <button key={a}
-                  onClick={() => { setForm({ ...form, ko_je_izdao: a }); setShowAgentModal(false) }}
+                <button key={a} onClick={() => { setForm({ ...form, ko_je_izdao: a }); setShowAgentModal(false) }}
                   style={{ padding: '10px', border: `1px solid ${form.ko_je_izdao === a ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: form.ko_je_izdao === a ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, color: '#374151', fontWeight: form.ko_je_izdao === a ? 600 : 400 }}>
                   {a}
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowAgentModal(false)}
-              style={{ width: '100%', padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
-              Odustani
-            </button>
+            <button onClick={() => setShowAgentModal(false)} style={{ width: '100%', padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>Odustani</button>
           </div>
         </div>
       )}
