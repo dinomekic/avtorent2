@@ -417,7 +417,7 @@ export default function FinansijePage() {
   if (loading) return <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>Učitavanje...</div>
 
   const needsFoto = FOTO_KAT.includes(kategorija)
-  const isRazmjena = kategorija.toLowerCase().includes('razmjena')
+  const isRazmjena = kategorija === 'Razmjena novca'
   const katOptions = tip === 'priliv' ? katPriliv : katOdliv
 
   const sortedTrans = [...prikazTrans].sort((a, b) =>
