@@ -266,12 +266,16 @@ export default function AdminKalendarPage() {
     }))
   }
 
-  // Init / reinit kalendar
+  // Init / reinit kalendar — triggeruje se kad su I podaci I FC biblioteka učitani
   useEffect(() => {
     if (!fcLoaded || loading || !calendarRef.current) return
-    if (calInstanceRef.current) { calInstanceRef.current.destroy(); calInstanceRef.current = null }
+    // Kratki timeout da DOM bude spreman
+    const timer = setTimeout(() => {
+      if (!calendarRef.current) return
+      if (calInstanceRef.current) { calInstanceRef.current.destroy(); calInstanceRef.current = null }
 
-    const FC = (window as any).FullCalendar
+      const FC = (window as any).FullCalendar
+      if (!FC) return
     const cal = new FC.Calendar(calendarRef.current, {
       schedulerLicenseKey: 'CC-Attribution-NonCommercialNoDerivatives',
       initialView: 'resourceTimelineMonth',
@@ -345,6 +349,8 @@ export default function AdminKalendarPage() {
 
     cal.render()
     calInstanceRef.current = cal
+    }, 100)
+    return () => clearTimeout(timer)
   }, [fcLoaded, loading, currentLok])
 
   useEffect(() => {
