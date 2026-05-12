@@ -33,6 +33,7 @@ export default function AdminFinansijePanelPage() {
   const [rezervacije, setRezervacije] = useState<Rezervacija[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [tSearch, setTSearch] = useState('')
   const [tOd, setTOd] = useState('')
@@ -44,6 +45,11 @@ export default function AdminFinansijePanelPage() {
   const [katSearch, setKatSearch] = useState('')
   const [tLimit, setTLimit] = useState(50)
 
+  // Edit modal
+  const [editT, setEditT] = useState<Transakcija | null>(null)
+  const [editForm, setEditForm] = useState({ datum: '', kategorija: '', iznos: '', komentar: '', vozilo: '', status: '' })
+  const [editSaving, setEditSaving] = useState(false)
+
   const [uSearch, setUSearch] = useState('')
   const [uOd, setUOd] = useState('')
   const [uDo, setUDo] = useState('')
@@ -51,6 +57,19 @@ export default function AdminFinansijePanelPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+
+    // Provjeri role
+    const agentName = typeof document !== 'undefined'
+      ? (document.cookie.match(/avtorent-agent-name=([^;]+)/) || [])[1]
+      : ''
+    if (agentName) {
+      const { data: agentData } = await supabase.from('agents').select('role').eq('full_name', decodeURIComponent(agentName)).single()
+      if (!agentData || agentData.role !== 'admin') {
+        setAccessDenied(true)
+        setLoading(false)
+        return
+      }
+    }
 
     // Učitaj SVE transakcije straničenjem (Supabase limit je 1000 po pozivu)
     let allTrans: any[] = []
@@ -203,6 +222,35 @@ export default function AdminFinansijePanelPage() {
     setTransakcije(prev => prev.map(t => t.id === id ? { ...t, provereno: !cur } : t))
   }
 
+  function openEdit(t: Transakcija) {
+    setEditT(t)
+    setEditForm({
+      datum: t.datum || '',
+      kategorija: t.kategorija || '',
+      iznos: String(t.iznos || ''),
+      komentar: t.komentar || '',
+      vozilo: t.vozilo || '',
+      status: t.status || '',
+    })
+  }
+
+  async function saveEdit() {
+    if (!editT) return
+    setEditSaving(true)
+    const updates = {
+      datum: editForm.datum,
+      kategorija: editForm.kategorija,
+      iznos: parseFloat(editForm.iznos) || 0,
+      komentar: editForm.komentar || null,
+      vozilo: editForm.vozilo || null,
+      status: editForm.status,
+    }
+    await supabase.from('transakcije').update(updates).eq('id', editT.id)
+    setTransakcije(prev => prev.map(t => t.id === editT.id ? { ...t, ...updates } : t))
+    setEditSaving(false)
+    setEditT(null)
+  }
+
   async function deleteTransakcija(id: string) {
     if (!confirm('Obrisati transakciju?')) return
     await supabase.from('transakcije').delete().eq('id', id)
@@ -235,6 +283,14 @@ export default function AdminFinansijePanelPage() {
   const inp: React.CSSProperties = { padding: '7px 10px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111', outline: 'none', width: '100%', boxSizing: 'border-box' as const }
   const lbl: React.CSSProperties = { fontSize: 10, color: '#9ca3af', marginBottom: 3, fontWeight: 700, display: 'block', textTransform: 'uppercase' as const, letterSpacing: 0.4 }
 
+  if (accessDenied) return (
+    <div style={{ padding: 60, textAlign: 'center' }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 8 }}>Pristup odbijen</div>
+      <div style={{ fontSize: 14, color: '#9ca3af' }}>Ova stranica je dostupna samo adminima.</div>
+    </div>
+  )
+
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
       {/* HEADER */}
@@ -266,21 +322,7 @@ export default function AdminFinansijePanelPage() {
         <>
           {tab === 'transakcije' && (
             <div>
-              {/* DEBUG PANEL - privremeno */}
-      <div style={{ background: '#1a1f2e', color: '#fff', borderRadius: 10, padding: 16, marginBottom: 16, fontSize: 11, fontFamily: 'monospace' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8, color: '#f59e0b' }}>🔍 DEBUG (obriši poslije)</div>
-        <div>Ukupno transakcija: {transakcije.length}</div>
-        <div>Prva transakcija: iznos={transakcije[0]?.iznos}, tip={transakcije[0]?.tip_transakcije}, status={transakcije[0]?.status}, kat={transakcije[0]?.kategorija}</div>
-        <div>Druga: iznos={transakcije[1]?.iznos}, tip={transakcije[1]?.tip_transakcije}, status={transakcije[1]?.status}</div>
-        <div>Treća: iznos={transakcije[2]?.iznos}, tip={transakcije[2]?.tip_transakcije}, status={transakcije[2]?.status}</div>
-        <div style={{ marginTop: 8 }}>Sandučić raw: {stanjeSanduce.toFixed(2)}</div>
-        <div>Saldo entries: {JSON.stringify(saldoEntries.slice(0, 3))}</div>
-        <div>DugFirma entries: {JSON.stringify(dugEntries.slice(0, 3))}</div>
-        <div style={{ marginTop: 8, color: '#9ca3af' }}>
-          SANDUCE kategorije nađene: {transakcije.filter(t => (t.kategorija || '').toUpperCase().includes('SANDUCE')).length}
-          {' | '}DUG PREMA FIRMI: {transakcije.filter(t => (t.kategorija || '').toUpperCase().includes('DUG PREMA FIRMI')).length}
-        </div>
-      </div>
+              {/* TOP PANELI */}
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 12, marginBottom: 20 }}>
 
                 {/* Sanduce */}
@@ -407,7 +449,7 @@ export default function AdminFinansijePanelPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 860 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      {['', 'Datum', 'Kategorija', 'Iznos', 'Vozilo', 'Agent', 'Komentar', 'Status', ''].map((h, i) => (
+                      {['', 'Datum', 'Kategorija', 'Iznos', 'Vozilo', 'Agent', 'Notes / Komentar', 'Upisano', ''].map((h, i) => (
                         <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, background: '#fafafa' }}>{h}</th>
                       ))}
                     </tr>
@@ -448,21 +490,27 @@ export default function AdminFinansijePanelPage() {
                             <div style={{ fontWeight: 600, color: '#111' }}>{aIme}</div>
                             {pIme && <div style={{ fontSize: 10, color: '#9ca3af' }}>→ {pIme}</div>}
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
+                          <td style={{ padding: '10px 12px', color: '#6b7280', maxWidth: 200, fontSize: 11 }}>
                             {t.komentar || '—'}
-                            {(t.slika1 || t.slika2 || t.slika3) && [t.slika1, t.slika2, t.slika3].filter(Boolean).map((s, i) => (
-                              <a key={i} href={s!} target="_blank" rel="noreferrer"
-                                style={{ marginLeft: 6, fontSize: 10, color: '#185FA5', background: '#eff6ff', padding: '1px 5px', borderRadius: 4, textDecoration: 'none' }}>
-                                📷
-                              </a>
-                            ))}
+                            {(t.slika1 || t.slika2 || t.slika3) && (
+                              <span style={{ marginLeft: 4 }}>
+                                {[t.slika1, t.slika2, t.slika3].filter(Boolean).map((s, i) => (
+                                  <a key={i} href={s!} target="_blank" rel="noreferrer"
+                                    style={{ marginLeft: 4, fontSize: 10, color: '#185FA5', background: '#eff6ff', padding: '1px 5px', borderRadius: 4, textDecoration: 'none' }}>
+                                    📷
+                                  </a>
+                                ))}
+                              </span>
+                            )}
                           </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: isZavrseno(t) ? '#dcfce7' : '#fef9c3', color: isZavrseno(t) ? '#166534' : '#854d0e' }}>
-                              {t.status || '/'}
-                            </span>
+                          <td style={{ padding: '10px 12px', fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap' as const }}>
+                            {t.timestamp_upisa
+                              ? new Date(t.timestamp_upisa).toLocaleString('sr-RS', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                              : '—'}
                           </td>
-                          <td style={{ padding: '10px 8px' }}>
+                          <td style={{ padding: '10px 8px', whiteSpace: 'nowrap' as const }}>
+                            <button onClick={() => openEdit(t)}
+                              style={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#374151', padding: '2px 8px', marginRight: 4 }}>✏️</button>
                             <button onClick={() => deleteTransakcija(t.id)}
                               style={{ fontSize: 11, border: '1px solid #fee2e2', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#dc2626', padding: '2px 8px' }}>✕</button>
                           </td>
@@ -586,6 +634,76 @@ export default function AdminFinansijePanelPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* EDIT MODAL */}
+      {editT && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>Uredi transakciju</div>
+              <button onClick={() => setEditT(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Datum</label>
+                  <input type="date" value={editForm.datum} onChange={e => setEditForm(f => ({ ...f, datum: e.target.value }))}
+                    style={{ ...inp, fontWeight: 500 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Iznos (€)</label>
+                  <input type="number" value={editForm.iznos} onChange={e => setEditForm(f => ({ ...f, iznos: e.target.value }))}
+                    style={{ ...inp, fontWeight: 700, color: parseFloat(editForm.iznos) >= 0 ? '#16a34a' : '#dc2626' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Kategorija</label>
+                <input value={editForm.kategorija} onChange={e => setEditForm(f => ({ ...f, kategorija: e.target.value }))} style={inp} />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Vozilo</label>
+                <input value={editForm.vozilo} onChange={e => setEditForm(f => ({ ...f, vozilo: e.target.value }))} style={inp} />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Komentar / Notes</label>
+                <textarea value={editForm.komentar} onChange={e => setEditForm(f => ({ ...f, komentar: e.target.value }))}
+                  style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Status</label>
+                <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} style={inp}>
+                  <option value="Zavrseno">Zavrseno</option>
+                  <option value="na cekanju">Na čekanju</option>
+                </select>
+              </div>
+              {/* Slike readonly */}
+              {(editT.slika1 || editT.slika2 || editT.slika3) && (
+                <div>
+                  <label style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' as const }}>Slike</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[editT.slika1, editT.slika2, editT.slika3].filter(Boolean).map((s, i) => (
+                      <a key={i} href={s!} target="_blank" rel="noreferrer"
+                        style={{ display: 'block', width: 80, height: 60, borderRadius: 6, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                        <img src={s!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button onClick={() => setEditT(null)}
+                  style={{ flex: 1, padding: '9px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+                  Odustani
+                </button>
+                <button onClick={saveEdit} disabled={editSaving}
+                  style={{ flex: 2, padding: '9px', background: editSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  {editSaving ? 'Snimanje...' : '💾 Sačuvaj'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
