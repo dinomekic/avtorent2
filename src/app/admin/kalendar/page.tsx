@@ -87,11 +87,7 @@ export default function AdminKalendarPage() {
 
   // Filteri
   const [filterMenjac, setFilterMenjac] = useState('ALL')
-  const [filterOd, setFilterOd] = useState('')
-  const [filterDo, setFilterDo] = useState('')
   const filterMenjacRef = useRef('ALL')
-  const filterOdRef = useRef('')
-  const filterDoRef = useRef('')
 
   // Učitaj FullCalendar + CSS
   useEffect(() => {
@@ -223,36 +219,15 @@ export default function AdminKalendarPage() {
 
   function getResources() {
     const q = searchQRef.current.toLowerCase()
-    const menjac = filterMenjacRef.current
-    const od = filterOdRef.current
-    const doo = filterDoRef.current
 
-    let vozila = vozilaRef.current
+    return vozilaRef.current
       .filter(v => v.lokacija === currentLokRef.current && (v.fleet_status || '').toLowerCase() === 'available')
       .filter(v => !q || (v.agregirani_2 || '').toLowerCase().includes(q) || (v.license_plate || '').toLowerCase().includes(q))
-
-    if (menjac !== 'ALL') {
-      vozila = vozila.filter(v => {
-        const m = ((v as any).mjenjac || '').toUpperCase()
-        return menjac === 'AUTOMATIC' ? m.includes('AUTO') : m.includes('MAN') || m.includes('RUC')
-      })
-    }
-
-    // Filter slobodnih vozila u periodu
-    if (od && doo) {
-      const zauzete = new Set(
-        rezervacijeRef.current
-          .filter(r => r.daily_status !== 'Nije izdato' && r.od_datuma <= doo && r.do_datuma >= od)
-          .map(r => r.br_tablica)
-      )
-      vozila = vozila.filter(v => !zauzete.has(v.license_plate || ''))
-    }
-
-    return vozila.map(v => ({
-      id: v.license_plate || '',
-      building: (v.marka || 'Ostalo').toUpperCase(),
-      title: v.agregirani_2 || v.license_plate || '',
-    }))
+      .map(v => ({
+        id: v.license_plate || '',
+        building: (v.marka || 'Ostalo').toUpperCase(),
+        title: v.agregirani_2 || v.license_plate || '',
+      }))
   }
 
   function getEvents() {
@@ -447,13 +422,6 @@ export default function AdminKalendarPage() {
     setShowLogovi(true)
   }
 
-  function resetFilteri() {
-    setFilterMenjac('ALL'); filterMenjacRef.current = 'ALL'
-    setFilterOd(''); filterOdRef.current = ''
-    setFilterDo(''); filterDoRef.current = ''
-    if (calInstanceRef.current) calInstanceRef.current.setOption('resources', getResources())
-  }
-
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok && (v.fleet_status || '').toLowerCase() === 'available')
 
   return (
@@ -478,22 +446,7 @@ export default function AdminKalendarPage() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži vozilo..."
-            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 150, outline: 'none' }} />
-          {/* Filter mjenjač */}
-          {(['ALL','AUTOMATIC','MANUAL'] as const).map(m => (
-            <button key={m} onClick={() => { setFilterMenjac(m); filterMenjacRef.current = m; calInstanceRef.current?.setOption('resources', getResources()) }}
-              style={{ padding: '6px 10px', fontSize: 11, border: `1px solid ${filterMenjac === m ? '#185FA5' : '#e5e7eb'}`, borderRadius: 8, background: filterMenjac === m ? '#E6F1FB' : '#fff', color: filterMenjac === m ? '#0C447C' : '#6b7280', cursor: 'pointer', fontWeight: filterMenjac === m ? 700 : 400 }}>
-              {m === 'ALL' ? 'Svi' : m === 'AUTOMATIC' ? 'Auto' : 'Manual'}
-            </button>
-          ))}
-          {/* Filter slobodnih */}
-          <input type="date" value={filterOd} onChange={e => { setFilterOd(e.target.value); filterOdRef.current = e.target.value; calInstanceRef.current?.setOption('resources', getResources()) }}
-            style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 11, color: '#374151', width: 130 }} placeholder="Od" />
-          <input type="date" value={filterDo} onChange={e => { setFilterDo(e.target.value); filterDoRef.current = e.target.value; calInstanceRef.current?.setOption('resources', getResources()) }}
-            style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 11, color: '#374151', width: 130 }} placeholder="Do" />
-          {(filterOd || filterDo || filterMenjac !== 'ALL') && (
-            <button onClick={resetFilteri} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>✕ Reset</button>
-          )}
+            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 170, outline: 'none' }} />
           <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
             style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Nova rezervacija
