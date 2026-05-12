@@ -41,25 +41,6 @@ function genId(): string {
   return Date.now().toString() + Math.random().toString(36).slice(2, 6)
 }
 
-const KATEGORIJE_PRILIV = [
-  'Izdavanje vozila', 'Naplata Duga', 'Depozit', 'Bonus', 'MOJ bonus',
-  'MOJA dnevnica', 'Renta', 'Uplata duga prema FIRMI', 'Neutralni novcani tokovi',
-  'PREUZETO IZ SANDUCETA', 'Prodaja vozila', 'Razmjena novca',
-  'Razmjena novca medju nama', 'Refundacija (u komentaru dodaj razlog)', 'Ostalo',
-]
-const KATEGORIJE_ODLIV = [
-  'Gorivo (dodaj sliku racuna)', 'Gorivo', 'Djelovi (dodaj sliku racuna)', 'Djelovi',
-  'Servisiranje vozila', 'Servis', 'Registracija vozila (dodaj sliku racuna)',
-  'Pranje', 'Pranje Planet', 'Parking (dodaj sliku racuna)', 'Parking',
-  'Kazne i prekrsaji', 'Doplata za kazne (dodaj sliku kazne)', 'Doplata za oštetu',
-  'Doplata za gorivo', 'Doplata za pranje', 'Povrat Depozita',
-  'Provizije posrednicima', 'Putni troškovi', 'Taksi', 'Kirija',
-  'Komunalije', 'Telekomunikacije', 'Kancelarijski materijal', 'Plata', 'MOJA plata',
-  'Slepanje vozila', 'Uplata duga za službeno vozilo', 'Rata za vozilo (dodaj sliku potvrde)',
-  'Marketing i oglasavanje', 'Osiguranje', 'Transfer', 'OSTAVLJENO U SANDUCE',
-  'Neutralni novcani tok', 'DUG PREMA FIRMI ( u komentaru upisi iznos preostalog duga)',
-  'Pozajmica (u komenatru upisi preostali dug)', 'Ostalo',
-]
 const FOTO_KAT = [
   'Gorivo (dodaj sliku racuna)', 'Gorivo', 'Djelovi (dodaj sliku racuna)',
   'Registracija vozila (dodaj sliku racuna)', 'Rata za vozilo (dodaj sliku potvrde)',
@@ -81,6 +62,26 @@ export default function FinansijePage() {
   const [saldo, setSaldo] = useState(0)
   const [firmaDug, setFirmaDug] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
+
+  const [katPriliv, setKatPriliv] = useState<string[]>([
+    'Izdavanje vozila', 'Naplata Duga', 'Depozit', 'Bonus', 'MOJ bonus',
+    'MOJA dnevnica', 'Renta', 'Uplata duga prema FIRMI', 'Neutralni novcani tokovi',
+    'PREUZETO IZ SANDUCETA', 'Prodaja vozila', 'Razmjena novca',
+    'Razmjena novca medju nama', 'Refundacija (u komentaru dodaj razlog)', 'Ostalo',
+  ])
+  const [katOdliv, setKatOdliv] = useState<string[]>([
+    'Gorivo (dodaj sliku racuna)', 'Gorivo', 'Djelovi (dodaj sliku racuna)', 'Djelovi',
+    'Servisiranje vozila', 'Servis', 'Registracija vozila (dodaj sliku racuna)',
+    'Pranje', 'Pranje Planet', 'Parking (dodaj sliku racuna)', 'Parking',
+    'Kazne i prekrsaji', 'Doplata za kazne (dodaj sliku kazne)', 'Doplata za oštetu',
+    'Doplata za gorivo', 'Doplata za pranje', 'Povrat Depozita',
+    'Provizije posrednicima', 'Putni troškovi', 'Taksi', 'Kirija',
+    'Komunalije', 'Telekomunikacije', 'Kancelarijski materijal', 'Plata', 'MOJA plata',
+    'Slepanje vozila', 'Uplata duga za službeno vozilo', 'Rata za vozilo (dodaj sliku potvrde)',
+    'Marketing i oglasavanje', 'Osiguranje', 'Transfer', 'OSTAVLJENO U SANDUCE',
+    'Neutralni novcani tok', 'DUG PREMA FIRMI ( u komentaru upisi iznos preostalog duga)',
+    'Pozajmica (u komenatru upisi preostali dug)', 'Ostalo',
+  ])
 
   const [tip, setTip] = useState<'priliv' | 'odliv'>('priliv')
   const [datum, setDatum] = useState(new Date().toISOString().split('T')[0])
@@ -118,6 +119,12 @@ export default function FinansijePage() {
       setAgentEmail(session.user.email)
       loadAll(session.user.email, ime)
     })
+    // Učitaj kategorije iz baze
+    supabase.from('konfiguracija').select('*').eq('id', 'kategorije_transakcija').single()
+      .then(({ data }) => {
+        if (data?.priliv?.length) setKatPriliv(data.priliv)
+        if (data?.odliv?.length) setKatOdliv(data.odliv)
+      })
   }, [])
 
   const loadAll = useCallback(async (email: string, ime: string) => {
@@ -318,10 +325,13 @@ export default function FinansijePage() {
 
   async function startPrivate() {
     if (!privVozilo || !kmStart) { alert('Unesite vozilo i KM!'); return }
+    // Nađi agregirani_2 naziv vozila
+    const vozilo = vozila.find(v => v.license_plate === privVozilo || (v.agregirani_2 || '').toLowerCase().includes(privVozilo.toLowerCase()))
+    const tablice = vozilo?.agregirani_2 || privVozilo.toUpperCase()
     setVozSaving(true)
     await supabase.from('koristenje').insert([{
       id: genId(), email: agentEmail, ime_prezime: agentIme,
-      tablice: privVozilo.toUpperCase(), km_start: parseFloat(kmStart),
+      tablice: tablice, km_start: parseFloat(kmStart),
       destinacija: privDest, status: 'Aktivno',
       vreme_zaduzenja: new Date().toLocaleString('sr-RS'),
       timestamp_upisa: new Date().toISOString(),
@@ -345,7 +355,7 @@ export default function FinansijePage() {
 
   const needsFoto = FOTO_KAT.includes(kategorija)
   const isRazmjena = kategorija.toLowerCase().includes('razmjena')
-  const katOptions = tip === 'priliv' ? KATEGORIJE_PRILIV : KATEGORIJE_ODLIV
+  const katOptions = tip === 'priliv' ? katPriliv : katOdliv
   const filteredTrans = prikazTrans.filter(t => {
     const matchTip = filterTip === 'sve' || t.tip_transakcije === filterTip
     const matchSearch = !filterSearch || (t.kategorija || '').toLowerCase().includes(filterSearch.toLowerCase()) || (t.vozilo || '').toLowerCase().includes(filterSearch.toLowerCase())
@@ -520,7 +530,7 @@ export default function FinansijePage() {
               <button onClick={() => finishPrivate(aktivnoKor.id, aktivnoKor.km_start)} style={{ width: '100%', padding: '11px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>RAZDUŽI VOZILO</button>
             </>) : (<>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 16 }}>Zaduži vozilo</div>
-              <div style={{ marginBottom: 10 }}><label style={lbl}>Vozilo</label><input list="voz-priv" value={privVozilo} onChange={e => setPrivVozilo(e.target.value)} placeholder="Pretraži po tablicama..." style={inp} /><datalist id="voz-priv">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2} ({v.license_plate})</option>)}</datalist></div>
+              <div style={{ marginBottom: 10 }}><label style={lbl}>Vozilo</label><input list="voz-priv" value={privVozilo} onChange={e => setPrivVozilo(e.target.value)} placeholder="Pretraži po tablicama ili nazivu..." style={inp} /><datalist id="voz-priv">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>)}</datalist></div>
               <div style={{ marginBottom: 10 }}><label style={lbl}>Početna KM</label><input type="number" value={kmStart} onChange={e => setKmStart(e.target.value)} placeholder="Npr. 45230" style={inp} /></div>
               <div style={{ marginBottom: 14 }}><label style={lbl}>Destinacija</label><input value={privDest} onChange={e => setPrivDest(e.target.value)} placeholder="Npr. Aerodrom" style={inp} /></div>
               <button onClick={startPrivate} disabled={vozSaving} style={{ width: '100%', padding: '11px', background: vozSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{vozSaving ? '⏳...' : 'ZADUŽI VOZILO'}</button>
