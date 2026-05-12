@@ -42,7 +42,7 @@ export type VoziloOption = {
   model: string | null
   agregirani_2: string | null
   fleet_status: string | null
-  mjenjac: string | null
+  mjenjac?: string | null
   lokacija: string
 }
 
