@@ -237,7 +237,6 @@ export default function FinansijePage() {
       timestamp_upisa: new Date().toISOString(),
       status: jeRazmjena ? 'na cekanju' : 'Zavrseno',
       primaocemail: jeRazmjena ? primaoc : null,
-      provereno: false, provera_status: 'pending', v_status: 'pending',
     }])
     
     console.log('INSERT data:', data, 'error:', error)
@@ -276,7 +275,6 @@ export default function FinansijePage() {
       kategorija: kat, iznos: tip_t === 'odliv' ? -Math.abs(iznT) : Math.abs(iznT),
       vozilo: voz, komentar: kom, osoba: agentIme, osobaemail: agentEmail,
       timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-      provereno: false, provera_status: 'pending', v_status: 'pending',
     }])
   }
 
@@ -297,8 +295,8 @@ export default function FinansijePage() {
     if (!confirm(`Zaduži NAJAM (${najam}€) i DEPOZIT (${dep}€)?`)) return
     const p = Math.max(0, (u.ukupno_naplata || 0) - (u.naplaceno || 0))
     await supabase.from('transakcije').insert([
-      { id: genId() + '1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: najam, vozilo: u.br_tablica, komentar: `Početna naplata pri izdavanju (Ugovor REZ #${u.id}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno', provereno: false, provera_status: 'pending', v_status: 'pending' },
-      { id: genId() + '2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: dep, vozilo: u.br_tablica, komentar: `Uzet depozit pri izdavanju (Ugovor REZ #${u.id})`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno', provereno: false, provera_status: 'pending', v_status: 'pending' },
+      { id: genId() + '1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: najam, vozilo: u.br_tablica, komentar: `Početna naplata pri izdavanju (Ugovor REZ #${u.id}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
+      { id: genId() + '2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: dep, vozilo: u.br_tablica, komentar: `Uzet depozit pri izdavanju (Ugovor REZ #${u.id})`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
     ])
     alert('Sve zaduženo!'); loadAll(agentEmail, agentIme); loadUgovori()
   }
