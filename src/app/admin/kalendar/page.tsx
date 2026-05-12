@@ -91,7 +91,7 @@ export default function AdminKalendarPage() {
         .fc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; }
         .fc .fc-license-message { display: none !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: #e5e7eb !important; }
-        .fc .fc-scrollgrid { border-color: #e5e7eb !important; border-radius: 0; }
+        .fc .fc-scrollgrid { border-color: #e5e7eb !important; }
         
         /* Header toolbar */
         .fc .fc-toolbar { padding: 8px 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; margin: 0 !important; }
@@ -103,46 +103,57 @@ export default function AdminKalendarPage() {
 
         /* Column headers (days) */
         .fc .fc-col-header-cell { background: #f9fafb; }
-        .fc .fc-col-header-cell-cushion { color: #6b7280 !important; font-weight: 600 !important; font-size: 10px !important; text-decoration: none !important; padding: 4px 2px !important; }
-        .fc .fc-day-today .fc-col-header-cell-cushion { color: #1D9E75 !important; font-weight: 800 !important; font-size: 12px !important; }
+        .fc .fc-col-header-cell-cushion { color: #6b7280 !important; font-weight: 600 !important; font-size: 10px !important; text-decoration: none !important; padding: 3px 2px !important; }
+        .fc .fc-day-today .fc-col-header-cell-cushion { color: #1D9E75 !important; font-weight: 800 !important; }
         .fc .fc-day-today { background-color: rgba(29,158,117,0.06) !important; }
 
-        /* Resource (vehicle) column */
-        .fc .fc-datagrid-cell-cushion { padding: 4px 8px !important; font-size: 11px !important; font-weight: 600 !important; color: #111 !important; }
+        /* Resource column — fiksna širina */
+        .fc .fc-datagrid-cell { width: 180px !important; min-width: 180px !important; max-width: 180px !important; }
+        .fc .fc-datagrid-header { width: 180px !important; min-width: 180px !important; }
+        .fc .fc-datagrid-cell-cushion { 
+          padding: 3px 8px !important; font-size: 11px !important; font-weight: 600 !important; 
+          color: #111 !important; white-space: nowrap !important; overflow: hidden !important;
+          text-overflow: ellipsis !important; max-width: 164px !important; display: block !important;
+        }
+        
+        /* Resource group row */
+        .fc .fc-resource-group .fc-datagrid-cell { background: #1a1f2e !important; }
         .fc .fc-resource-group .fc-datagrid-cell-cushion { 
-          background: #1a1f2e !important; color: #fff !important; font-weight: 900 !important;
+          background: #1a1f2e !important; color: #e2e8f0 !important; font-weight: 900 !important;
           font-size: 10px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important;
-          padding: 5px 10px !important;
         }
         .fc .fc-resource-group td { background: #1a1f2e !important; border-color: #2d3748 !important; }
+        .fc .fc-resource-group .fc-timeline-lane { background: #1a1f2e !important; }
         
-        /* Row heights */
-        .fc .fc-datagrid-cell-frame { min-height: 32px !important; height: 32px !important; }
-        .fc .fc-timeline-lane { min-height: 32px !important; }
-        .fc .fc-timeline-lane-frame { min-height: 32px !important; }
+        /* ROW HEIGHT — kritično za poravnanje */
+        .fc .fc-datagrid-body tr, .fc .fc-timeline-body tr { height: 32px !important; }
+        .fc .fc-datagrid-cell-frame { height: 32px !important; min-height: 32px !important; max-height: 32px !important; display: flex !important; align-items: center !important; }
+        .fc .fc-timeline-lane-frame { height: 32px !important; min-height: 32px !important; }
+        .fc .fc-timeline-lane { height: 32px !important; min-height: 32px !important; max-height: 32px !important; }
 
         /* Events */
-        .fc .fc-event { border-radius: 4px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 1px 4px !important; cursor: pointer !important; }
-        .fc .fc-event:hover { opacity: 0.85; }
+        .fc .fc-event { border-radius: 3px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 1px 4px !important; cursor: pointer !important; margin: 1px 0 !important; }
+        .fc .fc-event:hover { filter: brightness(0.9); }
         .ev-cekanje { background-color: #f97316 !important; color: #fff !important; }
         .ev-izdato { background-color: #1D9E75 !important; color: #fff !important; }
         .ev-nije-izdato { background-color: #dc2626 !important; color: #fff !important; }
         
         /* Timeline slot */
-        .fc .fc-timeline-slot { border-right: 1px solid #f3f4f6 !important; }
-        .fc .fc-timeline-slot:nth-child(even) td { background: rgba(0,0,0,0.01); }
+        .fc .fc-timeline-slot-frame { height: 32px !important; }
+        .fc .fc-timeline-slot { min-width: 28px !important; }
 
         /* Scrollbar */
-        .fc .fc-scroller::-webkit-scrollbar { height: 6px; width: 6px; }
-        .fc .fc-scroller::-webkit-scrollbar-track { background: #f1f1f1; }
+        .fc .fc-scroller::-webkit-scrollbar { height: 5px; width: 5px; }
+        .fc .fc-scroller::-webkit-scrollbar-track { background: #f9fafb; }
         .fc .fc-scroller::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
         
-        /* Selection highlight */
-        .fc .fc-highlight { background: rgba(29,158,117,0.15) !important; }
-
-        /* Now indicator */
+        /* Selection + now */
+        .fc .fc-highlight { background: rgba(29,158,117,0.12) !important; }
         .fc .fc-now-indicator-line { border-color: #1D9E75 !important; border-width: 2px !important; }
         .fc .fc-now-indicator-arrow { border-top-color: #1D9E75 !important; }
+        
+        /* Sync scroll — ovo je ključno za poravnanje */
+        .fc .fc-datagrid-body { overflow: hidden !important; }
       `
       document.head.appendChild(s)
     }
@@ -233,6 +244,9 @@ export default function AdminKalendarPage() {
       editable: true,
       selectable: true,
       nowIndicator: true,
+      lazyFetching: true,
+      eventMinWidth: 3,
+      resourceAreaWidth: '180px',
       resourceGroupField: 'building',
       locale: 'sr-Latn',
       headerToolbar: { left: 'prev,next today', center: 'title', right: 'resourceTimelineMonth,resourceTimelineWeek' },
@@ -241,10 +255,6 @@ export default function AdminKalendarPage() {
       height: 'calc(100vh - 210px)',
       resources: getResources(),
       events: getEvents(),
-
-      resourceLabelContent: (arg: any) => {
-        return { html: `<div style="font-size:11px; font-weight:600; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" title="${arg.resource.title}">${arg.resource.title}</div>` }
-      },
 
       slotLabelContent: (arg: any) => {
         const text = arg.text.trim()
