@@ -8,117 +8,137 @@ export async function GET(req: NextRequest) {
   )
 
   const { searchParams } = new URL(req.url)
-  const vehicleClass = searchParams.get('category') // sajt šalje 'category', mi mapiramo na vehicle_class
+  const vehicleClass = searchParams.get('category')
   const pickupDate = searchParams.get('pickupDate')
   const returnDate = searchParams.get('returnDate')
-  const locationId = searchParams.get('locationId') // lokacija iz sajta (ne koristimo za vozila_fleet direktno)
+  const targetDate = pickupDate || new Date().toISOString().split('T')[0]
 
-  // Učitaj sva aktivna vozila iz vehicles tabele (za sajt)
-  let query = supabase
-    .from('vehicles')
-    .select('*')
-    .eq('is_available', true)
-    .order('price_per_day')
+  // 1. Učitaj sve potrebne podatke paralelno
+  const [
+    { data: fleetData },
+    { data: categories },
+    { data: seasons },
+    { data: dynamics },
+    { data: zauzeteRez },
+  ] = await Promise.all([
+    supabase
+      .from('vozila_fleet')
+      .select('id, license_plate, marka, model, year, transmission, fuel_type, seats, image_url, vehicle_class, features, price_per_day, fleet_status, lokacija, show_on_site, price_category_id, agregirani_2')
+      .eq('fleet_status', 'available')
+      .eq('show_on_site', true)
+      .order('marka'),
+    supabase.from('price_categories').select('*').eq('is_active', true),
+    supabase.from('seasonal_pricing').select('*').eq('is_active', true).lte('date_from', targetDate).gte('date_to', targetDate),
+    supabase.from('dynamic_pricing').select('*').eq('is_active', true).order('occupancy_threshold', { ascending: false }),
+    // Zauzeta vozila u periodu
+    pickupDate && returnDate
+      ? supabase.from('rezervacije').select('br_tablica').neq('daily_status', 'Nije izdato').lte('od_datuma', returnDate).gt('do_datuma', pickupDate)
+      : Promise.resolve({ data: [] }),
+  ])
 
-  // Filter po klasi vozila
-  if (vehicleClass && vehicleClass !== 'all') {
-    query = query.eq('category', vehicleClass)
-  }
+  const fleet = fleetData || []
+  if (fleet.length === 0) return NextResponse.json([])
 
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: 'Greška' }, { status: 500 })
+  // 2. Zauzetost za dinamičke cijene
+  const { data: zauzeteDanas } = await supabase
+    .from('rezervacije')
+    .select('br_tablica')
+    .neq('daily_status', 'Nije izdato')
+    .lte('od_datuma', targetDate)
+    .gt('do_datuma', targetDate)
 
-  let vehicles = data || []
+  const totalAvailable = fleet.length
+  const zauzeteDanasSet = new Set((zauzeteDanas || []).map((r: any) => r.br_tablica))
+  const zauzeteDanasCount = fleet.filter((v: any) => zauzeteDanasSet.has(v.license_plate)).length
+  const occupancyRate = totalAvailable > 0 ? (zauzeteDanasCount / totalAvailable) * 100 : 0
 
-  // Filtriraj vozila koja nemaju slobodnih u floti (po model_group i datumu)
-  if (pickupDate && returnDate && vehicles.length > 0) {
-    // Pronađi zauzete tablice u periodu
-    const { data: zauzete } = await supabase
-      .from('rezervacije')
-      .select('br_tablica')
-      .neq('daily_status', 'Nije izdato')
-      .lte('od_datuma', returnDate)
-      .gt('do_datuma', pickupDate)
+  // 3. Računaj množitelje
+  const activeSeason = (seasons || [])[0] || null
+  const seasonMultiplier = activeSeason?.multiplier || 1
 
-    const zauzeteTablice = new Set((zauzete || []).map((r: any) => r.br_tablica))
+  const activeDynamics = (dynamics || []).filter((d: any) => d.is_active && occupancyRate >= d.occupancy_threshold)
+  const dynamicMultiplier = activeDynamics.length > 0 ? 1 + activeDynamics[0].price_increase_percent / 100 : 1
 
-    // Za svaki vehicle provjeri da li ima slobodnih u floti
-    const modelGroups = vehicles.map((v: any) => v.model_group).filter(Boolean)
-    if (modelGroups.length > 0) {
-      const { data: fleetVozila } = await supabase
-        .from('vozila_fleet')
-        .select('license_plate, model_group, fleet_status')
-        .in('model_group', modelGroups)
-        .eq('fleet_status', 'available')
+  // 4. Zauzeta vozila u traženom periodu
+  const zauzetePeriodSet = new Set(((zauzeteRez as any)?.data || []).map((r: any) => r.br_tablica))
 
-      // Grupiši po model_group i izbaci zauzeta
-      const slobodnaPoGrupi: Record<string, number> = {}
-      for (const fv of (fleetVozila || [])) {
-        if (!fv.model_group) continue
-        if (zauzeteTablice.has(fv.license_plate)) continue
-        slobodnaPoGrupi[fv.model_group] = (slobodnaPoGrupi[fv.model_group] || 0) + 1
-      }
+  // 5. Grupiši po marka+model+year
+  const groupMap = new Map<string, any>()
 
-      // Prikaži samo vozila koja imaju slobodnih u floti
-      vehicles = vehicles.filter((v: any) => {
-        if (!v.model_group) return v.is_available // bez grupe — prikaži ako je is_available
-        return (slobodnaPoGrupi[v.model_group] || 0) > 0
+  for (const v of fleet) {
+    // Preskoči zauzeta u periodu
+    if (pickupDate && returnDate && zauzetePeriodSet.has(v.license_plate)) continue
+
+    const key = `${v.marka}__${v.model}__${v.year}`
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        _vehicles: [],
+        marka: v.marka,
+        model: v.model,
+        year: v.year,
+        transmission: v.transmission,
+        fuel_type: v.fuel_type,
+        seats: v.seats,
+        image_url: v.image_url,
+        vehicle_class: v.vehicle_class,
+        features: v.features || [],
+        price_per_day: v.price_per_day || 0,
+        price_category_id: v.price_category_id,
+        lokacija: v.lokacija,
       })
     }
+
+    const g = groupMap.get(key)!
+    g._vehicles.push(v)
+    // Uzmi sliku, klasu, features od prvog koji ih ima
+    if (!g.image_url && v.image_url) g.image_url = v.image_url
+    if (!g.vehicle_class && v.vehicle_class) g.vehicle_class = v.vehicle_class
+    if ((!g.features || !g.features.length) && v.features?.length) g.features = v.features
+    if (!g.seats && v.seats) g.seats = v.seats
   }
 
-  // Primijeni sezonsko i dinamičko određivanje cijena
-  const targetDate = pickupDate || new Date().toISOString().split('T')[0]
-  const priced = await applyPricing(supabase, vehicles, targetDate)
-
-  return NextResponse.json(priced)
-}
-
-async function applyPricing(supabase: any, vehicles: any[], date: string) {
-  const { data: seasons } = await supabase
-    .from('seasonal_pricing')
-    .select('*')
-    .eq('is_active', true)
-    .lte('date_from', date)
-    .gte('date_to', date)
-
-  const { data: dynamics } = await supabase
-    .from('dynamic_pricing')
-    .select('*')
-    .eq('is_active', true)
-    .order('occupancy_threshold', { ascending: false })
-
-  let dynamicMultiplier = 1
-
-  if (dynamics && dynamics.length > 0) {
-    // Računaj zauzetost iz vozila_fleet + rezervacije
-    const { data: zauzete } = await supabase
-      .from('rezervacije')
-      .select('br_tablica')
-      .neq('daily_status', 'Nije izdato')
-      .lte('od_datuma', date)
-      .gt('do_datuma', date)
-
-    const { data: totalVozila } = await supabase
-      .from('vehicles')
-      .select('id')
-      .eq('is_available', true)
-
-    const bookedCount = new Set((zauzete || []).map((r: any) => r.br_tablica)).size
-    const totalCount = (totalVozila || []).length
-    const occupancyRate = totalCount > 0 ? (bookedCount / totalCount) * 100 : 0
-
-    const applicable = (dynamics || []).filter((d: any) => occupancyRate >= d.occupancy_threshold)
-    if (applicable.length > 0) dynamicMultiplier = 1 + (applicable[0].price_increase_percent / 100)
+  // 6. Filter po klasi
+  let groups = Array.from(groupMap.entries())
+  if (vehicleClass && vehicleClass !== 'all') {
+    groups = groups.filter(([, g]) => g.vehicle_class === vehicleClass)
   }
 
-  const activeSeason = seasons && seasons.length > 0 ? seasons[0] : null
-  const seasonMultiplier = activeSeason ? activeSeason.multiplier : 1
+  // 7. Mapuj u format za sajt sa finalnom cijenom
+  const result = groups.map(([key, g]) => {
+    const cat = (categories || []).find((c: any) => c.id === g.price_category_id)
+    const catMultiplier = cat?.base_multiplier || 1
+    const basePrice = g.price_per_day
+    const finalPrice = Math.round(basePrice * catMultiplier * seasonMultiplier * dynamicMultiplier)
 
-  return vehicles.map((v: any) => ({
-    ...v,
-    original_price: v.price_per_day,
-    price_per_day: Math.round(v.price_per_day * seasonMultiplier * dynamicMultiplier),
-    season_name: activeSeason?.name || null,
-  }))
+    // Čist naziv za prikaz: "Audi A4 TDI 2008" bez tablica i sl.
+    const transmission = g.transmission === 'automatic' ? 'Automatik' : g.transmission === 'manual' ? 'Manual' : ''
+    const fuel = g.fuel_type === 'diesel' ? 'TDI' : g.fuel_type === 'petrol' ? 'TSI' : g.fuel_type === 'electric' ? 'EV' : ''
+    const cleanName = `${g.marka} ${g.model} ${g.year || ''}`.trim()
+
+    return {
+      id: key, // key kao ID za sajt (marka__model__year)
+      name: cleanName,
+      category: g.vehicle_class || 'Hatchback',
+      price_per_day: finalPrice,
+      original_price: basePrice,
+      seats: g.seats || 5,
+      transmission: g.transmission || 'manual',
+      fuel_type: g.fuel_type || 'diesel',
+      features: g.features || [],
+      year: g.year,
+      image_url: g.image_url,
+      season_name: activeSeason?.name || null,
+      category_name: cat?.name || null,
+      slobodnih: g._vehicles.length,
+      lokacija: g.lokacija,
+      // Za kompatibilnost sa sajtom
+      vehicle_locations: [],
+    }
+  })
+
+  // Sortiraj po cijeni
+  result.sort((a, b) => a.price_per_day - b.price_per_day)
+
+  return NextResponse.json(result)
 }
