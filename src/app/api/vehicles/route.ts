@@ -13,17 +13,16 @@ export async function GET(req: NextRequest) {
   const returnDate = searchParams.get('returnDate')
   const locationId = searchParams.get('locationId') // lokacija iz sajta (ne koristimo za vozila_fleet direktno)
 
-  // Učitaj sva aktivna vozila iz vozila_fleet
+  // Učitaj sva aktivna vozila iz vehicles tabele (za sajt)
   let query = supabase
-    .from('vozila_fleet')
+    .from('vehicles')
     .select('*')
-    .eq('fleet_status', 'available')
     .eq('is_available', true)
-    .order('marka')
+    .order('price_per_day')
 
   // Filter po klasi vozila
   if (vehicleClass && vehicleClass !== 'all') {
-    query = query.eq('vehicle_class', vehicleClass)
+    query = query.eq('category', vehicleClass)
   }
 
   const { data, error } = await query
@@ -31,8 +30,9 @@ export async function GET(req: NextRequest) {
 
   let vehicles = data || []
 
-  // Filtriraj zauzeta vozila koristeći rezervacije tabelu (stara baza)
+  // Filtriraj vozila koja nemaju slobodnih u floti (po model_group i datumu)
   if (pickupDate && returnDate && vehicles.length > 0) {
+    // Pronađi zauzete tablice u periodu
     const { data: zauzete } = await supabase
       .from('rezervacije')
       .select('br_tablica')
@@ -41,36 +41,35 @@ export async function GET(req: NextRequest) {
       .gt('do_datuma', pickupDate)
 
     const zauzeteTablice = new Set((zauzete || []).map((r: any) => r.br_tablica))
-    vehicles = vehicles.filter((v: any) => !zauzeteTablice.has(v.license_plate))
-  }
 
-  // Mapuj vozila_fleet strukturu na format koji sajt očekuje
-  const mapped = vehicles.map((v: any) => ({
-    id: String(v.id),
-    name: v.agregirani_2 || `${v.marka} ${v.model}`,
-    category: v.vehicle_class || 'Hatchback',
-    price_per_day: v.price_per_day || 0,
-    seats: v.seats || 5,
-    transmission: v.transmission === 'automatic' ? 'automatic' : 'manual',
-    fuel_type: v.fuel_type || 'diesel',
-    features: v.features || [],
-    year: v.year || null,
-    image_url: v.image_url || null,
-    license_plate: v.license_plate || null,
-    color: v.color || null,
-    lokacija: v.lokacija || 'CRNA GORA',
-    marka: v.marka || null,
-    model: v.model || null,
-    power_kw: v.power_kw || null,
-    engine_cc: v.engine_cc || null,
-    is_available: true,
-    // Kompatibilnost sa starim vehicle_locations sistemom
-    vehicle_locations: [],
-  }))
+    // Za svaki vehicle provjeri da li ima slobodnih u floti
+    const modelGroups = vehicles.map((v: any) => v.model_group).filter(Boolean)
+    if (modelGroups.length > 0) {
+      const { data: fleetVozila } = await supabase
+        .from('vozila_fleet')
+        .select('license_plate, model_group, fleet_status')
+        .in('model_group', modelGroups)
+        .eq('fleet_status', 'available')
+
+      // Grupiši po model_group i izbaci zauzeta
+      const slobodnaPoGrupi: Record<string, number> = {}
+      for (const fv of (fleetVozila || [])) {
+        if (!fv.model_group) continue
+        if (zauzeteTablice.has(fv.license_plate)) continue
+        slobodnaPoGrupi[fv.model_group] = (slobodnaPoGrupi[fv.model_group] || 0) + 1
+      }
+
+      // Prikaži samo vozila koja imaju slobodnih u floti
+      vehicles = vehicles.filter((v: any) => {
+        if (!v.model_group) return v.is_available // bez grupe — prikaži ako je is_available
+        return (slobodnaPoGrupi[v.model_group] || 0) > 0
+      })
+    }
+  }
 
   // Primijeni sezonsko i dinamičko određivanje cijena
   const targetDate = pickupDate || new Date().toISOString().split('T')[0]
-  const priced = await applyPricing(supabase, mapped, targetDate)
+  const priced = await applyPricing(supabase, vehicles, targetDate)
 
   return NextResponse.json(priced)
 }
@@ -101,9 +100,8 @@ async function applyPricing(supabase: any, vehicles: any[], date: string) {
       .gt('do_datuma', date)
 
     const { data: totalVozila } = await supabase
-      .from('vozila_fleet')
+      .from('vehicles')
       .select('id')
-      .eq('fleet_status', 'available')
       .eq('is_available', true)
 
     const bookedCount = new Set((zauzete || []).map((r: any) => r.br_tablica)).size
