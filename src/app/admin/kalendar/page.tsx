@@ -185,7 +185,7 @@ export default function AdminKalendarPage() {
 
   function updateStats(v: any[], r: any[]) {
     const lok = currentLokRef.current
-    const vLok = v.filter((x: any) => x.lokacija === lok)
+    const vLok = v.filter((x: any) => x.lokacija === lok && (x.fleet_status || '').toUpperCase() === 'ZA IZDAVANJE')
     const tablice = new Set(vLok.map((x: any) => x.license_plate))
     const zauzeto = new Set(r.filter((x: any) =>
       x.daily_status !== 'Nije izdato' && x.od_datuma <= today && x.do_datuma > today && tablice.has(x.br_tablica)
@@ -212,7 +212,7 @@ export default function AdminKalendarPage() {
   function getResources() {
     const q = searchQRef.current.toLowerCase()
     return vozilaRef.current
-      .filter(v => v.lokacija === currentLokRef.current)
+      .filter(v => v.lokacija === currentLokRef.current && (v.fleet_status || '').toUpperCase() === 'ZA IZDAVANJE')
       .filter(v => !q || (v.agregirani_2 || '').toLowerCase().includes(q) || (v.license_plate || '').toLowerCase().includes(q))
       .map(v => ({
         id: v.license_plate || '',
@@ -390,7 +390,7 @@ export default function AdminKalendarPage() {
     loadAll()
   }
 
-  const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
+  const vozilaLok = vozila.filter(v => v.lokacija === currentLok && (v.fleet_status || '').toUpperCase() === 'ZA IZDAVANJE')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
