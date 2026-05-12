@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyunN3qJRFk-bydMWkEImsYoXdw-n-e7nln3aerDLGtc5gxXUmwkBPgCFMNzS7qBitpjg/exec'
+const GOOGLE_SCRIPT_URL = '/api/upload'
 const FOLDER_ID = '1gFiCAgolZu9fAn5d-Ngmsx9qp3hWdIkN'
 
 type Tab = 'transakcije' | 'ugovori' | 'vozilo' | 'spisak' | 'potvrde'
