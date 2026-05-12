@@ -415,7 +415,6 @@ export default function AdminFinansijePanelPage() {
                       const isX = t.xstrik === 'x'
                       const aIme = getName(t.osobaemail)
                       const pIme = t.primaocemail ? getName(t.primaocemail) : null
-                      const slike = [t.slika1, t.slika2, t.slika3].filter(Boolean) as string[]
                       return (
                         <tr key={t.id} style={{ borderBottom: '1px solid #f9fafb', background: isOk ? '#f0fdf8' : isX ? '#fff5f5' : '#fff' }}>
                           <td style={{ padding: '10px 12px', textAlign: 'center', cursor: 'pointer', fontSize: 15 }}
@@ -443,19 +442,47 @@ export default function AdminFinansijePanelPage() {
                             {pIme && <div style={{ fontSize: 10, color: '#9ca3af' }}>→ {pIme}</div>}
                           </td>
                           <td style={{ padding: '10px 12px', color: '#6b7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, fontSize: 11 }}>
-                            {t.komentar || '—'}
+                            {(() => {
+                              const kom = t.komentar || ''
+                              const urlMatch = kom.match(/https?:\/\/[^\s]+/)
+                              const tekst = urlMatch ? kom.replace(urlMatch[0], '').trim() : kom
+                              return tekst || '—'
+                            })()}
                           </td>
                           <td style={{ padding: '10px 12px' }}>
-                            {slike.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                {slike.map((s, i) => (
-                                  <a key={i} href={s} target="_blank" rel="noreferrer"
-                                    style={{ display: 'block', width: 36, height: 28, borderRadius: 4, overflow: 'hidden', border: '1px solid #e5e7eb', flexShrink: 0 }}>
-                                    <img src={s} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </a>
-                                ))}
-                              </div>
-                            ) : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+                            {(() => {
+                              const kom = t.komentar || ''
+                              const urlMatch = kom.match(/https?:\/\/[^\s]+/)
+                              const slike = [t.slika1, t.slika2, t.slika3].filter(Boolean) as string[]
+                              const sveUrls = urlMatch ? [urlMatch[0], ...slike] : slike
+
+                              function toThumb(url: string): string {
+                                const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                                if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w80`
+                                return url
+                              }
+
+                              return sveUrls.length > 0 ? (
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  {sveUrls.map((s, i) => (
+                                    <a key={i} href={s} target="_blank" rel="noreferrer"
+                                      style={{ display: 'block', width: 44, height: 34, borderRadius: 4, overflow: 'hidden', border: '1px solid #e5e7eb', flexShrink: 0, background: '#f3f4f6' }}>
+                                      <img
+                                        src={toThumb(s)}
+                                        alt=""
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => {
+                                          const t = e.currentTarget
+                                          t.style.display = 'none'
+                                          const p = t.parentElement
+                                          if (p) p.innerHTML = '<span style="font-size:18px;display:flex;align-items:center;justify-content:center;height:100%;">📷</span>'
+                                        }}
+                                      />
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
+                            })()}
                           </td>
                           <td style={{ padding: '10px 12px', maxWidth: 160 }}>
                             {t.admin_notes ? (
