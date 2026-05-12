@@ -48,13 +48,12 @@ export default function KategorijePage() {
       .from('konfiguracija')
       .select('*')
       .eq('id', 'kategorije_transakcija')
-      .single()
+      .maybeSingle()
 
     if (data) {
-      setPrilivKat(data.priliv || DEFAULT_PRILIV)
-      setOdlivKat(data.odliv || DEFAULT_ODLIV)
+      if (Array.isArray(data.priliv) && data.priliv.length > 0) setPrilivKat(data.priliv)
+      if (Array.isArray(data.odliv) && data.odliv.length > 0) setOdlivKat(data.odliv)
     } else {
-      // Nije još kreiran — koristi defaultne
       setPrilivKat(DEFAULT_PRILIV)
       setOdlivKat(DEFAULT_ODLIV)
     }
