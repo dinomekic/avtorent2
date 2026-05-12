@@ -266,43 +266,50 @@ export default function AdminKalendarPage() {
     }))
   }
 
-  // Init / reinit kalendar — triggeruje se kad su I podaci I FC biblioteka učitani
+  // Init / reinit kalendar
   useEffect(() => {
     if (!fcLoaded || loading || !calendarRef.current) return
-    // Kratki timeout da DOM bude spreman
-    const timer = setTimeout(() => {
-      if (!calendarRef.current) return
-      if (calInstanceRef.current) { calInstanceRef.current.destroy(); calInstanceRef.current = null }
 
-      const FC = (window as any).FullCalendar
-      if (!FC) return
+    const FC = (window as any).FullCalendar
+    if (!FC) return
+
+    if (calInstanceRef.current) {
+      calInstanceRef.current.destroy()
+      calInstanceRef.current = null
+    }
+
+    const resources = getResources()
+    const events = getEvents()
+
     const cal = new FC.Calendar(calendarRef.current, {
       schedulerLicenseKey: 'CC-Attribution-NonCommercialNoDerivatives',
       initialView: 'resourceTimelineMonth',
       editable: true,
       selectable: true,
       nowIndicator: true,
-      lazyFetching: true,
       eventMinWidth: 3,
       resourceAreaWidth: '220px',
       resourceGroupField: 'building',
-      resourceLabelContent: (arg: any) => {
-        const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
-        const naziv = v?.agregirani_2 || arg.resource.title
-        const plate = v?.license_plate || ''
-        const kratko = naziv.replace(plate, '').replace(/\s+/g, ' ').trim()
-        return { html: `<div style="padding:2px 0;max-width:212px;">
-          <div style="font-size:9px;font-weight:700;color:#111;white-space:normal;word-break:break-word;line-height:1.3;">${kratko}</div>
-          <div style="font-size:9px;color:#6b7280;font-family:monospace;font-weight:700;letter-spacing:0.3px;margin-top:1px;">${plate.toUpperCase()}</div>
-        </div>` }
-      },
       locale: 'sr-Latn',
       headerToolbar: { left: 'prev,next today', center: 'title', right: 'resourceTimelineMonth,resourceTimelineWeek' },
       buttonText: { today: 'Danas', month: 'Mjesec', week: 'Sedmica' },
       slotLabelFormat: [{ weekday: 'short' }, { day: 'numeric' }],
       height: 'calc(100vh - 210px)',
-      resources: getResources(),
-      events: getEvents(),
+      resources,
+      events,
+
+      resourceLabelContent: (arg: any) => {
+        const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
+        const naziv = v?.agregirani_2 || arg.resource.title
+        const plate = v?.license_plate || ''
+        const kratko = naziv.replace(plate, '').replace(/\s+/g, ' ').trim()
+        return {
+          html: `<div style="padding:2px 0;max-width:212px;">
+            <div style="font-size:9px;font-weight:700;color:#111;white-space:normal;word-break:break-word;line-height:1.3;">${kratko}</div>
+            <div style="font-size:9px;color:#6b7280;font-family:monospace;font-weight:700;">${plate.toUpperCase()}</div>
+          </div>`
+        }
+      },
 
       slotLabelContent: (arg: any) => {
         const text = arg.text.trim()
@@ -349,8 +356,11 @@ export default function AdminKalendarPage() {
 
     cal.render()
     calInstanceRef.current = cal
-    }, 100)
-    return () => clearTimeout(timer)
+
+    return () => {
+      cal.destroy()
+      calInstanceRef.current = null
+    }
   }, [fcLoaded, loading, currentLok])
 
   useEffect(() => {
