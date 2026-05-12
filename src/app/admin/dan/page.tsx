@@ -313,22 +313,18 @@ export default function AdminDanPage() {
 
   // ─── AGENT AKCIJE — koristi logovanog agenta ─────────────
   function pokreniIzdaj(r: KalRezervacija) {
-    if (logovanAgent) {
-      // Direktno izvrši bez modala
-      setAgentTip('izdavanje')
-      setAgentRezId(r.id)
-      izvrsiAgentAkcijuDirectly(r.id, logovanAgent, 'izdavanje', r)
+    const agent = getCookie('avtorent-agent-name') || logovanAgent
+    if (agent) {
+      izvrsiAgentAkcijuDirectly(r.id, agent, 'izdavanje', r)
     } else {
-      // Fallback — prikaži modal sa listom
       setAgentTip('izdavanje'); setAgentRezId(r.id); setShowAgentModal(true)
     }
   }
 
   function pokreniPreuzmi(r: KalRezervacija) {
-    if (logovanAgent) {
-      setAgentTip('preuzimanje')
-      setAgentRezId(r.id)
-      izvrsiAgentAkcijuDirectly(r.id, logovanAgent, 'preuzimanje', r)
+    const agent = getCookie('avtorent-agent-name') || logovanAgent
+    if (agent) {
+      izvrsiAgentAkcijuDirectly(r.id, agent, 'preuzimanje', r)
     } else {
       setAgentTip('preuzimanje'); setAgentRezId(r.id); setShowAgentModal(true)
     }
@@ -341,14 +337,20 @@ export default function AdminDanPage() {
       const naplata = parseFloat(naplataStr) || 0
       const depozit = rez.depozit || 0
       let depozitUzet = false
+      let depozitUzetIznos = 0
       if (depozit > 0) {
-        depozitUzet = confirm(`Ovaj ugovor ima DEPOZIT od ${depozit}€.\nDa li ste preuzeli depozit od klijenta?`)
+        const depStr = window.prompt(`Depozit za ovaj ugovor je ${depozit}€.\nKoliko ste uzeli od klijenta? (0 ako niste uzeli)`, String(depozit))
+        if (depStr === null) return
+        depozitUzetIznos = parseFloat(depStr) || 0
+        depozitUzet = depozitUzetIznos > 0
       }
       await supabase.from('rezervacije').update({
-        daily_status: 'Izdato', ko_je_izdao: agent, naplaceno: naplata, depozit_uzet: depozitUzet,
+        daily_status: 'Izdato', ko_je_izdao: agent, naplaceno: naplata,
+        depozit_uzet: depozitUzet,
+        depozit: depozitUzetIznos > 0 ? depozitUzetIznos : depozit,
       }).eq('id', rezId)
-      await supabase.from('logovi').insert([{ akcija: `${agent} izdao vozilo REZ #${rezId}. Naplaćeno: ${naplata}€` }])
-      alert(`Vozilo izdato od strane: ${agent}`)
+      await supabase.from('logovi').insert([{ akcija: `${agent} izdao vozilo REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit uzet: ${depozitUzetIznos}€` }])
+      alert(`Vozilo izdato!\nAgent: ${agent}\nNaplaćeno: ${naplata}€${depozitUzetIznos > 0 ? `\nDepozit uzet: ${depozitUzetIznos}€` : ''}`)
     } else {
       const ukupno = rez.ukupno_naplata || 0
       const naplaceno = rez.naplaceno || 0
