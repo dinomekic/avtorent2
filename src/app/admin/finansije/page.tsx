@@ -351,10 +351,11 @@ export default function FinansijePage() {
 
   async function startPrivate() {
     if (!privVozilo || !kmStart) { alert('Unesite vozilo i KM!'); return }
+    if (!agentEmail) { alert('Email nije učitan! Osvježi stranicu.'); return }
     const vozilo = vozila.find(v => v.license_plate === privVozilo || (v.agregirani_2 || '').toLowerCase().includes(privVozilo.toLowerCase()))
     const tablice = vozilo?.agregirani_2 || privVozilo.toUpperCase()
     setVozSaving(true)
-    await supabase.from('koristenje').insert([{
+    const { error } = await supabase.from('koristenje').insert([{
       id: genId(), email: agentEmail, ime_prezime: agentIme,
       tablice, km_start: parseFloat(kmStart),
       kilometraza: 0,
@@ -362,6 +363,13 @@ export default function FinansijePage() {
       vreme_zaduzenja: new Date().toLocaleString('sr-RS'),
       timestamp_upisa: new Date().toISOString(),
     }])
+    if (error) {
+      alert('Greška pri zaduženju: ' + error.message)
+      console.error('startPrivate error:', error)
+      setVozSaving(false)
+      return
+    }
+    alert(`Vozilo zaduženo: ${tablice}`)
     setPrivVozilo(''); setKmStart(''); setPrivDest('')
     setVozSaving(false); loadAll(agentEmail, agentIme)
   }
@@ -639,6 +647,14 @@ export default function FinansijePage() {
       {activeTab === 'vozilo' && (
         <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
           <div style={card}>
+            {/* DEBUG INFO */}
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginBottom: 14, fontSize: 11, color: '#6b7280' }}>
+              <div>📧 Email: <strong>{agentEmail || 'NEMA!'}</strong></div>
+              <div>👤 Ime: <strong>{agentIme || 'NEMA!'}</strong></div>
+              <div>🚗 Aktivno: <strong>{aktivnoKor ? aktivnoKor.tablice : 'nema'}</strong></div>
+              <div>📋 Historija: <strong>{korHistory.length} unosa</strong></div>
+              <div>💰 KM dug: <strong>{kmDug.toFixed(2)}€</strong></div>
+            </div>
             {aktivnoKor ? (<>
               <div style={{ background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 10, padding: '14px 18px', marginBottom: 14, textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: '#633806', marginBottom: 4 }}>AKTIVNO VOZILO</div>
