@@ -251,12 +251,12 @@ export default function AdminKalendarPage() {
       resourceLabelContent: (arg: any) => {
         const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
         const naziv = v?.agregirani_2 || arg.resource.title
-        // Skrati naziv - ukloni tablice iz naziva ako su tu
         const plate = v?.license_plate || ''
-        const kratko = naziv.replace(plate, '').trim().replace(/\s+/g, ' ')
-        return { html: `<div style="line-height:1.2; overflow:hidden;">
-          <div style="font-size:11px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:176px;" title="${naziv}">${kratko}</div>
-          <div style="font-size:9px;color:#9ca3af;font-family:monospace;letter-spacing:0.5px;">${plate.toLowerCase()}</div>
+        // Ukloni tablice iz naziva
+        const kratko = naziv.replace(plate, '').replace(/\s+/g, ' ').trim()
+        return { html: `<div style="padding:1px 0;overflow:hidden;max-width:196px;">
+          <div style="font-size:9.5px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${naziv}">${kratko}</div>
+          <div style="font-size:9px;color:#6b7280;font-family:monospace;font-weight:700;letter-spacing:0.3px;">${plate.toUpperCase()}</div>
         </div>` }
       },
       locale: 'sr-Latn',
