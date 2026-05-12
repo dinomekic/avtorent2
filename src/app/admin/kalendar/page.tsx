@@ -27,22 +27,11 @@ type Duznik = { id?: number; br_vozacke: string; ime_prezime: string; telefon?: 
 
 const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
 const SIFRE: Record<string, string> = { 'CRNA GORA': 'cg810805', 'BiH': 'bih000', 'SRBIJA': 'srb222', 'ALBANIJA': 'alb333' }
-const MONTHS = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Juni', 'Juli', 'August', 'Septembar', 'Oktobar', 'Novembar', 'Decembar']
 
 function toDMY(iso: string) {
   if (!iso) return ''
   const p = iso.split('-')
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso
-}
-
-function getCookie(name: string): string {
-  if (typeof document === 'undefined') return ''
-  const match = document.cookie.match(new RegExp(`${name}=([^;]+)`))
-  return match ? decodeURIComponent(match[1]) : ''
-}
-
-function normalize(s: string): string {
-  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
 function rezToForm(r: KalRezervacija): RezForm {
@@ -70,16 +59,17 @@ function rezToForm(r: KalRezervacija): RezForm {
 
 export default function AdminKalendarPage() {
   const calendarRef = useRef<HTMLDivElement>(null)
-  const calendarInstanceRef = useRef<any>(null)
+  const calInstanceRef = useRef<any>(null)
   const [currentLok, setCurrentLokState] = useState('CRNA GORA')
   const currentLokRef = useRef('CRNA GORA')
   const [vozila, setVozila] = useState<VoziloOption[]>([])
   const vozilaRef = useRef<VoziloOption[]>([])
-  const [rezervacije, setRezervacije] = useState<KalRezervacija[]>([])
   const rezervacijeRef = useRef<KalRezervacija[]>([])
   const [duznici, setDuznici] = useState<Duznik[]>([])
   const [loading, setLoading] = useState(true)
   const [fcLoaded, setFcLoaded] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const searchQRef = useRef('')
   const today = new Date().toISOString().split('T')[0]
 
   const [showRezModal, setShowRezModal] = useState(false)
@@ -87,19 +77,85 @@ export default function AdminKalendarPage() {
   const [rezForm, setRezForm] = useState<RezForm>(EMPTY_REZ_FORM)
   const [isNewRez, setIsNewRez] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [searchQ, setSearchQ] = useState('')
 
-  // Učitaj FullCalendar Scheduler
+  // Stats
+  const [stats, setStats] = useState({ total: 0, zauzeto: 0 })
+
+  // Učitaj FullCalendar + CSS
   useEffect(() => {
-    if ((window as any).FullCalendar) { setFcLoaded(true); return }
+    const addStyle = () => {
+      if (document.getElementById('fc-custom-style')) return
+      const s = document.createElement('style')
+      s.id = 'fc-custom-style'
+      s.textContent = `
+        .fc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; }
+        .fc .fc-license-message { display: none !important; }
+        .fc-theme-standard td, .fc-theme-standard th { border-color: #e5e7eb !important; }
+        .fc .fc-scrollgrid { border-color: #e5e7eb !important; border-radius: 0; }
+        
+        /* Header toolbar */
+        .fc .fc-toolbar { padding: 8px 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; margin: 0 !important; }
+        .fc .fc-toolbar-title { font-size: 14px !important; font-weight: 700 !important; color: #111 !important; text-transform: capitalize; }
+        .fc .fc-button { background: #fff !important; border: 1px solid #d1d5db !important; color: #374151 !important; font-size: 11px !important; font-weight: 600 !important; padding: 5px 10px !important; border-radius: 6px !important; box-shadow: none !important; text-transform: none !important; }
+        .fc .fc-button:hover { background: #f3f4f6 !important; }
+        .fc .fc-button-active, .fc .fc-button-primary:not(:disabled).fc-button-active { background: #1D9E75 !important; border-color: #1D9E75 !important; color: #fff !important; }
+        .fc .fc-today-button { background: #E1F5EE !important; border-color: #1D9E75 !important; color: #085041 !important; }
+
+        /* Column headers (days) */
+        .fc .fc-col-header-cell { background: #f9fafb; }
+        .fc .fc-col-header-cell-cushion { color: #6b7280 !important; font-weight: 600 !important; font-size: 10px !important; text-decoration: none !important; padding: 4px 2px !important; }
+        .fc .fc-day-today .fc-col-header-cell-cushion { color: #1D9E75 !important; font-weight: 800 !important; font-size: 12px !important; }
+        .fc .fc-day-today { background-color: rgba(29,158,117,0.06) !important; }
+
+        /* Resource (vehicle) column */
+        .fc .fc-datagrid-cell-cushion { padding: 4px 8px !important; font-size: 11px !important; font-weight: 600 !important; color: #111 !important; }
+        .fc .fc-resource-group .fc-datagrid-cell-cushion { 
+          background: #1a1f2e !important; color: #fff !important; font-weight: 900 !important;
+          font-size: 10px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important;
+          padding: 5px 10px !important;
+        }
+        .fc .fc-resource-group td { background: #1a1f2e !important; border-color: #2d3748 !important; }
+        
+        /* Row heights */
+        .fc .fc-datagrid-cell-frame { min-height: 32px !important; height: 32px !important; }
+        .fc .fc-timeline-lane { min-height: 32px !important; }
+        .fc .fc-timeline-lane-frame { min-height: 32px !important; }
+
+        /* Events */
+        .fc .fc-event { border-radius: 4px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 1px 4px !important; cursor: pointer !important; }
+        .fc .fc-event:hover { opacity: 0.85; }
+        .ev-cekanje { background-color: #f97316 !important; color: #fff !important; }
+        .ev-izdato { background-color: #1D9E75 !important; color: #fff !important; }
+        .ev-nije-izdato { background-color: #dc2626 !important; color: #fff !important; }
+        
+        /* Timeline slot */
+        .fc .fc-timeline-slot { border-right: 1px solid #f3f4f6 !important; }
+        .fc .fc-timeline-slot:nth-child(even) td { background: rgba(0,0,0,0.01); }
+
+        /* Scrollbar */
+        .fc .fc-scroller::-webkit-scrollbar { height: 6px; width: 6px; }
+        .fc .fc-scroller::-webkit-scrollbar-track { background: #f1f1f1; }
+        .fc .fc-scroller::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+        
+        /* Selection highlight */
+        .fc .fc-highlight { background: rgba(29,158,117,0.15) !important; }
+
+        /* Now indicator */
+        .fc .fc-now-indicator-line { border-color: #1D9E75 !important; border-width: 2px !important; }
+        .fc .fc-now-indicator-arrow { border-top-color: #1D9E75 !important; }
+      `
+      document.head.appendChild(s)
+    }
+
+    if ((window as any).FullCalendar) { addStyle(); setFcLoaded(true); return }
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.11/index.global.min.js'
-    script.onload = () => setFcLoaded(true)
+    script.onload = () => { addStyle(); setFcLoaded(true) }
     document.head.appendChild(script)
-    const style = document.createElement('link')
-    style.rel = 'stylesheet'
-    style.href = 'https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.11/index.global.min.css'
-    document.head.appendChild(style)
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.11/index.global.min.css'
+    document.head.appendChild(link)
   }, [])
 
   const loadAll = useCallback(async () => {
@@ -110,36 +166,40 @@ export default function AdminKalendarPage() {
       supabase.from('duznici').select('*').order('ukupan_dug', { ascending: false }),
     ])
     if (v) { setVozila(v); vozilaRef.current = v }
-    if (r) { setRezervacije(r); rezervacijeRef.current = r }
+    if (r) { rezervacijeRef.current = r }
     if (d) setDuznici(d)
     setLoading(false)
+    updateStats(v || [], r || [])
   }, [])
+
+  function updateStats(v: any[], r: any[]) {
+    const lok = currentLokRef.current
+    const vLok = v.filter((x: any) => x.lokacija === lok)
+    const tablice = new Set(vLok.map((x: any) => x.license_plate))
+    const zauzeto = new Set(r.filter((x: any) =>
+      x.daily_status !== 'Nije izdato' && x.od_datuma <= today && x.do_datuma > today && tablice.has(x.br_tablica)
+    ).map((x: any) => x.br_tablica)).size
+    setStats({ total: vLok.length, zauzeto })
+  }
 
   useEffect(() => { loadAll() }, [loadAll])
 
   // Real-time
   useEffect(() => {
-    const ch = supabase.channel('kal-rt')
+    const ch = supabase.channel('kal-rt2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rezervacije' }, async () => {
         const { data } = await supabase.from('rezervacije').select('*')
-        if (data) { rezervacijeRef.current = data; setRezervacije(data) }
-        calendarInstanceRef.current?.refetchEvents()
+        if (data) {
+          rezervacijeRef.current = data
+          calInstanceRef.current?.refetchEvents()
+          updateStats(vozilaRef.current, data)
+        }
       }).subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [])
 
-  // Init FullCalendar kada su podaci i biblioteka učitani
-  useEffect(() => {
-    if (!fcLoaded || loading || !calendarRef.current) return
-    if (calendarInstanceRef.current) {
-      calendarInstanceRef.current.destroy()
-      calendarInstanceRef.current = null
-    }
-    initCalendar()
-  }, [fcLoaded, loading, currentLok])
-
   function getResources() {
-    const q = searchQ.toLowerCase()
+    const q = searchQRef.current.toLowerCase()
     return vozilaRef.current
       .filter(v => v.lokacija === currentLokRef.current)
       .filter(v => !q || (v.agregirani_2 || '').toLowerCase().includes(q) || (v.license_plate || '').toLowerCase().includes(q))
@@ -151,40 +211,55 @@ export default function AdminKalendarPage() {
   }
 
   function getEvents() {
-    return rezervacijeRef.current.map(r => {
-      const tStart = (r.vreme_izdavanja || '10:00').padEnd(5, '0')
-      const tEnd = (r.vreme_povratka || '10:00').padEnd(5, '0')
-      return {
-        id: String(r.id),
-        resourceId: r.br_tablica,
-        start: `${r.od_datuma}T${tStart}`,
-        end: `${r.do_datuma}T${tEnd}`,
-        title: r.ime_prezime,
-        className: r.daily_status === 'Izdato' ? 'ev-izdato' : r.daily_status === 'Nije izdato' ? 'ev-nije-izdato' : 'ev-cekanje',
-      }
-    })
+    return rezervacijeRef.current.map(r => ({
+      id: String(r.id),
+      resourceId: r.br_tablica,
+      start: `${r.od_datuma}T${(r.vreme_izdavanja || '10:00')}`,
+      end: `${r.do_datuma}T${(r.vreme_povratka || '10:00')}`,
+      title: r.ime_prezime,
+      className: r.daily_status === 'Izdato' ? 'ev-izdato' : r.daily_status === 'Nije izdato' ? 'ev-nije-izdato' : 'ev-cekanje',
+    }))
   }
 
-  function initCalendar() {
-    if (!calendarRef.current || !(window as any).FullCalendar) return
-    const FC = (window as any).FullCalendar
+  // Init / reinit kalendar
+  useEffect(() => {
+    if (!fcLoaded || loading || !calendarRef.current) return
+    if (calInstanceRef.current) { calInstanceRef.current.destroy(); calInstanceRef.current = null }
 
+    const FC = (window as any).FullCalendar
     const cal = new FC.Calendar(calendarRef.current, {
       schedulerLicenseKey: 'CC-Attribution-NonCommercialNoDerivatives',
       initialView: 'resourceTimelineMonth',
       editable: true,
       selectable: true,
+      nowIndicator: true,
       resourceGroupField: 'building',
       locale: 'sr-Latn',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'resourceTimelineMonth,resourceTimelineWeek',
-      },
+      headerToolbar: { left: 'prev,next today', center: 'title', right: 'resourceTimelineMonth,resourceTimelineWeek' },
+      buttonText: { today: 'Danas', month: 'Mjesec', week: 'Sedmica' },
       slotLabelFormat: [{ weekday: 'short' }, { day: 'numeric' }],
-      height: 'calc(100vh - 200px)',
+      height: 'calc(100vh - 210px)',
       resources: getResources(),
       events: getEvents(),
+
+      resourceLabelContent: (arg: any) => {
+        return { html: `<div style="font-size:11px; font-weight:600; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" title="${arg.resource.title}">${arg.resource.title}</div>` }
+      },
+
+      slotLabelContent: (arg: any) => {
+        const text = arg.text.trim()
+        const isDay = !isNaN(parseInt(text)) && text.length <= 2
+        if (isDay) {
+          const d = arg.date
+          const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+          const count = rezervacijeRef.current.filter(r =>
+            r.od_datuma <= iso && r.do_datuma > iso &&
+            vozilaRef.current.some(v => v.license_plate === r.br_tablica && v.lokacija === currentLokRef.current)
+          ).length
+          return { html: `<div style="text-align:center;"><div>${text}</div>${count > 0 ? `<div style="font-size:9px;color:#1D9E75;font-weight:900;">${count}🚗</div>` : '<div style="font-size:9px;">&nbsp;</div>'}</div>` }
+        }
+        return { html: `<span style="text-transform:lowercase;font-size:9px;color:#9ca3af;">${text}</span>` }
+      },
 
       eventDrop: async (info: any) => {
         const startIso = info.event.startStr.split('T')[0]
@@ -193,7 +268,7 @@ export default function AdminKalendarPage() {
         const payload: any = { od_datuma: startIso, do_datuma: endIso }
         if (resId) payload.br_tablica = resId
         const { error } = await supabase.from('rezervacije').update(payload).eq('id', info.event.id)
-        if (error) { alert('Greška pri pomjeranju: ' + error.message); info.revert(); return }
+        if (error) { alert('Greška: ' + error.message); info.revert(); return }
         await supabase.from('logovi').insert([{ akcija: `Drag&Drop REZ #${info.event.id} → ${resId}, ${startIso}–${endIso}` }])
         const idx = rezervacijeRef.current.findIndex(r => r.id === parseInt(info.event.id))
         if (idx !== -1) rezervacijeRef.current[idx] = { ...rezervacijeRef.current[idx], ...payload }
@@ -215,49 +290,28 @@ export default function AdminKalendarPage() {
     })
 
     cal.render()
-    calendarInstanceRef.current = cal
+    calInstanceRef.current = cal
+  }, [fcLoaded, loading, currentLok])
 
-    // CSS za boje
-    const style = document.createElement('style')
-    style.textContent = `
-      .ev-cekanje { background-color: #f97316 !important; color: #fff !important; font-weight: 700; border: none !important; border-radius: 4px !important; }
-      .ev-izdato { background-color: #1D9E75 !important; color: #fff !important; font-weight: 700; border: none !important; border-radius: 4px !important; }
-      .ev-nije-izdato { background-color: #dc2626 !important; color: #fff !important; font-weight: 700; border: none !important; border-radius: 4px !important; }
-      .fc-license-message { display: none !important; }
-      .fc-datagrid-cell-frame { height: 32px !important; }
-      .fc-timeline-lane { height: 32px !important; }
-      .fc-resource-group .fc-datagrid-cell-frame { background: #1a1a2e !important; color: #fff !important; font-weight: 900 !important; }
-      .fc-day-today { background-color: rgba(29, 158, 117, 0.08) !important; }
-    `
-    document.head.appendChild(style)
-  }
-
-  // Osvježi resurse kada se promijeni pretraga
   useEffect(() => {
-    if (!calendarInstanceRef.current) return
-    calendarInstanceRef.current.setOption('resources', getResources())
+    searchQRef.current = searchQ
+    if (calInstanceRef.current) {
+      calInstanceRef.current.setOption('resources', getResources())
+    }
   }, [searchQ])
 
   function setLokacija(lok: string) {
     const key = `auth_${lok.replace(/\s+/g, '')}`
-    if (sessionStorage.getItem(key) === 'ok') {
-      currentLokRef.current = lok
-      setCurrentLokState(lok)
-      return
-    }
+    if (sessionStorage.getItem(key) === 'ok') { currentLokRef.current = lok; setCurrentLokState(lok); return }
     const uneto = window.prompt(`Lozinka za: ${lok}`)
-    if (uneto === SIFRE[lok]) {
-      sessionStorage.setItem(key, 'ok')
-      currentLokRef.current = lok
-      setCurrentLokState(lok)
-    } else if (uneto !== null) alert('Pogrešna lozinka!')
+    if (uneto === SIFRE[lok]) { sessionStorage.setItem(key, 'ok'); currentLokRef.current = lok; setCurrentLokState(lok) }
+    else if (uneto !== null) alert('Pogrešna lozinka!')
   }
 
   async function saveRezervacija() {
     if (!rezForm.br_tablica || !rezForm.ime_prezime) { alert('Unesite tablice i ime!'); return }
     setSaving(true)
-    const dana = calcDana(rezForm)
-    const ukupno = calcUkupno(rezForm)
+    const dana = calcDana(rezForm); const ukupno = calcUkupno(rezForm)
     const payload = {
       br_tablica: rezForm.br_tablica, ime_prezime: rezForm.ime_prezime, br_vozacke: rezForm.br_vozacke,
       daily_status: rezForm.daily_status, od_datuma: rezForm.od_datuma, do_datuma: rezForm.do_datuma,
@@ -281,10 +335,9 @@ export default function AdminKalendarPage() {
       await supabase.from('rezervacije').insert([payload])
       await supabase.from('logovi').insert([{ akcija: `Kreirana rezervacija za ${rezForm.ime_prezime}` }])
     }
-    setSaving(false)
-    setShowRezModal(false)
+    setSaving(false); setShowRezModal(false)
     loadAll()
-    calendarInstanceRef.current?.refetchEvents()
+    setTimeout(() => calInstanceRef.current?.refetchEvents(), 500)
   }
 
   async function deleteRezervacija() {
@@ -294,9 +347,8 @@ export default function AdminKalendarPage() {
     if (!confirm('Sigurno obrišete?')) return
     await supabase.from('rezervacije').delete().eq('id', rezForm.id)
     await supabase.from('logovi').insert([{ akcija: `Obrisana REZ #${rezForm.id}` }])
-    setShowRezModal(false)
-    loadAll()
-    calendarInstanceRef.current?.refetchEvents()
+    setShowRezModal(false); loadAll()
+    setTimeout(() => calInstanceRef.current?.refetchEvents(), 500)
   }
 
   async function razduziDuznika(br_v: string, trenutniDug: number) {
@@ -313,106 +365,113 @@ export default function AdminKalendarPage() {
     if (noviDug <= 0) {
       if (confirm('Dug otplaćen! Obrisati?')) await supabase.from('duznici').delete().eq('br_vozacke', br_v)
       else await supabase.from('duznici').update({ ukupan_dug: 0, istorija }).eq('br_vozacke', br_v)
-    } else {
-      await supabase.from('duznici').update({ ukupan_dug: noviDug, istorija }).eq('br_vozacke', br_v)
-    }
+    } else await supabase.from('duznici').update({ ukupan_dug: noviDug, istorija }).eq('br_vozacke', br_v)
     loadAll()
   }
 
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
-  const zauzetaDanas = new Set(
-    rezervacije.filter(r => r.daily_status !== 'Nije izdato' && r.od_datuma <= today && r.do_datuma > today && vozilaLok.find(v => v.license_plate === r.br_tablica)).map(r => r.br_tablica)
-  )
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Kalendar zauzetosti</h1>
-          <p style={{ fontSize: 13, color: '#6b7280', margin: '2px 0 0' }}>
-            {vozilaLok.length} vozila · <span style={{ color: '#dc2626' }}>{zauzetaDanas.size} zauzeto</span> · <span style={{ color: '#1D9E75' }}>{vozilaLok.length - zauzetaDanas.size} slobodno</span> danas
-          </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#111', margin: 0 }}>Kalendar zauzetosti</h1>
+          </div>
+          {/* Stats */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
+              📊 Zauzeto: {stats.zauzeto}/{stats.total}
+            </div>
+            <div style={{ background: '#E1F5EE', border: '1px solid #5DCAA5', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700, color: '#085041' }}>
+              🟢 Slobodno: {stats.total - stats.zauzeto}
+            </div>
+          </div>
         </div>
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži vozilo..."
-            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, width: 180 }} />
+            style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 170, outline: 'none' }} />
           <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
-            style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Nova rezervacija
           </button>
           <button onClick={() => setShowDuznici(true)}
-            style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '8px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             📝 Dužnici ({duznici.length})
           </button>
         </div>
       </div>
 
-      {/* LOKACIJE */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {LOKACIJE.map(l => (
-          <button key={l} onClick={() => setLokacija(l)}
-            style={{ padding: '7px 16px', fontSize: 12, fontWeight: 600, border: `1px solid ${currentLok === l ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#fff', color: currentLok === l ? '#085041' : '#6b7280', cursor: 'pointer' }}>
-            {l === 'CRNA GORA' ? '🇲🇪' : l === 'BiH' ? '🇧🇦' : l === 'SRBIJA' ? '🇷🇸' : '🇦🇱'} {l}
-          </button>
-        ))}
-      </div>
-
-      {/* LEGENDA */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        {[['#f97316', 'Na čekanju'], ['#1D9E75', 'Izdato'], ['#dc2626', 'Nije izdato']].map(([color, label]) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6b7280' }}>
-            <div style={{ width: 12, height: 12, borderRadius: 2, background: color }} />{label}
-          </div>
-        ))}
-        <span style={{ fontSize: 11, color: '#9ca3af' }}>✦ Prevuci rezervaciju da pomjeriš · Klikni za detalje · Selektuj prazno polje za novu rezervaciju</span>
+      {/* LOKACIJE + LEGENDA u jednom redu */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {LOKACIJE.map(l => (
+            <button key={l} onClick={() => setLokacija(l)}
+              style={{ padding: '6px 14px', fontSize: 11, fontWeight: 700, border: `1px solid ${currentLok === l ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#fff', color: currentLok === l ? '#085041' : '#6b7280', cursor: 'pointer', transition: 'all 0.15s' }}>
+              {l === 'CRNA GORA' ? '🇲🇪' : l === 'BiH' ? '🇧🇦' : l === 'SRBIJA' ? '🇷🇸' : '🇦🇱'} {l}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {[['#f97316', 'Na čekanju'], ['#1D9E75', 'Izdato'], ['#dc2626', 'Nije izdato']].map(([c, l]) => (
+            <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6b7280' }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />{l}
+            </div>
+          ))}
+          <span style={{ fontSize: 10, color: '#9ca3af' }}>✦ Vuci · Klikni · Selektuj za novu</span>
+        </div>
       </div>
 
       {/* KALENDAR */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>Učitavanje...</div>
-      ) : !fcLoaded ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>Učitavam FullCalendar...</div>
-      ) : (
-        <div ref={calendarRef} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }} />
-      )}
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>Učitavanje podataka...</div>
+        ) : !fcLoaded ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>Učitavam kalendar...</div>
+        ) : (
+          <div ref={calendarRef} />
+        )}
+      </div>
 
       {/* REZ MODAL */}
       {showRezModal && (
         <RezervacijaModal
-          form={rezForm} setForm={setRezForm}
-          vozila={vozilaLok}
-          onSave={saveRezervacija}
-          onClose={() => setShowRezModal(false)}
+          form={rezForm} setForm={setRezForm} vozila={vozilaLok}
+          onSave={saveRezervacija} onClose={() => setShowRezModal(false)}
           onDelete={!isNewRez ? deleteRezervacija : undefined}
           saving={saving} isNew={isNewRez}
         />
       )}
 
-      {/* DUŽNICI MODAL */}
+      {/* DUŽNICI */}
       {showDuznici && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#dc2626' }}>⚠️ Lista dužnika</h2>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#dc2626' }}>⚠️ Lista dužnika</h2>
               <button onClick={() => setShowDuznici(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ padding: 20 }}>
               <NoviDugForm onSave={loadAll} />
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 16 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead><tr style={{ background: '#f9fafb' }}>
-                  {['Ime', 'Vozačka', 'Telefon', 'Dug', 'Akcija'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#6b7280', borderBottom: '2px solid #e5e7eb' }}>{h}</th>)}
+                  {['Ime', 'Vozačka', 'Telefon', 'Dug', 'Akcija'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6b7280', borderBottom: '2px solid #e5e7eb' }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {duznici.map(d => (
                     <tr key={d.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 600 }}>{d.ime_prezime}</td>
-                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#6b7280' }}>{d.br_vozacke}</td>
+                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#6b7280', fontSize: 11 }}>{d.br_vozacke}</td>
                       <td style={{ padding: '10px 12px', color: '#6b7280' }}>{d.telefon || '/'}</td>
-                      <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 16, color: '#dc2626' }}>{d.ukupan_dug.toFixed(2)} €</td>
+                      <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 15, color: '#dc2626' }}>{d.ukupan_dug.toFixed(2)} €</td>
                       <td style={{ padding: '10px 12px' }}>
                         <button onClick={() => razduziDuznika(d.br_vozacke, d.ukupan_dug)}
-                          style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>Uplata</button>
+                          style={{ padding: '6px 12px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>
+                          Uplata
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -443,7 +502,7 @@ function NoviDugForm({ onSave }: { onSave: () => void }) {
   }
   return (
     <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>+ Unesi novi dug</div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>+ Unesi novi dug</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         {[['br_vozacke','Vozačka *'],['ime_prezime','Ime *'],['telefon','Tel'],['iznos','Iznos €*'],['komentar','Komentar *']].map(([k,l]) => (
           <div key={k} style={{ flex: 1, minWidth: 90 }}>
