@@ -449,37 +449,48 @@ export default function AdminDanPage() {
   }
 
   function otvoriProduzi(r: KalRezervacija) {
-    setProduziRezId(r.id); setProduziDana(''); setProduziCijena(String(r.cijena_dan || 0))
-    setProduziNaplaceno(''); setShowProduziModal(true)
+    setProduziRezId(r.id)
+    setProduziDana('')
+    setProduziCijena(String(r.cijena_dan || 0))
+    setProduziNaplaceno('')
+    setShowProduziModal(true)
   }
 
   async function sacuvajProduzi() {
     if (!produziRezId) return
     const dani = parseInt(produziDana)
     const cijena = parseFloat(produziCijena)
-    const naplacenoProduzenje = parseFloat(produziNaplaceno || '0')
     if (isNaN(dani) || dani <= 0 || isNaN(cijena)) { alert('Unesite ispravne podatke!'); return }
     const rez = rezervacije.find(r => r.id === produziRezId) || overdueRez.find(r => r.id === produziRezId)
     if (!rez) return
 
-    setProduziSaving(true)
     const doplata = dani * cijena
+    const novoNaplacenoProduzenje = parseFloat(produziNaplaceno || '0')
+
+    // Pitaj za naplatu samo ako nije već unešeno
+    const naplacenoStr = window.prompt(
+      `Produženje: ${dani} dana × ${cijena}€ = ${doplata}€\n` +
+      (rez.ukupno_naplata && rez.naplaceno ? `Postojeći dug: ${((rez.ukupno_naplata || 0) - (rez.naplaceno || 0)).toFixed(2)}€\n` : '') +
+      `Koliko je klijent sada platio za produženje?`,
+      String(doplata)
+    )
+    if (naplacenoStr === null) return
+    const naplacenoProduzenje = parseFloat(naplacenoStr) || 0
+
+    setProduziSaving(true)
     const novoDo = addDays(rez.do_datuma, dani)
     const novoUkupno = (rez.ukupno_naplata || 0) + doplata
     const novoNaplaceno = (rez.naplaceno || 0) + naplacenoProduzenje
     const noviBrojDana = Math.ceil((new Date(novoDo).getTime() - new Date(rez.od_datuma).getTime()) / 86400000)
 
-    // 1. Update rezervacije
+    // Update rezervacije
     const { error } = await supabase.from('rezervacije').update({
-      do_datuma: novoDo,
-      ukupno_naplata: novoUkupno,
-      naplaceno: novoNaplaceno,
-      broj_dana: noviBrojDana,
+      do_datuma: novoDo, ukupno_naplata: novoUkupno,
+      naplaceno: novoNaplaceno, broj_dana: noviBrojDana,
     }).eq('id', produziRezId)
-
     if (error) { alert('Greška: ' + error.message); setProduziSaving(false); return }
 
-    // 2. Kreiraj transakciju za produženje
+    // Kreiraj transakciju ako je nešto naplaćeno
     const agent = getCookie('avtorent-agent-name') || logovanAgent
     if (agent && naplacenoProduzenje > 0) {
       const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
@@ -491,33 +502,37 @@ export default function AdminDanPage() {
         kategorija: 'Izdavanje vozila',
         iznos: naplacenoProduzenje,
         vozilo: rez.br_tablica,
-        komentar: `Produženje rente za ${dani} dana (REZ #${produziRezId}). Novo do: ${novoDo}.`,
-        osoba: agent,
-        osobaemail: agentEmail,
-        timestamp_upisa: new Date().toISOString(),
-        status: 'Zavrseno',
+        komentar: `Produženje rente ${dani} dana (REZ #${produziRezId}). Novo do: ${novoDo}.`,
+        osoba: agent, osobaemail: agentEmail,
+        timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
       }])
     }
 
-    // 3. Log
+    // Ako postoji preostali dug (nije sve plaćeno), dodaj u dužnike
+    const ukupniDug = novoUkupno - novoNaplaceno
+    if (ukupniDug > 0.01 && rez.br_vozacke) {
+      const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
+      const istorija = [...(dData?.istorija || []), {
+        datum: new Date().toLocaleString('sr-RS'), iznos: ukupniDug,
+        komentar: `Dug nakon produženja REZ #${produziRezId} do ${novoDo}`, tip: 'zaduzenje'
+      }]
+      if (dData) {
+        await supabase.from('duznici').update({ ukupan_dug: ukupniDug, istorija, telefon: rez.telefon || dData.telefon }).eq('br_vozacke', rez.br_vozacke)
+      } else if (ukupniDug > 0) {
+        await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: ukupniDug, istorija }])
+      }
+    }
+
     await supabase.from('logovi').insert([{
       akcija: `Produžena renta REZ #${produziRezId} za ${dani} dana do ${novoDo}. Doplata: ${doplata}€. Naplaćeno: ${naplacenoProduzenje}€.`
     }])
 
-    setProduziSaving(false)
-    setShowProduziModal(false)
-    loadAll()
-    loadOverdue()
+    setProduziSaving(false); setShowProduziModal(false); loadAll(); loadOverdue()
 
-    // 4. Ponudi štampanje novog ugovora
-    const stampa = confirm(`✅ Renta produžena do: ${toDMY(novoDo)}\nDoplata: ${doplata}€\nNaplaćeno: ${naplacenoProduzenje}€\n\nŽeliš li da odštampaš novi ugovor?`)
+    const stampa = confirm(`✅ Renta produžena do: ${toDMY(novoDo)}\nNaplaćeno: ${naplacenoProduzenje}€${ukupniDug > 0.01 ? `\nPreostali dug: ${ukupniDug.toFixed(2)}€` : ''}\n\nŽeliš li odštampati novi ugovor?`)
     if (stampa) {
-      // Učitaj ažuriranu rezervaciju i štampaj ugovor
       const { data: azurRez } = await supabase.from('rezervacije').select('*').eq('id', produziRezId).single()
-      if (azurRez) {
-        const form = rezToForm(azurRez as KalRezervacija)
-        generateUgovor(form, vozila)
-      }
+      if (azurRez) generateUgovor(rezToForm(azurRez as KalRezervacija), vozila)
     }
   }
 
