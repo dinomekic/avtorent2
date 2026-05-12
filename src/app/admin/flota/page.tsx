@@ -158,6 +158,16 @@ export default function AdminFleetPage() {
     fetchData()
   }
 
+  async function quickClassUpdate(id: number, cls: string) {
+    await supabase.from('vozila_fleet').update({ vehicle_class: cls }).eq('id', id)
+    setVehicles(prev => prev.map(v => v.id === id ? { ...v, vehicle_class: cls } : v))
+  }
+
+  async function quickPriceUpdate(id: number, price: number) {
+    await supabase.from('vozila_fleet').update({ price_per_day: price }).eq('id', id)
+    setVehicles(prev => prev.map(v => v.id === id ? { ...v, price_per_day: price } : v))
+  }
+
   function openEdit(v: FleetVehicle) {
     setEditVehicle(v)
     setForm({ ...v })
@@ -253,52 +263,62 @@ export default function AdminFleetPage() {
                       const isticeSkoro = v.dana_do_isteka !== null && v.dana_do_isteka <= 30 && v.dana_do_isteka > 0
                       const istekla = v.dana_do_isteka !== null && v.dana_do_isteka <= 0
                       return (
-                        <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', background: '#fff', marginBottom: 6, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                                {v.image_url && (
-                                  <img src={v.image_url} alt="" style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
-                                )}
-                                <span style={{ fontWeight: 600, fontSize: 14, color: '#111' }}>{v.agregirani_2 || `${v.marka} ${v.model}`}</span>
-                                {v.license_plate && (
-                                  <span style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', color: '#374151', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>{v.license_plate}</span>
-                                )}
-                                <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{st.label}</span>
-                                {v.vehicle_class && (
-                                  <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>🏷️ {v.vehicle_class}</span>
-                                )}
-                                {isticeSkoro && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '2px 7px', borderRadius: 20, fontWeight: 600 }}>⚠️ Reg. ističe za {Math.round(v.dana_do_isteka!)} dana</span>}
-                                {istekla && <span style={{ fontSize: 10, background: '#FEE2E2', color: '#DC2626', padding: '2px 7px', borderRadius: 20, fontWeight: 600 }}>🚫 Reg. istekla</span>}
-                              </div>
-                              <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                {v.year && <span>📅 {v.year}</span>}
-                                {v.transmission && <span>⚙️ {v.transmission === 'manual' ? 'Manual' : 'Automat'}</span>}
-                                {v.fuel_type && <span>⛽ {v.fuel_type === 'diesel' ? 'Dizel' : v.fuel_type === 'petrol' ? 'Benzin' : v.fuel_type}</span>}
-                                {v.color && <span>🎨 {v.color}</span>}
-                                {v.power_kw && <span>💪 {v.power_kw}kW</span>}
-                                <span style={{ background: '#f3f4f6', padding: '1px 6px', borderRadius: 10, color: '#374151', fontWeight: 500 }}>📍 {v.lokacija}</span>
-                                {v.price_per_day > 0 && <span style={{ color: '#1D9E75', fontWeight: 700 }}>{v.price_per_day}€/dan</span>}
-                              </div>
-                              {v.features && v.features.length > 0 && (
-                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                                  {v.features.map(f => (
-                                    <span key={f} style={{ fontSize: 10, background: '#f3f4f6', color: '#6b7280', padding: '1px 6px', borderRadius: 10 }}>{f}</span>
-                                  ))}
+                        <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff', marginBottom: 6, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', gap: 0 }}>
+                            {/* Slika */}
+                            {v.image_url ? (
+                              <img src={v.image_url} alt="" style={{ width: 80, height: 68, objectFit: 'cover', flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: 80, height: 68, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0, color: '#d1d5db' }}>🚗</div>
+                            )}
+
+                            {/* Sadržaj */}
+                            <div style={{ flex: 1, padding: '8px 12px', minWidth: 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                {/* Lijevo — naziv + tablice + badges */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                                    <span style={{ fontWeight: 600, fontSize: 13, color: '#111' }}>{v.agregirani_2 || `${v.marka} ${v.model}`}</span>
+                                    {v.license_plate && (
+                                      <span style={{ fontFamily: 'monospace', fontSize: 11, background: '#f3f4f6', color: '#374151', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{v.license_plate}</span>
+                                    )}
+                                    <span style={{ fontSize: 10, background: st.bg, color: st.color, padding: '1px 7px', borderRadius: 20, fontWeight: 600 }}>{st.label}</span>
+                                    {isticeSkoro && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '1px 6px', borderRadius: 20, fontWeight: 600 }}>⚠️ {Math.round(v.dana_do_isteka!)}d</span>}
+                                    {istekla && <span style={{ fontSize: 10, background: '#FEE2E2', color: '#DC2626', padding: '1px 6px', borderRadius: 20, fontWeight: 600 }}>🚫 Reg.</span>}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: '#9ca3af', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    {v.year && <span>{v.year}</span>}
+                                    {v.transmission && <span>⚙️ {v.transmission === 'manual' ? 'MAN' : 'AUT'}</span>}
+                                    {v.fuel_type && <span>⛽ {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : v.fuel_type.toUpperCase()}</span>}
+                                    {v.color && <span>🎨 {v.color}</span>}
+                                    <span style={{ background: '#f3f4f6', padding: '0 5px', borderRadius: 8, color: '#374151' }}>📍 {v.lokacija}</span>
+                                    {v.price_per_day > 0 && <span style={{ color: '#1D9E75', fontWeight: 700 }}>{v.price_per_day}€/d</span>}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                              <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
-                                style={{ padding: '5px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
-                                {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                              </select>
-                              <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
-                                style={{ padding: '5px 8px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
-                                {LOKACIJE.map(l => <option key={l} value={l}>{l}</option>)}
-                              </select>
-                              <button onClick={() => openEdit(v)} style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️ Uredi</button>
-                              <button onClick={() => deleteVehicle(v.id, v.license_plate || String(v.id))} style={{ padding: '6px 10px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+
+                                {/* Desno — kontrole */}
+                                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                  {/* Inline klasa */}
+                                  <select value={v.vehicle_class || ''} onChange={e => quickClassUpdate(v.id, e.target.value)}
+                                    title="Klasa vozila (sajt)"
+                                    style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 600 }}>
+                                    <option value="">-- Klasa --</option>
+                                    {VEHICLE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                  {/* Status */}
+                                  <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
+                                    style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
+                                    {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                  </select>
+                                  {/* Lokacija */}
+                                  <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
+                                    style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
+                                    {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
+                                  </select>
+                                  <button onClick={() => openEdit(v)} style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️</button>
+                                  <button onClick={() => deleteVehicle(v.id, v.license_plate || String(v.id))} style={{ padding: '3px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
