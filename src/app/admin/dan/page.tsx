@@ -169,6 +169,24 @@ export default function AdminDanPage() {
   const [uploadUrl, setUploadUrl] = useState('')
   const [uploadSaving, setUploadSaving] = useState(false)
 
+  // ─── AKCIJA MODAL (Izdaj / Preuzmi) ──────────────────────
+  const [showAkcijaModal, setShowAkcijaModal] = useState(false)
+  const [akcijaRez, setAkcijaRez] = useState<KalRezervacija | null>(null)
+  const [akcijaTip, setAkcijaTip] = useState<'izdavanje' | 'preuzimanje'>('izdavanje')
+  const [akcijaAgent, setAkcijaAgent] = useState('')
+  // Izdavanje
+  const [izdNaplata, setIzdNaplata] = useState('')
+  const [izdDepozit, setIzdDepozit] = useState('')
+  const [izdNacinPlacanja, setIzdNacinPlacanja] = useState('Keš')
+  // Preuzimanje
+  const [preuzDugNaplacen, setPreuzDugNaplacen] = useState(false)
+  const [preuzDugIznos, setPreuzDugIznos] = useState('')
+  const [preuzDugNacin, setPreuzDugNacin] = useState('Keš')
+  const [preuzDepVracen, setPreuzDepVracen] = useState(false)
+  const [preuzDepIznos, setPreuzDepIznos] = useState('')
+  const [preuzDepRazlog, setPreuzDepRazlog] = useState('')
+  const [akcijaSaving, setAkcijaSaving] = useState(false)
+
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
 
   const loadAll = useCallback(async () => {
@@ -311,155 +329,100 @@ export default function AdminDanPage() {
     setShowRezModal(false); loadAll()
   }
 
-  // ─── AGENT AKCIJE — koristi logovanog agenta ─────────────
+  // ─── AGENT AKCIJE — otvori modal ────────────────────────
   function pokreniIzdaj(r: KalRezervacija) {
     const agent = getCookie('avtorent-agent-name') || logovanAgent
-    if (agent) {
-      izvrsiAgentAkcijuDirectly(r.id, agent, 'izdavanje', r)
-    } else {
-      setAgentTip('izdavanje'); setAgentRezId(r.id); setShowAgentModal(true)
-    }
+    setAkcijaRez(r)
+    setAkcijaTip('izdavanje')
+    setAkcijaAgent(agent || '')
+    setIzdNaplata(String(r.ukupno_naplata || 0))
+    setIzdDepozit(String(r.depozit || 0))
+    setIzdNacinPlacanja('Keš')
+    setShowAkcijaModal(true)
   }
 
   function pokreniPreuzmi(r: KalRezervacija) {
     const agent = getCookie('avtorent-agent-name') || logovanAgent
-    if (agent) {
-      izvrsiAgentAkcijuDirectly(r.id, agent, 'preuzimanje', r)
-    } else {
-      setAgentTip('preuzimanje'); setAgentRezId(r.id); setShowAgentModal(true)
-    }
+    const dug = Math.max(0, (r.ukupno_naplata || 0) - (r.naplaceno || 0))
+    const dep = r.depozit || 0
+    setAkcijaRez(r)
+    setAkcijaTip('preuzimanje')
+    setAkcijaAgent(agent || '')
+    setPreuzDugNaplacen(dug > 0)
+    setPreuzDugIznos(dug > 0 ? String(dug.toFixed(2)) : '0')
+    setPreuzDugNacin('Keš')
+    setPreuzDepVracen(dep > 0)
+    setPreuzDepIznos(dep > 0 ? String(dep) : '0')
+    setPreuzDepRazlog('')
+    setShowAkcijaModal(true)
   }
 
-  async function izvrsiAgentAkcijuDirectly(rezId: number, agent: string, tip: 'izdavanje' | 'preuzimanje', rez: KalRezervacija) {
-    if (tip === 'izdavanje') {
-      const naplataStr = window.prompt('Iznos naplaćen (€) na licu mjesta:', String(rez.ukupno_naplata || 0))
-      if (naplataStr === null) return
-      const naplata = parseFloat(naplataStr) || 0
+  async function potvrdiAkcijuIzdaj() {
+    if (!akcijaRez || !akcijaAgent) return
+    setAkcijaSaving(true)
+    const naplata = parseFloat(izdNaplata) || 0
+    const depozitUzet = parseFloat(izdDepozit) || 0
+    const rez = akcijaRez
+    const rezId = rez.id
 
-      const depozit = rez.depozit || 0
-      let depozitUzetIznos = 0
-      if (depozit > 0) {
-        const depStr = window.prompt(`Depozit za ovaj ugovor je ${depozit}€.\nKoliko ste uzeli depozita od klijenta?`, String(depozit))
-        if (depStr === null) return
-        depozitUzetIznos = parseFloat(depStr) || 0
-      }
+    const { error } = await supabase.from('rezervacije').update({
+      daily_status: 'Izdato', ko_je_izdao: akcijaAgent,
+      naplaceno: naplata, depozit_uzet: depozitUzet > 0,
+      depozit: depozitUzet > 0 ? depozitUzet : (rez.depozit || 0),
+      nacin_placanja: izdNacinPlacanja,
+    }).eq('id', rezId)
+    if (error) { alert('Greška: ' + error.message); setAkcijaSaving(false); return }
 
-      // Update rezervacije
-      const { error } = await supabase.from('rezervacije').update({
-        daily_status: 'Izdato',
-        ko_je_izdao: agent,
-        naplaceno: naplata,
-        depozit_uzet: depozitUzetIznos > 0,
-        depozit: depozitUzetIznos > 0 ? depozitUzetIznos : depozit,
-      }).eq('id', rezId)
-
-      if (error) { alert('Greška: ' + error.message); return }
-
-      // Pronađi email agenta
-      const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
-      const agentEmail = agentData?.email || ''
-
-      // Automatski kreiraj transakcije
-      const inserti: any[] = []
-      if (naplata > 0) {
-        const p = Math.max(0, (rez.ukupno_naplata || 0) - naplata)
-        inserti.push({
-          id: Date.now().toString() + '1',
-          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
-          kategorija: 'Izdavanje vozila', iznos: naplata,
-          vozilo: rez.br_tablica,
-          komentar: `Početna naplata pri izdavanju (Ugovor REZ #${rezId}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ' Isplaćeno u potpunosti.'}`,
-          osoba: agent, osobaemail: agentEmail,
-          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-        })
-      }
-      if (depozitUzetIznos > 0) {
-        inserti.push({
-          id: Date.now().toString() + '2',
-          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
-          kategorija: 'Depozit', iznos: depozitUzetIznos,
-          vozilo: rez.br_tablica,
-          komentar: `Uzet depozit pri izdavanju (Ugovor REZ #${rezId})`,
-          osoba: agent, osobaemail: agentEmail,
-          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-        })
-      }
-      if (inserti.length > 0) await supabase.from('transakcije').insert(inserti)
-
-      await supabase.from('logovi').insert([{ akcija: `${agent} izdao vozilo REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit: ${depozitUzetIznos}€` }])
-      alert(`✅ Vozilo izdato!\nAgent: ${agent}\nNaplaćeno: ${naplata}€${depozitUzetIznos > 0 ? `\nDepozit uzet: ${depozitUzetIznos}€` : ''}`)
-    } else {
-      const ukupno = rez.ukupno_naplata || 0
-      const naplaceno = rez.naplaceno || 0
-      const dug = ukupno - naplaceno
-      const depozit = rez.depozit || 0
-      let naplataDuga = 0
-      if (dug > 0) {
-        const dugStr = window.prompt(`Ovaj ugovor ima nepokriven iznos od ${dug.toFixed(2)}€.\nKoliko naplaćujete?`, dug.toFixed(2))
-        if (dugStr === null) return
-        naplataDuga = parseFloat(dugStr) || 0
-      }
-      let vracenDepozit = 0
-      if (depozit > 0 && !rez.depozit_vracen) {
-        const depStr = window.prompt(`Depozit: ${depozit}€.\nKoliko vraćate klijentu?`, String(depozit))
-        if (depStr === null) return
-        vracenDepozit = parseFloat(depStr) || 0
-      }
-      let napomenaDepozit = ''
-      if (vracenDepozit < depozit && depozit > 0) {
-        napomenaDepozit = window.prompt('Razlog zadržavanja depozita:') || 'Zadržan depozit.'
-      }
-      const novoNaplaceno = naplaceno + naplataDuga
-      const preostaliDug = ukupno - novoNaplaceno
-      let novaNapomena = rez.napomena || ''
-      if (napomenaDepozit) novaNapomena += ` | Zadržan depozit: ${napomenaDepozit}`
-      await supabase.from('rezervacije').update({
-        ko_je_preuzeo: agent, naplaceno: novoNaplaceno,
-        depozit_vracen: true, vraceni_depozit_iznos: vracenDepozit, napomena: novaNapomena,
-      }).eq('id', rezId)
-      await supabase.from('logovi').insert([{ akcija: `${agent} preuzeo vozilo REZ #${rezId}. Naplaćeno duga: ${naplataDuga}€` }])
-
-      // Kreiraj transakcije
-      const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
-      const agentEmail = agentData?.email || ''
-      const tranInsert: any[] = []
-      if (naplataDuga > 0) {
-        tranInsert.push({
-          id: Date.now().toString() + 'r1',
-          tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0],
-          kategorija: 'Naplata Duga', iznos: naplataDuga,
-          vozilo: rez.br_tablica,
-          komentar: `Naplata duga pri preuzimanju (REZ #${rezId})`,
-          osoba: agent, osobaemail: agentEmail,
-          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-        })
-      }
-      if (vracenDepozit > 0) {
-        tranInsert.push({
-          id: Date.now().toString() + 'r2',
-          tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0],
-          kategorija: 'Povrat Depozita', iznos: vracenDepozit,
-          vozilo: rez.br_tablica,
-          komentar: `Vraćen depozit pri preuzimanju (REZ #${rezId})`,
-          osoba: agent, osobaemail: agentEmail,
-          timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-        })
-      }
-      if (tranInsert.length > 0) await supabase.from('transakcije').insert(tranInsert)
-      if (preostaliDug > 0 && rez.br_vozacke) {
-        const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
-        const istorija = [...(dData?.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos: preostaliDug, komentar: `Ostao dug sa ugovora REZ #${rezId}`, tip: 'zaduzenje' }]
-        if (dData) {
-          await supabase.from('duznici').update({ ukupan_dug: (dData.ukupan_dug || 0) + preostaliDug, istorija, telefon: rez.telefon || dData.telefon }).eq('br_vozacke', rez.br_vozacke)
-        } else {
-          await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: preostaliDug, istorija }])
-        }
-        alert(`Vozilo preuzeto! Klijent je ostao dužan ${preostaliDug.toFixed(2)}€ — automatski dodat u listu dužnika.`)
-      } else {
-        alert('Vozilo uspješno preuzeto!')
-      }
+    const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', akcijaAgent).maybeSingle()
+    const agentEmail = agentData?.email || ''
+    const inserti: any[] = []
+    if (naplata > 0) {
+      const p = Math.max(0, (rez.ukupno_naplata || 0) - naplata)
+      inserti.push({ id: Date.now()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: naplata, vozilo: rez.br_tablica, komentar: `Naplata pri izdavanju (REZ #${rezId}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
     }
-    loadAll(); loadOverdue()
+    if (depozitUzet > 0) {
+      inserti.push({ id: Date.now()+'2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: depozitUzet, vozilo: rez.br_tablica, komentar: `Depozit pri izdavanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+    }
+    if (inserti.length > 0) await supabase.from('transakcije').insert(inserti)
+    await supabase.from('logovi').insert([{ akcija: `${akcijaAgent} izdao REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit: ${depozitUzet}€` }])
+    setAkcijaSaving(false); setShowAkcijaModal(false); loadAll(); loadOverdue()
+  }
+
+  async function potvrdiAkcijuPreuzmi() {
+    if (!akcijaRez || !akcijaAgent) return
+    setAkcijaSaving(true)
+    const rez = akcijaRez; const rezId = rez.id
+    const naplataDuga = preuzDugNaplacen ? (parseFloat(preuzDugIznos) || 0) : 0
+    const vracenDepozit = preuzDepVracen ? (parseFloat(preuzDepIznos) || 0) : 0
+    const novoNaplaceno = (rez.naplaceno || 0) + naplataDuga
+    const preostaliDug = (rez.ukupno_naplata || 0) - novoNaplaceno
+    let novaNapomena = rez.napomena || ''
+    if (preuzDepRazlog) novaNapomena += ` | Zadržan depozit: ${preuzDepRazlog}`
+
+    await supabase.from('rezervacije').update({
+      ko_je_preuzeo: akcijaAgent, naplaceno: novoNaplaceno,
+      depozit_vracen: true, vraceni_depozit_iznos: vracenDepozit, napomena: novaNapomena,
+    }).eq('id', rezId)
+
+    const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', akcijaAgent).maybeSingle()
+    const agentEmail = agentData?.email || ''
+    const tranInsert: any[] = []
+    if (naplataDuga > 0) {
+      tranInsert.push({ id: Date.now()+'r1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Duga', iznos: naplataDuga, vozilo: rez.br_tablica, komentar: `Naplata duga pri preuzimanju (REZ #${rezId}). Način: ${preuzDugNacin}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+    }
+    if (vracenDepozit > 0) {
+      tranInsert.push({ id: Date.now()+'r2', tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Povrat Depozita', iznos: vracenDepozit, vozilo: rez.br_tablica, komentar: `Vraćen depozit pri preuzimanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+    }
+    if (tranInsert.length > 0) await supabase.from('transakcije').insert(tranInsert)
+    await supabase.from('logovi').insert([{ akcija: `${akcijaAgent} preuzeo REZ #${rezId}. Naplaćeno: ${naplataDuga}€` }])
+
+    if (preostaliDug > 0.01 && rez.br_vozacke) {
+      const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
+      const istorija = [...(dData?.istorija || []), { datum: new Date().toLocaleString('sr-RS'), iznos: preostaliDug, komentar: `Ostao dug REZ #${rezId}`, tip: 'zaduzenje' }]
+      if (dData) await supabase.from('duznici').update({ ukupan_dug: (dData.ukupan_dug || 0) + preostaliDug, istorija }).eq('br_vozacke', rez.br_vozacke)
+      else await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: preostaliDug, istorija }])
+    }
+    setAkcijaSaving(false); setShowAkcijaModal(false); loadAll(); loadOverdue()
   }
 
   async function izvrsiAgentAkciju(agent: string) {
@@ -842,6 +805,170 @@ export default function AdminDanPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ─── AKCIJA MODAL (Izdaj / Preuzmi) ─── */}
+      {showAkcijaModal && akcijaRez && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+
+            {/* Header */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 4 }}>
+                {akcijaTip === 'izdavanje' ? '🚗 Izdaj vozilo' : '🔙 Preuzmi vozilo'}
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280' }}>
+                {akcijaRez.br_tablica} — {akcijaRez.ime_prezime}
+              </div>
+              {akcijaAgent && (
+                <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 600, marginTop: 4 }}>
+                  👤 Agent: {akcijaAgent}
+                </div>
+              )}
+            </div>
+
+            {/* Finansije pregled */}
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 16 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: '#9ca3af' }}>UKUPNO</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{akcijaRez.ukupno_naplata || 0}€</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: '#9ca3af' }}>NAPLAĆENO</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#1D9E75' }}>{akcijaRez.naplaceno || 0}€</div>
+              </div>
+              {(akcijaRez.depozit || 0) > 0 && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>DEPOZIT</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#633806' }}>{akcijaRez.depozit}€</div>
+                </div>
+              )}
+              {Math.max(0, (akcijaRez.ukupno_naplata || 0) - (akcijaRez.naplaceno || 0)) > 0 && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>DUG</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#dc2626' }}>
+                    {Math.max(0, (akcijaRez.ukupno_naplata || 0) - (akcijaRez.naplaceno || 0)).toFixed(2)}€
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* IZDAVANJE */}
+            {akcijaTip === 'izdavanje' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>💰 Naplaćeno od klijenta (€)</label>
+                  <input type="number" step="0.01" value={izdNaplata} onChange={e => setIzdNaplata(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', fontSize: 15, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                  {Math.abs((parseFloat(izdNaplata)||0) - (akcijaRez.ukupno_naplata||0)) > 0.01 && (
+                    <div style={{ marginTop: 4, fontSize: 12, color: (parseFloat(izdNaplata)||0) < (akcijaRez.ukupno_naplata||0) ? '#dc2626' : '#1D9E75', fontWeight: 600 }}>
+                      {(parseFloat(izdNaplata)||0) < (akcijaRez.ukupno_naplata||0)
+                        ? `⚠️ Dug: ${((akcijaRez.ukupno_naplata||0) - (parseFloat(izdNaplata)||0)).toFixed(2)}€`
+                        : `✅ Pretplata: ${((parseFloat(izdNaplata)||0) - (akcijaRez.ukupno_naplata||0)).toFixed(2)}€`}
+                    </div>
+                  )}
+                </div>
+                {(akcijaRez.depozit || 0) > 0 && (
+                  <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>🛡️ Uzet depozit (€)</label>
+                    <input type="number" step="0.01" value={izdDepozit} onChange={e => setIzdDepozit(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', fontSize: 15, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                  </div>
+                )}
+                <div>
+                  <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>💳 Način plaćanja</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                    {['Keš', 'Kartica', 'Kartica + Keš'].map(m => (
+                      <button key={m} onClick={() => setIzdNacinPlacanja(m)}
+                        style={{ padding: '9px', border: `1px solid ${izdNacinPlacanja === m ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: izdNacinPlacanja === m ? '#E1F5EE' : '#fff', color: izdNacinPlacanja === m ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 12, fontWeight: izdNacinPlacanja === m ? 700 : 400 }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#0C447C' }}>
+                  Agent <strong>{akcijaAgent}</strong> se zadužuje za naplaćeni iznos.
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                  <button onClick={() => setShowAkcijaModal(false)} style={{ flex: 1, padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
+                  <button onClick={potvrdiAkcijuIzdaj} disabled={akcijaSaving}
+                    style={{ flex: 2, padding: 10, background: akcijaSaving ? '#5DCAA5' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    {akcijaSaving ? '⏳...' : '✓ Potvrdi izdavanje'}
+                  </button>
+                </div>
+                {/* Otkaži dugme samo za izdavanje */}
+                <button onClick={async () => {
+                  await supabase.from('rezervacije').update({ daily_status: 'Nije izdato' }).eq('id', akcijaRez.id)
+                  await supabase.from('logovi').insert([{ akcija: `Otkazano izdavanje REZ #${akcijaRez.id}` }])
+                  setShowAkcijaModal(false); loadAll()
+                }} style={{ width: '100%', padding: 10, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', cursor: 'pointer', fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                  🚫 Označi: NIJE IZDATO
+                </button>
+              </div>
+            )}
+
+            {/* PREUZIMANJE */}
+            {akcijaTip === 'preuzimanje' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Dug */}
+                {Math.max(0, (akcijaRez.ukupno_naplata || 0) - (akcijaRez.naplaceno || 0)) > 0.01 && (
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                      💰 Dug za naplatu: <span style={{ color: '#dc2626' }}>{Math.max(0, (akcijaRez.ukupno_naplata || 0) - (akcijaRez.naplaceno || 0)).toFixed(2)}€</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: preuzDugNaplacen ? 8 : 0 }}>
+                      <button onClick={() => setPreuzDugNaplacen(true)} style={{ flex: 1, padding: '8px', border: `1px solid ${preuzDugNaplacen ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: preuzDugNaplacen ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, color: preuzDugNaplacen ? '#085041' : '#374151', fontWeight: preuzDugNaplacen ? 600 : 400 }}>Naplaćeno ✓</button>
+                      <button onClick={() => setPreuzDugNaplacen(false)} style={{ flex: 1, padding: '8px', border: `1px solid ${!preuzDugNaplacen ? '#dc2626' : '#e5e7eb'}`, borderRadius: 8, background: !preuzDugNaplacen ? '#FCEBEB' : '#fff', cursor: 'pointer', fontSize: 13, color: !preuzDugNaplacen ? '#dc2626' : '#374151', fontWeight: !preuzDugNaplacen ? 600 : 400 }}>Nije naplaćeno</button>
+                    </div>
+                    {preuzDugNaplacen && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <input type="number" step="0.01" value={preuzDugIznos} onChange={e => setPreuzDugIznos(e.target.value)}
+                          style={{ width: '100%', padding: '9px 12px', fontSize: 14, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                          {['Keš', 'Kartica', 'Kartica + Keš'].map(m => (
+                            <button key={m} onClick={() => setPreuzDugNacin(m)}
+                              style={{ padding: '7px', border: `1px solid ${preuzDugNacin === m ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: preuzDugNacin === m ? '#E1F5EE' : '#fff', color: preuzDugNacin === m ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 11, fontWeight: preuzDugNacin === m ? 700 : 400 }}>
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Depozit */}
+                {(akcijaRez.depozit || 0) > 0 && (
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                      🛡️ Depozit: <span style={{ color: '#633806' }}>{akcijaRez.depozit}€</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: preuzDepVracen ? 8 : 0 }}>
+                      <button onClick={() => { setPreuzDepVracen(true); setPreuzDepIznos(String(akcijaRez.depozit)) }} style={{ flex: 1, padding: '8px', border: `1px solid ${preuzDepVracen ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: preuzDepVracen ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, color: preuzDepVracen ? '#085041' : '#374151', fontWeight: preuzDepVracen ? 600 : 400 }}>Vraćen ✓</button>
+                      <button onClick={() => { setPreuzDepVracen(false); setPreuzDepIznos('0') }} style={{ flex: 1, padding: '8px', border: `1px solid ${!preuzDepVracen ? '#f59e0b' : '#e5e7eb'}`, borderRadius: 8, background: !preuzDepVracen ? '#FAEEDA' : '#fff', cursor: 'pointer', fontSize: 13, color: !preuzDepVracen ? '#633806' : '#374151', fontWeight: !preuzDepVracen ? 600 : 400 }}>Zadržan</button>
+                    </div>
+                    {preuzDepVracen && (
+                      <input type="number" step="0.01" value={preuzDepIznos} onChange={e => setPreuzDepIznos(e.target.value)} placeholder="Iznos vraćen"
+                        style={{ width: '100%', padding: '9px 12px', fontSize: 14, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                    )}
+                    {!preuzDepVracen && (
+                      <input value={preuzDepRazlog} onChange={e => setPreuzDepRazlog(e.target.value)} placeholder="Razlog zadržavanja..."
+                        style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const, marginTop: 8 }} />
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowAkcijaModal(false)} style={{ flex: 1, padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
+                  <button onClick={potvrdiAkcijuPreuzmi} disabled={akcijaSaving}
+                    style={{ flex: 2, padding: 10, background: akcijaSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    {akcijaSaving ? '⏳...' : '✓ Potvrdi preuzimanje'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* REZ MODAL */}
