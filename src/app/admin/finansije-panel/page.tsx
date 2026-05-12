@@ -56,7 +56,15 @@ export default function AdminFinansijePanelPage() {
       supabase.from('rezervacije').select('id, br_tablica, ime_prezime, telefon, od_datuma, do_datuma, ukupno_naplata, naplaceno, ko_je_izdao, ko_je_preuzeo, daily_status, ugovor_slika, nacin_placanja, depozit').order('id', { ascending: false }),
       supabase.from('agents').select('id, email, full_name').eq('is_active', true).order('full_name'),
     ])
-    setTransakcije(t || [])
+
+    // Sortiraj transakcije po timestamp_upisa — format je "M/D/YYYY HH:MM:SS" ili ISO
+    const sorted = (t || []).sort((a: any, b: any) => {
+      const pa = new Date(a.timestamp_upisa || a.datum || 0).getTime()
+      const pb = new Date(b.timestamp_upisa || b.datum || 0).getTime()
+      return pb - pa // desc — najnoviji prvi
+    })
+
+    setTransakcije(sorted)
     setRezervacije(r || [])
     setAgents(a || [])
     setLoading(false)
@@ -99,8 +107,9 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        if (mail) saldo[mail] = (saldo[mail] || 0) + (isPriliv(t) ? iz : -iz)
-        if (pMail) saldo[pMail] = (saldo[pMail] || 0) + (isPriliv(t) ? -iz : iz)
+        // iznos je već pozitivan za priliv, negativan za odliv
+        if (mail) saldo[mail] = (saldo[mail] || 0) + iz
+        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
       }
 
       if (kat.includes('OSTAVLJENO U SANDUCE')) sOst += Math.abs(iz)
@@ -398,7 +407,7 @@ export default function AdminFinansijePanelPage() {
                             </div>
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
-                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
+                            {pril ? '+' : ''}{iznos.toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' }}>
