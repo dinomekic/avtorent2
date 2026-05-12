@@ -735,7 +735,7 @@ export default function AdminVozilaPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {editCat && (
-                    <button onClick={() => { setEditCat(null); setCatForm({ name: '', description: '', base_multiplier: '1.0', sort_order: '0' }) }}
+                    <button onClick={() => { setEditCat(null); setCatForm({ name: '', description: '', base_multiplier: '1.0', sort_order: '0', default_price: '' }) }}
                       style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#6b7280' }}>
                       Otkaži
                     </button>
