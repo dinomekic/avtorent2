@@ -12,8 +12,6 @@ const AGENT_NAV = [
   { href: '/admin/finansije', label: '💰 Finansije' },
   { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
   { href: '/admin/pranje', label: '💦 Pranje vozila' },
-  { href: '/admin/provjera', label: '🔍 Provjera vozila' },
-  { href: '/admin/kvarovi', label: '⚠️ Kvarovi' },
   { href: '/admin/servis', label: '🔧 Servis' },
 ]
 
@@ -42,9 +40,6 @@ const ADMIN_NAV = [
   { href: '/admin/analitika', label: '📡 QR analitika' },
   { href: '/admin/performance', label: '🏆 Performanse' },
   { href: '/admin/flota', label: '🚗 Flota' },
-  { href: '/admin/provjera', label: '🔍 Provjera vozila' },
-  { href: '/admin/kvarovi', label: '⚠️ Kvarovi' },
-  { href: '/admin/serviseri', label: '🔧 Serviseri' },
   { href: '/admin/servis', label: '🔧 Servis' },
 ]
 
