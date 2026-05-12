@@ -250,7 +250,21 @@ export default function AdminFinansijePanelPage() {
         <>
           {tab === 'transakcije' && (
             <div>
-              {/* TOP PANELI */}
+              {/* DEBUG PANEL - privremeno */}
+      <div style={{ background: '#1a1f2e', color: '#fff', borderRadius: 10, padding: 16, marginBottom: 16, fontSize: 11, fontFamily: 'monospace' }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, color: '#f59e0b' }}>🔍 DEBUG (obriši poslije)</div>
+        <div>Ukupno transakcija: {transakcije.length}</div>
+        <div>Prva transakcija: iznos={transakcije[0]?.iznos}, tip={transakcije[0]?.tip_transakcije}, status={transakcije[0]?.status}, kat={transakcije[0]?.kategorija}</div>
+        <div>Druga: iznos={transakcije[1]?.iznos}, tip={transakcije[1]?.tip_transakcije}, status={transakcije[1]?.status}</div>
+        <div>Treća: iznos={transakcije[2]?.iznos}, tip={transakcije[2]?.tip_transakcije}, status={transakcije[2]?.status}</div>
+        <div style={{ marginTop: 8 }}>Sandučić raw: {stanjeSanduce.toFixed(2)}</div>
+        <div>Saldo entries: {JSON.stringify(saldoEntries.slice(0, 3))}</div>
+        <div>DugFirma entries: {JSON.stringify(dugEntries.slice(0, 3))}</div>
+        <div style={{ marginTop: 8, color: '#9ca3af' }}>
+          SANDUCE kategorije nađene: {transakcije.filter(t => (t.kategorija || '').toUpperCase().includes('SANDUCE')).length}
+          {' | '}DUG PREMA FIRMI: {transakcije.filter(t => (t.kategorija || '').toUpperCase().includes('DUG PREMA FIRMI')).length}
+        </div>
+      </div>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 12, marginBottom: 20 }}>
 
                 {/* Sanduce */}
