@@ -20,11 +20,11 @@ type Rezervacija = {
   id: number; br_tablica: string; ime_prezime: string; telefon: string | null
   od_datuma: string; do_datuma: string; ukupno_naplata: number | null
   naplaceno: number | null; ko_je_izdao: string | null; ko_je_preuzeo: string | null
-  daily_status: string; ugovor_slika: string | null; email: string | null
+  daily_status: string; ugovor_slika: string | null
   nacin_placanja: string | null; depozit: number | null
 }
 
-type Agent = { id: string; email: string; full_name: string; role: string; is_active: boolean }
+type Agent = { id: string; email: string; full_name: string }
 type Tab = 'transakcije' | 'ugovori'
 
 export default function AdminFinansijePanelPage() {
@@ -34,19 +34,16 @@ export default function AdminFinansijePanelPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Transakcije filteri
   const [tSearch, setTSearch] = useState('')
   const [tOd, setTOd] = useState('')
   const [tDo, setTDo] = useState('')
   const [tTip, setTTip] = useState('all')
-  const [tKat, setTKat] = useState('all')
   const [tVStatus, setTVStatus] = useState('all')
   const [selAgents, setSelAgents] = useState<Set<string>>(new Set())
   const [selKats, setSelKats] = useState<Set<string>>(new Set())
   const [katSearch, setKatSearch] = useState('')
   const [tLimit, setTLimit] = useState(50)
 
-  // Ugovori filteri
   const [uSearch, setUSearch] = useState('')
   const [uOd, setUOd] = useState('')
   const [uDo, setUDo] = useState('')
@@ -56,8 +53,8 @@ export default function AdminFinansijePanelPage() {
     setLoading(true)
     const [{ data: t }, { data: r }, { data: a }] = await Promise.all([
       supabase.from('transakcije').select('*').order('timestamp_upisa', { ascending: false }),
-      supabase.from('rezervacije').select('id, br_tablica, ime_prezime, telefon, od_datuma, do_datuma, ukupno_naplata, naplaceno, ko_je_izdao, ko_je_preuzeo, daily_status, ugovor_slika, email, nacin_placanja, depozit').order('id', { ascending: false }),
-      supabase.from('agents').select('id, email, full_name, role, is_active').eq('is_active', true).order('full_name'),
+      supabase.from('rezervacije').select('id, br_tablica, ime_prezime, telefon, od_datuma, do_datuma, ukupno_naplata, naplaceno, ko_je_izdao, ko_je_preuzeo, daily_status, ugovor_slika, nacin_placanja, depozit').order('id', { ascending: false }),
+      supabase.from('agents').select('id, email, full_name').eq('is_active', true).order('full_name'),
     ])
     setTransakcije(t || [])
     setRezervacije(r || [])
@@ -67,7 +64,6 @@ export default function AdminFinansijePanelPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Email → ime mapa iz agents tabele
   const emailToName = useMemo(() => {
     const map: Record<string, string> = {}
     agents.forEach(a => { map[a.email.toLowerCase()] = a.full_name })
@@ -79,14 +75,18 @@ export default function AdminFinansijePanelPage() {
     return emailToName[email.toLowerCase()] || email.split('@')[0]
   }
 
-  // ── SALDO PO AGENTU ──
+  // Normalizuj tip i status za poređenje
+  const isPriliv = (t: Transakcija) => (t.tip_transakcije || '').toLowerCase() === 'priliv'
+  const isZavrseno = (t: Transakcija) => (t.status || '').toLowerCase() === 'zavrseno'
+
+  // Saldo računanje
   const { saldo, dugFirma, stanjeSanduce } = useMemo(() => {
     const saldo: Record<string, number> = {}
     const dugFirma: Record<string, number> = {}
     let sOst = 0, sPre = 0
 
     transakcije.forEach(t => {
-      if ((t.status || '').toLowerCase() !== 'zavrseno') return
+      if (!isZavrseno(t)) return
       const iz = t.iznos || 0
       const kat = (t.kategorija || '').toUpperCase()
       const mail = (t.osobaemail || '').toLowerCase().trim()
@@ -99,8 +99,8 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        if (mail) saldo[mail] = (saldo[mail] || 0) + iz
-        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
+        if (mail) saldo[mail] = (saldo[mail] || 0) + (isPriliv(t) ? iz : -iz)
+        if (pMail) saldo[pMail] = (saldo[pMail] || 0) + (isPriliv(t) ? -iz : iz)
       }
 
       if (kat.includes('OSTAVLJENO U SANDUCE')) sOst += Math.abs(iz)
@@ -110,20 +110,21 @@ export default function AdminFinansijePanelPage() {
     return { saldo, dugFirma, stanjeSanduce: sOst - sPre }
   }, [transakcije])
 
-  // ── FILTER TRANSAKCIJE ──
+  // Filtriranje transakcija
   const filteredTrans = useMemo(() => {
     return transakcije.filter(t => {
       const q = tSearch.toLowerCase()
       const mail = (t.osobaemail || '').toLowerCase()
       const pMail = (t.primaocemail || '').toLowerCase()
-      const ime = getName(t.osobaemail).toLowerCase()
-      const matchQ = !q || ime.includes(q) || mail.includes(q) ||
+      const matchQ = !q ||
+        getName(t.osobaemail).toLowerCase().includes(q) ||
+        mail.includes(q) ||
         (t.kategorija || '').toLowerCase().includes(q) ||
         (t.vozilo || '').toLowerCase().includes(q) ||
         (t.komentar || '').toLowerCase().includes(q)
       const matchOd = !tOd || (t.datum || '') >= tOd
       const matchDo = !tDo || (t.datum || '') <= tDo
-      const matchTip = tTip === 'all' || t.tip_transakcije === tTip
+      const matchTip = tTip === 'all' || (t.tip_transakcije || '').toLowerCase() === tTip
       const matchKat = selKats.size === 0 || selKats.has(t.kategorija || '')
       const matchAgent = selAgents.size === 0 || selAgents.has(mail) || selAgents.has(pMail)
       const vS = t.provereno ? 'ok' : t.xstrik === 'x' ? 'cancel' : 'pending'
@@ -132,15 +133,14 @@ export default function AdminFinansijePanelPage() {
     })
   }, [transakcije, tSearch, tOd, tDo, tTip, selKats, selAgents, tVStatus])
 
-  const totalPriliv = filteredTrans.filter(t => t.tip_transakcije === 'Priliv' && (t.status || '').toLowerCase() === 'zavrseno').reduce((s, t) => s + (t.iznos || 0), 0)
-  const totalOdliv = filteredTrans.filter(t => t.tip_transakcije === 'Odliv' && (t.status || '').toLowerCase() === 'zavrseno').reduce((s, t) => s + Math.abs(t.iznos || 0), 0)
-  const neto = totalPriliv - totalOdliv
+  const allKats = useMemo(() =>
+    Array.from(new Set(transakcije.map(t => t.kategorija).filter(Boolean))).sort() as string[]
+  , [transakcije])
 
-  const allKats = useMemo(() => Array.from(new Set(transakcije.map(t => t.kategorija).filter(Boolean))).sort() as string[], [transakcije])
-  const filteredKats = katSearch ? allKats.filter(k => k.toLowerCase().includes(katSearch.toLowerCase())) : allKats
-  const tipovi = useMemo(() => Array.from(new Set(transakcije.map(t => t.tip_transakcije).filter(Boolean))) as string[], [transakcije])
+  const filteredKats = katSearch
+    ? allKats.filter(k => k.toLowerCase().includes(katSearch.toLowerCase()))
+    : allKats
 
-  // Agenti koji se pojavljuju u transakcijama
   const transAgentEmails = useMemo(() => {
     const emails = new Set<string>()
     transakcije.forEach(t => {
@@ -150,12 +150,14 @@ export default function AdminFinansijePanelPage() {
     return Array.from(emails).sort((a, b) => getName(a).localeCompare(getName(b)))
   }, [transakcije, emailToName])
 
-  // ── FILTER UGOVORI ──
+  // Filtriranje ugovora
   const filteredUgovori = useMemo(() => {
     return rezervacije.filter(r => {
       const q = uSearch.toLowerCase()
-      const matchQ = !q || (r.ime_prezime || '').toLowerCase().includes(q) ||
-        (r.br_tablica || '').toLowerCase().includes(q) || String(r.id).includes(q)
+      const matchQ = !q ||
+        (r.ime_prezime || '').toLowerCase().includes(q) ||
+        (r.br_tablica || '').toLowerCase().includes(q) ||
+        String(r.id).includes(q)
       const matchOd = !uOd || (r.od_datuma || '') >= uOd
       const matchDo = !uDo || (r.od_datuma || '') <= uDo
       const dug = Math.max(0, (r.ukupno_naplata || 0) - (r.naplaceno || 0))
@@ -166,9 +168,6 @@ export default function AdminFinansijePanelPage() {
       return matchQ && matchOd && matchDo && matchStatus
     })
   }, [rezervacije, uSearch, uOd, uDo, uStatus])
-
-  const ukupnoNaplaceno = filteredUgovori.reduce((s, r) => s + (r.naplaceno || 0), 0)
-  const ukupnoDug = filteredUgovori.reduce((s, r) => s + Math.max(0, (r.ukupno_naplata || 0) - (r.naplaceno || 0)), 0)
 
   async function toggleProvereno(id: string, cur: boolean | null) {
     await supabase.from('transakcije').update({ provereno: !cur }).eq('id', id)
@@ -196,23 +195,37 @@ export default function AdminFinansijePanelPage() {
 
   const fmt = (n: number) => n.toFixed(2) + '€'
   const fmtDate = (d: string) => d ? d.split('-').reverse().join('.') : '/'
-  const inp: React.CSSProperties = { padding: '7px 10px', fontSize: 12, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', outline: 'none', width: '100%', boxSizing: 'border-box' }
-  const lbl: React.CSSProperties = { fontSize: 10, color: '#9ca3af', marginBottom: 3, fontWeight: 700, display: 'block', textTransform: 'uppercase' as const }
 
-  const saldoAgents = Object.keys(saldo).filter(a => Math.abs(saldo[a] || 0) > 0.01)
-  const dugAgents = Object.keys(dugFirma).filter(a => Math.abs(dugFirma[a] || 0) > 0.01)
+  const saldoEntries = Object.entries(saldo).filter(([, v]) => Math.abs(v) > 0.01).sort((a, b) => b[1] - a[1])
+  const dugEntries = Object.entries(dugFirma).filter(([, v]) => Math.abs(v) > 0.01)
+
+  const ukupnoNaplaceno = filteredUgovori.reduce((s, r) => s + (r.naplaceno || 0), 0)
+  const ukupnoDug = filteredUgovori.reduce((s, r) => s + Math.max(0, (r.ukupno_naplata || 0) - (r.naplaceno || 0)), 0)
+
+  // Styles
+  const inp: React.CSSProperties = { padding: '7px 10px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111', outline: 'none', width: '100%', boxSizing: 'border-box' as const }
+  const lbl: React.CSSProperties = { fontSize: 10, color: '#9ca3af', marginBottom: 3, fontWeight: 700, display: 'block', textTransform: 'uppercase' as const, letterSpacing: 0.4 }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Finansije panel</h1>
+    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+      {/* HEADER */}
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Finansije panel</h1>
+        <p style={{ fontSize: 13, color: '#9ca3af', margin: '4px 0 0' }}>
+          {transakcije.length} transakcija · {rezervacije.length} ugovora
+        </p>
       </div>
 
       {/* TABS */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
-        {([['transakcije', '💸 Transakcije'], ['ugovori', '📑 Ugovori i naplate']] as [Tab, string][]).map(([t, l]) => (
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, borderBottom: '2px solid #f3f4f6', paddingBottom: 0 }}>
+        {([['transakcije', '💸 Transakcije'], ['ugovori', '📑 Ugovori']] as [Tab, string][]).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '8px 18px', fontSize: 13, fontWeight: 600, border: '1px solid', borderColor: tab === t ? '#185FA5' : '#e5e7eb', borderRadius: 8, background: tab === t ? '#E6F1FB' : '#fff', color: tab === t ? '#0C447C' : '#6b7280', cursor: 'pointer' }}>
+            style={{
+              padding: '9px 20px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+              borderBottom: tab === t ? '2px solid #111' : '2px solid transparent',
+              background: 'none', color: tab === t ? '#111' : '#9ca3af',
+              marginBottom: -2,
+            }}>
             {l}
           </button>
         ))}
@@ -222,115 +235,98 @@ export default function AdminFinansijePanelPage() {
         <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
       ) : (
         <>
-          {/* ══════════════ TRANSAKCIJE ══════════════ */}
           {tab === 'transakcije' && (
             <div>
-              {/* Sanduče + Saldo paneli */}
-              <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr', gap: 12, marginBottom: 16 }}>
-                {/* Sanduče */}
-                <div style={{ background: '#fff', border: '2px solid #f59e0b', borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, marginBottom: 4 }}>📦 STANJE SANDUČETA</div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: stanjeSanduce >= 0 ? '#1D9E75' : '#dc2626' }}>
+              {/* TOP PANELI */}
+              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 12, marginBottom: 20 }}>
+
+                {/* Sanduce */}
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>📦 Sandučić</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: stanjeSanduce >= 0 ? '#1D9E75' : '#dc2626' }}>
                     {fmt(stanjeSanduce)}
                   </div>
                 </div>
 
-                {/* Saldo po agentu */}
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 16px', maxHeight: 160, overflowY: 'auto' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>
+                {/* Saldo */}
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 16px', maxHeight: 150, overflowY: 'auto' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, position: 'sticky', top: 0, background: '#fff', paddingBottom: 4, borderBottom: '1px solid #f3f4f6' }}>
                     💸 Saldo agenata
                   </div>
-                  {saldoAgents.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Nema podataka</div>
-                  ) : saldoAgents.map(email => (
-                    <div key={email} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #f9fafb', fontSize: 12 }}>
-                      <span style={{ color: '#374151' }}>{getName(email)}</span>
-                      <span style={{ fontWeight: 700, color: (saldo[email] || 0) >= 0 ? '#1D9E75' : '#dc2626' }}>
-                        {fmt(saldo[email] || 0)}
-                      </span>
-                    </div>
-                  ))}
+                  {saldoEntries.length === 0
+                    ? <div style={{ fontSize: 12, color: '#9ca3af' }}>Nema podataka</div>
+                    : saldoEntries.map(([email, val]) => (
+                      <div key={email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f9fafb', fontSize: 12 }}>
+                        <span style={{ color: '#374151' }}>{getName(email)}</span>
+                        <span style={{ fontWeight: 700, color: val >= 0 ? '#1D9E75' : '#dc2626' }}>{fmt(val)}</span>
+                      </div>
+                    ))
+                  }
                 </div>
 
                 {/* Dug prema firmi */}
-                <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', maxHeight: 160, overflowY: 'auto' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #fef2f2' }}>
+                <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', maxHeight: 150, overflowY: 'auto' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, position: 'sticky', top: 0, background: '#fff', paddingBottom: 4, borderBottom: '1px solid #fef2f2' }}>
                     ⚠️ Dug prema firmi
                   </div>
-                  {dugAgents.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Nema dugova</div>
-                  ) : dugAgents.map(email => (
-                    <div key={email} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #fef2f2', fontSize: 12 }}>
-                      <span style={{ color: '#374151' }}>{getName(email)}</span>
-                      <span style={{ fontWeight: 700, color: '#dc2626' }}>{fmt(dugFirma[email] || 0)}</span>
-                    </div>
-                  ))}
+                  {dugEntries.length === 0
+                    ? <div style={{ fontSize: 12, color: '#9ca3af' }}>Nema dugova ✓</div>
+                    : dugEntries.map(([email, val]) => (
+                      <div key={email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #fef2f2', fontSize: 12 }}>
+                        <span style={{ color: '#374151' }}>{getName(email)}</span>
+                        <span style={{ fontWeight: 700, color: '#dc2626' }}>{fmt(val)}</span>
+                      </div>
+                    ))
+                  }
                 </div>
               </div>
 
-              {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
-                {[
-                  { label: 'Ukupno priliv', value: fmt(totalPriliv), color: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5' },
-                  { label: 'Ukupno odliv', value: fmt(totalOdliv), color: '#dc2626', bg: '#FCEBEB', border: '#fecaca' },
-                  { label: 'Neto', value: fmt(neto), color: neto >= 0 ? '#1D9E75' : '#dc2626', bg: neto >= 0 ? '#E1F5EE' : '#FCEBEB', border: neto >= 0 ? '#5DCAA5' : '#fecaca' },
-                ].map(s => (
-                  <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '12px 18px' }}>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Filteri */}
-              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+              {/* FILTERI */}
+              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                  {/* Pretraga */}
-                  <div style={{ flex: '1 1 200px' }}>
+
+                  <div style={{ flex: '1 1 180px' }}>
                     <label style={lbl}>Pretraga</label>
                     <input value={tSearch} onChange={e => setTSearch(e.target.value)} placeholder="Osoba, kategorija, vozilo..." style={inp} />
                   </div>
 
-                  {/* Od */}
-                  <div style={{ flex: '0 0 130px' }}>
+                  <div style={{ flex: '0 0 120px' }}>
                     <label style={lbl}>Od</label>
                     <input type="date" value={tOd} onChange={e => setTOd(e.target.value)} style={inp} />
                   </div>
 
-                  {/* Do */}
-                  <div style={{ flex: '0 0 130px' }}>
+                  <div style={{ flex: '0 0 120px' }}>
                     <label style={lbl}>Do</label>
                     <input type="date" value={tDo} onChange={e => setTDo(e.target.value)} style={inp} />
                   </div>
 
-                  {/* Tip */}
-                  <div style={{ flex: '0 0 130px' }}>
+                  <div style={{ flex: '0 0 120px' }}>
                     <label style={lbl}>Tip</label>
                     <select value={tTip} onChange={e => setTTip(e.target.value)} style={inp}>
-                      <option value="all">Svi tipovi</option>
-                      {tipovi.map(t => <option key={t} value={t}>{t}</option>)}
+                      <option value="all">Svi</option>
+                      <option value="priliv">Priliv</option>
+                      <option value="odliv">Odliv</option>
                     </select>
                   </div>
 
-                  {/* V Status */}
-                  <div style={{ flex: '0 0 130px' }}>
+                  <div style={{ flex: '0 0 120px' }}>
                     <label style={lbl}>V Status</label>
                     <select value={tVStatus} onChange={e => setTVStatus(e.target.value)} style={inp}>
                       <option value="all">Svi</option>
                       <option value="ok">✅ OK</option>
-                      <option value="cancel">❌ Otkazano</option>
+                      <option value="cancel">❌ X</option>
                       <option value="pending">⚪ Na čekanju</option>
                     </select>
                   </div>
 
-                  {/* Agenti multiselect */}
-                  <div style={{ flex: '1 1 160px' }}>
+                  {/* Agenti */}
+                  <div style={{ flex: '1 1 150px' }}>
                     <label style={lbl}>Agenti {selAgents.size > 0 && `(${selAgents.size})`}</label>
-                    <div style={{ border: '1px solid #d1d5db', borderRadius: 8, height: 120, overflowY: 'auto', background: '#fff', padding: 4 }}>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, height: 110, overflowY: 'auto', background: '#fafafa' }}>
                       {transAgentEmails.map(email => (
-                        <label key={email} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px', cursor: 'pointer', borderRadius: 4, background: selAgents.has(email) ? '#E1F5EE' : 'transparent', fontSize: 11 }}>
-                          <input type="checkbox" checked={selAgents.has(email)} onChange={() => toggleAgent(email)} style={{ accentColor: '#1D9E75' }} />
-                          <span style={{ color: selAgents.has(email) ? '#085041' : '#374151', fontWeight: selAgents.has(email) ? 600 : 400 }}>
+                        <label key={email} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', cursor: 'pointer', background: selAgents.has(email) ? '#f0fdf8' : 'transparent', borderBottom: '1px solid #f3f4f6' }}>
+                          <input type="checkbox" checked={selAgents.has(email)} onChange={() => toggleAgent(email)} style={{ accentColor: '#1D9E75', cursor: 'pointer' }} />
+                          <span style={{ fontSize: 11, color: selAgents.has(email) ? '#085041' : '#374151', fontWeight: selAgents.has(email) ? 600 : 400 }}>
                             {getName(email)}
                           </span>
                         </label>
@@ -338,169 +334,163 @@ export default function AdminFinansijePanelPage() {
                     </div>
                   </div>
 
-                  {/* Kategorije multiselect */}
+                  {/* Kategorije */}
                   <div style={{ flex: '1 1 180px' }}>
                     <label style={lbl}>Kategorije {selKats.size > 0 && `(${selKats.size})`}</label>
-                    <input value={katSearch} onChange={e => setKatSearch(e.target.value)} placeholder="Pretraži kategoriju..." style={{ ...inp, marginBottom: 4, height: 28, fontSize: 11 }} />
-                    <div style={{ border: '1px solid #d1d5db', borderRadius: 8, height: 88, overflowY: 'auto', background: '#fff', padding: 4 }}>
+                    <input value={katSearch} onChange={e => setKatSearch(e.target.value)}
+                      placeholder="Pretraži..." style={{ ...inp, marginBottom: 4, height: 30 }} />
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, height: 76, overflowY: 'auto', background: '#fafafa' }}>
                       {filteredKats.map(k => (
-                        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 4px', cursor: 'pointer', borderRadius: 4, background: selKats.has(k) ? '#E6F1FB' : 'transparent', fontSize: 11 }}>
-                          <input type="checkbox" checked={selKats.has(k)} onChange={() => toggleKat(k)} style={{ accentColor: '#185FA5' }} />
-                          <span style={{ color: selKats.has(k) ? '#0C447C' : '#374151', fontWeight: selKats.has(k) ? 600 : 400 }}>{k}</span>
+                        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', cursor: 'pointer', background: selKats.has(k) ? '#eff6ff' : 'transparent', borderBottom: '1px solid #f3f4f6' }}>
+                          <input type="checkbox" checked={selKats.has(k)} onChange={() => toggleKat(k)} style={{ accentColor: '#185FA5', cursor: 'pointer' }} />
+                          <span style={{ fontSize: 11, color: selKats.has(k) ? '#1e40af' : '#374151', fontWeight: selKats.has(k) ? 600 : 400 }}>{k}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
-                  {/* Reset */}
-                  <div style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
+                  <div style={{ flex: '0 0 auto', alignSelf: 'flex-end', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <button onClick={resetAll}
-                      style={{ padding: '8px 14px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>
+                      style={{ padding: '7px 14px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#6b7280', fontWeight: 600 }}>
                       ✕ Reset
                     </button>
+                    <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>{filteredTrans.length}</div>
                   </div>
-
-                  <span style={{ fontSize: 12, color: '#9ca3af', alignSelf: 'flex-end', marginLeft: 'auto' }}>
-                    {filteredTrans.length} transakcija
-                  </span>
                 </div>
               </div>
 
-              {/* Tabela */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 950 }}>
+              {/* TABELA */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'auto', background: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 860 }}>
                   <thead>
-                    <tr style={{ background: '#f9fafb' }}>
-                      {['V', 'Datum', 'Tip', 'Kategorija', 'Iznos', 'Vozilo', 'Agent / Relacija', 'Komentar', 'Status', ''].map(h => (
-                        <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' as const }}>{h}</th>
+                    <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      {['', 'Datum', 'Kategorija', 'Iznos', 'Vozilo', 'Agent', 'Komentar', 'Status', ''].map((h, i) => (
+                        <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, background: '#fafafa' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTrans.slice(0, tLimit).map(t => {
-                      const isPriliv = t.tip_transakcije === 'Priliv'
+                      const pril = isPriliv(t)
                       const iznos = t.iznos || 0
-                      const isProvereno = t.provereno === true
-                      const isXstrik = t.xstrik === 'x'
+                      const isOk = t.provereno === true
+                      const isX = t.xstrik === 'x'
                       const aIme = getName(t.osobaemail)
                       const pIme = t.primaocemail ? getName(t.primaocemail) : null
-                      const relacija = pIme ? `${aIme} → ${pIme}` : aIme
                       return (
-                        <tr key={t.id} style={{ borderBottom: '1px solid #f3f4f6', background: isProvereno ? 'rgba(29,158,117,0.06)' : isXstrik ? 'rgba(220,38,38,0.04)' : 'transparent' }}>
-                          <td style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 16, textAlign: 'center' }}
+                        <tr key={t.id} style={{ borderBottom: '1px solid #f9fafb', background: isOk ? '#f0fdf8' : isX ? '#fff5f5' : '#fff', transition: 'background 0.1s' }}>
+                          <td style={{ padding: '10px 12px', width: 36, textAlign: 'center', cursor: 'pointer', fontSize: 15 }}
                             onClick={() => toggleProvereno(t.id, t.provereno)}>
-                            {isProvereno ? '✅' : isXstrik ? '❌' : '⚪'}
+                            {isOk ? '✅' : isX ? '❌' : '⚪'}
                           </td>
-                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' as const, color: '#374151' }}>{t.datum || '/'}</td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600, background: isPriliv ? '#E1F5EE' : '#FCEBEB', color: isPriliv ? '#085041' : '#dc2626' }}>
-                              {t.tip_transakcije || '/'}
-                            </span>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: '#374151', fontSize: 12 }}>
+                            <div style={{ fontWeight: 500 }}>{t.datum || '/'}</div>
+                            <div style={{ fontSize: 10, color: '#9ca3af' }}>
+                              {t.timestamp_upisa ? new Date(t.timestamp_upisa).toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
                           </td>
-                          <td style={{ padding: '8px 12px', color: '#374151', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {t.kategorija || '/'}
-                          </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: isPriliv ? '#1D9E75' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {isPriliv ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
-                          </td>
-                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '/'}</td>
-                          <td style={{ padding: '8px 12px', fontSize: 11, color: '#374151', whiteSpace: 'nowrap' as const, fontWeight: 500 }}>
-                            {relacija}
-                          </td>
-                          <td style={{ padding: '8px 12px', color: '#6b7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {t.komentar || '/'}
-                            {(t.slika1 || t.slika2 || t.slika3) && (
-                              <span style={{ marginLeft: 6 }}>
-                                {[t.slika1, t.slika2, t.slika3].filter(Boolean).map((s, i) => (
-                                  <a key={i} href={s!} target="_blank" rel="noreferrer"
-                                    style={{ fontSize: 10, marginLeft: 4, color: '#185FA5', textDecoration: 'none', background: '#E6F1FB', padding: '1px 5px', borderRadius: 4 }}>
-                                    📷{i + 1}
-                                  </a>
-                                ))}
+                          <td style={{ padding: '10px 12px', maxWidth: 180 }}>
+                            <div style={{ fontSize: 11, color: '#374151', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.kategorija || '/'}</div>
+                            <div style={{ marginTop: 2 }}>
+                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 600, background: pril ? '#dcfce7' : '#fee2e2', color: pril ? '#166534' : '#991b1b' }}>
+                                {pril ? '↑ Priliv' : '↓ Odliv'}
                               </span>
-                            )}
+                            </div>
                           </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600, background: (t.status || '').toLowerCase() === 'zavrseno' ? '#E1F5EE' : '#FAEEDA', color: (t.status || '').toLowerCase() === 'zavrseno' ? '#085041' : '#633806' }}>
-                              {t.status || 'na čekanju'}
+                          <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
+                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
+                          </td>
+                          <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
+                          <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, color: '#111' }}>{aIme}</div>
+                            {pIme && <div style={{ fontSize: 10, color: '#9ca3af' }}>→ {pIme}</div>}
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
+                            {t.komentar || '—'}
+                            {(t.slika1 || t.slika2 || t.slika3) && [t.slika1, t.slika2, t.slika3].filter(Boolean).map((s, i) => (
+                              <a key={i} href={s!} target="_blank" rel="noreferrer"
+                                style={{ marginLeft: 6, fontSize: 10, color: '#185FA5', background: '#eff6ff', padding: '1px 5px', borderRadius: 4, textDecoration: 'none' }}>
+                                📷
+                              </a>
+                            ))}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: isZavrseno(t) ? '#dcfce7' : '#fef9c3', color: isZavrseno(t) ? '#166534' : '#854d0e' }}>
+                              {t.status || '/'}
                             </span>
                           </td>
-                          <td style={{ padding: '8px 12px' }}>
+                          <td style={{ padding: '10px 8px' }}>
                             <button onClick={() => deleteTransakcija(t.id)}
-                              style={{ fontSize: 12, border: '1px solid #fecaca', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#dc2626', padding: '2px 7px' }}>✕</button>
+                              style={{ fontSize: 11, border: '1px solid #fee2e2', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#dc2626', padding: '2px 8px' }}>✕</button>
                           </td>
                         </tr>
                       )
                     })}
                     {filteredTrans.length === 0 && (
-                      <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema transakcija.</td></tr>
+                      <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nema transakcija</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+
               {filteredTrans.length > tLimit && (
                 <button onClick={() => setTLimit(l => l + 50)}
-                  style={{ width: '100%', padding: '11px', marginTop: 10, border: '1px dashed #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#6b7280', fontSize: 13 }}>
-                  Prikaži još +50 (prikazano {tLimit} od {filteredTrans.length})
+                  style={{ width: '100%', padding: 11, marginTop: 10, border: '1px dashed #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#6b7280', fontSize: 12 }}>
+                  Prikaži još +50 · prikazano {tLimit} od {filteredTrans.length}
                 </button>
               )}
             </div>
           )}
 
-          {/* ══════════════ UGOVORI ══════════════ */}
+          {/* UGOVORI */}
           {tab === 'ugovori' && (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
                 {[
-                  { label: 'Ukupno ugovora', value: filteredUgovori.length, color: '#374151', bg: '#f9fafb', border: '#e5e7eb', isNum: true },
-                  { label: 'Naplaćeno', value: fmt(ukupnoNaplaceno), color: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5', isNum: false },
-                  { label: 'Neplaćeno (dug)', value: fmt(ukupnoDug), color: '#dc2626', bg: '#FCEBEB', border: '#fecaca', isNum: false },
-                  { label: 'Bez ugovora', value: filteredUgovori.filter(r => !r.ugovor_slika).length, color: '#BA7517', bg: '#FAEEDA', border: '#EF9F27', isNum: true },
+                  { label: 'Ugovora', value: filteredUgovori.length, big: true, color: '#111', bg: '#fafafa', border: '#e5e7eb' },
+                  { label: 'Naplaćeno', value: fmt(ukupnoNaplaceno), big: false, color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+                  { label: 'Dug', value: fmt(ukupnoDug), big: false, color: '#dc2626', bg: '#fff5f5', border: '#fecaca' },
+                  { label: 'Bez ugovora', value: filteredUgovori.filter(r => !r.ugovor_slika).length, big: true, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
                 ].map(s => (
                   <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '12px 16px' }}>
                     <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ fontSize: s.isNum ? 28 : 20, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: s.big ? 28 : 20, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
               </div>
 
-              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '1 1 200px' }}>
-                  <label style={lbl}>Pretraga</label>
-                  <input value={uSearch} onChange={e => setUSearch(e.target.value)} placeholder="Klijent, tablice, ID..." style={inp} />
-                </div>
-                <div style={{ flex: '0 0 130px' }}>
-                  <label style={lbl}>Od datuma</label>
-                  <input type="date" value={uOd} onChange={e => setUOd(e.target.value)} style={inp} />
-                </div>
-                <div style={{ flex: '0 0 130px' }}>
-                  <label style={lbl}>Do datuma</label>
-                  <input type="date" value={uDo} onChange={e => setUDo(e.target.value)} style={inp} />
-                </div>
-                <div style={{ flex: '0 0 200px' }}>
-                  <label style={lbl}>Filter</label>
-                  <select value={uStatus} onChange={e => setUStatus(e.target.value)} style={inp}>
+              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 16px', marginBottom: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {[
+                  { label: 'Pretraga', node: <input value={uSearch} onChange={e => setUSearch(e.target.value)} placeholder="Klijent, tablice, ID..." style={inp} />, w: '1 1 200px' },
+                  { label: 'Od datuma', node: <input type="date" value={uOd} onChange={e => setUOd(e.target.value)} style={inp} />, w: '0 0 130px' },
+                  { label: 'Do datuma', node: <input type="date" value={uDo} onChange={e => setUDo(e.target.value)} style={inp} />, w: '0 0 130px' },
+                  { label: 'Filter', node: <select value={uStatus} onChange={e => setUStatus(e.target.value)} style={inp}>
                     <option value="all">Svi ugovori</option>
                     <option value="dug">⚠️ Sa dugom</option>
                     <option value="placeno">✅ Plaćeno</option>
-                    <option value="bez_ugovora">❌ Bez slike ugovora</option>
-                  </select>
-                </div>
+                    <option value="bez_ugovora">❌ Bez slike</option>
+                  </select>, w: '0 0 180px' },
+                ].map(f => (
+                  <div key={f.label} style={{ flex: f.w }}>
+                    <label style={lbl}>{f.label}</label>
+                    {f.node}
+                  </div>
+                ))}
                 {(uSearch || uOd || uDo || uStatus !== 'all') && (
                   <button onClick={() => { setUSearch(''); setUOd(''); setUDo(''); setUStatus('all') }}
-                    style={{ padding: '7px 12px', fontSize: 12, border: '1px solid #fecaca', borderRadius: 8, background: '#FCEBEB', cursor: 'pointer', color: '#dc2626', alignSelf: 'flex-end' }}>
+                    style={{ padding: '7px 12px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#6b7280', alignSelf: 'flex-end' }}>
                     ✕ Reset
                   </button>
                 )}
-                <span style={{ fontSize: 12, color: '#9ca3af', alignSelf: 'flex-end', marginLeft: 'auto' }}>{filteredUgovori.length} ugovora</span>
+                <span style={{ fontSize: 11, color: '#9ca3af', alignSelf: 'flex-end', marginLeft: 'auto' }}>{filteredUgovori.length}</span>
               </div>
 
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 900 }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'auto', background: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 860 }}>
                   <thead>
-                    <tr style={{ background: '#f9fafb' }}>
-                      {['#', 'Period', 'Klijent', 'Vozilo', 'Izdao / Preuzeo', 'Ukupno', 'Naplaćeno', 'Dug', 'Status', 'Ugovor'].map(h => (
-                        <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' as const }}>{h}</th>
+                    <tr style={{ borderBottom: '1px solid #f3f4f6', background: '#fafafa' }}>
+                      {['#', 'Period', 'Klijent', 'Vozilo', 'Agent', 'Ukupno', 'Naplaćeno', 'Dug', 'Status', 'Ugovor'].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -510,46 +500,42 @@ export default function AdminFinansijePanelPage() {
                       const naplaceno = r.naplaceno || 0
                       const dug = Math.max(0, ukupno - naplaceno)
                       return (
-                        <tr key={r.id} style={{ borderBottom: '1px solid #f3f4f6', background: dug > 0 ? 'rgba(220,38,38,0.03)' : 'transparent' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: '#9ca3af', fontSize: 11 }}>#{r.id}</td>
-                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' as const }}>
-                            <div style={{ fontWeight: 600, color: '#111' }}>{fmtDate(r.od_datuma)}</div>
-                            <div style={{ fontSize: 10, color: '#9ca3af' }}>do {fmtDate(r.do_datuma)}</div>
+                        <tr key={r.id} style={{ borderBottom: '1px solid #f9fafb', background: dug > 0 ? '#fff5f5' : '#fff' }}>
+                          <td style={{ padding: '10px 12px', color: '#9ca3af', fontSize: 11, fontWeight: 600 }}>#{r.id}</td>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' as const }}>
+                            <div style={{ fontWeight: 600, color: '#111', fontSize: 12 }}>{fmtDate(r.od_datuma)}</div>
+                            <div style={{ fontSize: 10, color: '#9ca3af' }}>→ {fmtDate(r.do_datuma)}</div>
                           </td>
-                          <td style={{ padding: '8px 12px' }}>
+                          <td style={{ padding: '10px 12px' }}>
                             <div style={{ fontWeight: 600, color: '#111' }}>{r.ime_prezime || '/'}</div>
                             <div style={{ fontSize: 10, color: '#9ca3af' }}>{r.telefon || ''}</div>
                           </td>
-                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#374151' }}>{r.br_tablica}</td>
-                          <td style={{ padding: '8px 12px', fontSize: 11 }}>
-                            <div>↗️ <span style={{ color: '#1D9E75', fontWeight: 600 }}>{r.ko_je_izdao?.split(' ')[0] || '/'}</span></div>
-                            <div>↙️ <span style={{ color: '#dc2626', fontWeight: 600 }}>{r.ko_je_preuzeo?.split(' ')[0] || '/'}</span></div>
+                          <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: '#374151', fontSize: 12 }}>{r.br_tablica}</td>
+                          <td style={{ padding: '10px 12px', fontSize: 11 }}>
+                            <div>↗ <span style={{ color: '#16a34a', fontWeight: 600 }}>{r.ko_je_izdao?.split(' ')[0] || '/'}</span></div>
+                            <div>↙ <span style={{ color: '#dc2626', fontWeight: 600 }}>{r.ko_je_preuzeo?.split(' ')[0] || '/'}</span></div>
                           </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: '#111' }}>{ukupno.toFixed(2)}€</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: '#1D9E75' }}>{naplaceno.toFixed(2)}€</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: dug > 0 ? '#dc2626' : '#1D9E75' }}>
-                            {dug > 0 ? `${dug.toFixed(2)}€` : '✓'}
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: '#111' }}>{ukupno.toFixed(2)}€</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: '#16a34a' }}>{naplaceno.toFixed(2)}€</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: dug > 0 ? '#dc2626' : '#9ca3af' }}>
+                            {dug > 0 ? `${dug.toFixed(2)}€` : '—'}
                           </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600, background: r.daily_status === 'Izdato' ? '#E6F1FB' : '#E1F5EE', color: r.daily_status === 'Izdato' ? '#0C447C' : '#085041' }}>
+                          <td style={{ padding: '10px 12px' }}>
+                            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: r.daily_status === 'Izdato' ? '#dbeafe' : '#dcfce7', color: r.daily_status === 'Izdato' ? '#1d4ed8' : '#166534' }}>
                               {r.daily_status || '/'}
                             </span>
                           </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            {r.ugovor_slika ? (
-                              <a href={r.ugovor_slika} target="_blank" rel="noreferrer"
-                                style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: '#E1F5EE', color: '#085041', fontWeight: 600, textDecoration: 'none' }}>
-                                📄 Vidi
-                              </a>
-                            ) : (
-                              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: '#FCEBEB', color: '#dc2626', fontWeight: 600 }}>❌ Fali</span>
-                            )}
+                          <td style={{ padding: '10px 12px' }}>
+                            {r.ugovor_slika
+                              ? <a href={r.ugovor_slika} target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: '#f0fdf4', color: '#166534', fontWeight: 600, textDecoration: 'none' }}>📄 Vidi</a>
+                              : <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: '#fee2e2', color: '#dc2626', fontWeight: 600 }}>❌ Fali</span>
+                            }
                           </td>
                         </tr>
                       )
                     })}
                     {filteredUgovori.length === 0 && (
-                      <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema ugovora.</td></tr>
+                      <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nema ugovora</td></tr>
                     )}
                   </tbody>
                 </table>
