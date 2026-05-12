@@ -218,9 +218,17 @@ export default function FinansijePage() {
   async function saveTransakcija() {
     const izVal = parseFloat(iznos)
     if (!izVal || !kategorija) { alert('Unesite iznos i kategoriju!'); return }
+    
+    // DEBUG - privremeno
+    console.log('agentEmail:', agentEmail)
+    console.log('agentIme:', agentIme)
+    console.log('iznos:', izVal, 'kategorija:', kategorija)
+    
+    if (!agentEmail) { alert('Greška: email nije učitan. Osvježi stranicu.'); return }
+    
     setUnosSaving(true)
     const jeRazmjena = kategorija.toLowerCase().includes('razmjena') && primaoc
-    await supabase.from('transakcije').insert([{
+    const { data, error } = await supabase.from('transakcije').insert([{
       id: genId(), tip_transakcije: tip, datum, kategorija,
       iznos: tip === 'priliv' ? Math.abs(izVal) : -Math.abs(izVal),
       vozilo: voziloUnos || 'OPŠTE',
@@ -231,6 +239,11 @@ export default function FinansijePage() {
       primaocemail: jeRazmjena ? primaoc : null,
       provereno: false, provera_status: 'pending', v_status: 'pending',
     }])
+    
+    console.log('INSERT data:', data, 'error:', error)
+    
+    if (error) { alert('Greška: ' + error.message); setUnosSaving(false); return }
+    
     setIznos(''); setKomentar(''); setVoziloUnos(''); setPhotoUrl('')
     setUploadStatus(''); setPrimaoc(''); setUnosSaving(false)
     alert('Upisano!'); loadAll(agentEmail, agentIme)
