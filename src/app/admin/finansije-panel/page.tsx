@@ -80,7 +80,8 @@ export default function AdminFinansijePanelPage() {
 
   function getName(email: string | null): string {
     if (!email) return '/'
-    return emailToName[email.toLowerCase()] || email.split('@')[0]
+    const e = email.toLowerCase()
+    return emailToName[e] || e.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
 
   // Normalizuj tip i status za poređenje
@@ -94,7 +95,9 @@ export default function AdminFinansijePanelPage() {
     let sOst = 0, sPre = 0
 
     transakcije.forEach(t => {
-      if (!isZavrseno(t)) return
+      // Samo Zavrseno (case-insensitive)
+      if ((t.status || '').toLowerCase() !== 'zavrseno') return
+
       const iz = t.iznos || 0
       const kat = (t.kategorija || '').toUpperCase()
       const mail = (t.osobaemail || '').toLowerCase().trim()
@@ -107,7 +110,8 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        // iznos je već pozitivan za priliv, negativan za odliv
+        // iznos je već signed: +70 za priliv, -20 za odliv
+        // direktno saberi kao u HTML-u: kol[mail] += iznos
         if (mail) saldo[mail] = (saldo[mail] || 0) + iz
         if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
       }
