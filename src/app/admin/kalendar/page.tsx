@@ -80,6 +80,8 @@ export default function AdminKalendarPage() {
 
   // Stats
   const [stats, setStats] = useState({ total: 0, zauzeto: 0 })
+  const [slotWidth, setSlotWidth] = useState(28)
+  const [rowHeight, setRowHeight] = useState(48)
 
   // Logovi
   const [showLogovi, setShowLogovi] = useState(false)
@@ -263,6 +265,7 @@ export default function AdminKalendarPage() {
       selectable: true,
       nowIndicator: true,
       eventMinWidth: 3,
+      slotMinWidth: slotWidth,
       resourceAreaWidth: '220px',
       resourceGroupField: 'building',
       locale: 'sr-Latn',
@@ -344,6 +347,28 @@ export default function AdminKalendarPage() {
       calInstanceRef.current.setOption('resources', getResources())
     }
   }, [searchQ])
+
+  useEffect(() => {
+    if (!calInstanceRef.current) return
+    calInstanceRef.current.setOption('slotMinWidth', slotWidth)
+  }, [slotWidth])
+
+  useEffect(() => {
+    if (!calInstanceRef.current) return
+    // Updateuj CSS za visinu redova dinamički
+    const styleId = 'fc-row-height-dynamic'
+    let el = document.getElementById(styleId)
+    if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el) }
+    el.textContent = `
+      .fc .fc-datagrid-body tr, .fc .fc-timeline-body tr { height: ${rowHeight}px !important; }
+      .fc .fc-datagrid-cell-frame { height: ${rowHeight}px !important; min-height: ${rowHeight}px !important; max-height: ${rowHeight}px !important; }
+      .fc .fc-timeline-lane-frame { height: ${rowHeight}px !important; min-height: ${rowHeight}px !important; }
+      .fc .fc-timeline-lane { height: ${rowHeight}px !important; min-height: ${rowHeight}px !important; max-height: ${rowHeight}px !important; }
+      .fc .fc-timeline-slot-frame { height: ${rowHeight}px !important; }
+    `
+    // Forsiraj re-render
+    calInstanceRef.current.updateSize()
+  }, [rowHeight])
 
   function setLokacija(lok: string) {
     const key = `auth_${lok.replace(/\s+/g, '')}`
@@ -447,6 +472,29 @@ export default function AdminKalendarPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži vozilo..."
             style={{ padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, width: 170, outline: 'none' }} />
+
+          {/* ZOOM KONTROLE */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px' }}>
+            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, marginRight: 2 }}>↔</span>
+            <button onClick={() => setSlotWidth(w => Math.max(14, w - 4))}
+              style={{ width: 22, height: 22, border: '1px solid #e5e7eb', borderRadius: 4, background: '#f9fafb', cursor: 'pointer', fontSize: 13, lineHeight: 1, color: '#374151' }}>−</button>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#374151', minWidth: 20, textAlign: 'center' }}>{slotWidth}</span>
+            <button onClick={() => setSlotWidth(w => Math.min(80, w + 4))}
+              style={{ width: 22, height: 22, border: '1px solid #e5e7eb', borderRadius: 4, background: '#f9fafb', cursor: 'pointer', fontSize: 13, lineHeight: 1, color: '#374151' }}>+</button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px' }}>
+            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, marginRight: 2 }}>↕</span>
+            <button onClick={() => setRowHeight(h => Math.max(24, h - 4))}
+              style={{ width: 22, height: 22, border: '1px solid #e5e7eb', borderRadius: 4, background: '#f9fafb', cursor: 'pointer', fontSize: 13, lineHeight: 1, color: '#374151' }}>−</button>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#374151', minWidth: 20, textAlign: 'center' }}>{rowHeight}</span>
+            <button onClick={() => setRowHeight(h => Math.min(80, h + 4))}
+              style={{ width: 22, height: 22, border: '1px solid #e5e7eb', borderRadius: 4, background: '#f9fafb', cursor: 'pointer', fontSize: 13, lineHeight: 1, color: '#374151' }}>+</button>
+          </div>
+
+          <button onClick={() => { setSlotWidth(28); setRowHeight(48) }}
+            title="Reset zoom"
+            style={{ width: 30, height: 30, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 14, color: '#9ca3af' }}>↺</button>
           <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
             style={{ padding: '8px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Nova rezervacija
