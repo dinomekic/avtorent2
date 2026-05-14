@@ -21,6 +21,7 @@ type Rezervacija = {
   is_early_return: boolean; original_return_date: string | null
   agent_name: string | null; created_at: string
   vehicles: { name: string } | null
+  qr_source: string | null; site_domain: string | null
 }
 
 const ST: Record<string, { bg: string; color: string; label: string }> = {
@@ -218,7 +219,7 @@ export default function AdminReservationsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
-                  {['Ref', 'Gost', 'Vozilo', 'Period', 'Iznos', 'Status', 'Akcije'].map(h => (
+                  {['Ref', 'Gost', 'Vozilo', 'Period', 'Iznos', 'Status', 'Izvor', 'Akcije'].map(h => (
                     <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
                   ))}
                 </tr>
@@ -246,6 +247,23 @@ export default function AdminReservationsPage() {
                           {st.label}
                         </span>
                       </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        {r.qr_source ? (
+                          <div>
+                            <span style={{ fontSize: 11, background: '#FAEEDA', color: '#854F0B', padding: '2px 7px', borderRadius: 20, fontWeight: 500 }}>
+                              {r.agent_name || r.qr_source}
+                            </span>
+                            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Partner QR</div>
+                          </div>
+                        ) : r.site_domain && r.site_domain !== 'rent-cars.me' && r.site_domain !== 'www.rent-cars.me' ? (
+                          <div>
+                            <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 7px', borderRadius: 20, fontWeight: 500 }}>{r.site_domain}</span>
+                            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Korporativni</div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 11, color: '#9ca3af' }}>Direktno</span>
+                        )}
+                      </td>
                       <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {!isPrebacena && r.status !== 'cancelled' && r.status !== 'closed' && (
@@ -269,7 +287,7 @@ export default function AdminReservationsPage() {
                   )
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema rezervacija.</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema rezervacija.</td></tr>
                 )}
               </tbody>
             </table>
