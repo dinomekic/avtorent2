@@ -308,6 +308,19 @@ export default function AdminKalendarPage() {
         const startIso = info.event.startStr.split('T')[0]
         const endIso = info.event.endStr ? info.event.endStr.split('T')[0] : startIso
         const resId = info.newResource ? info.newResource.id : info.event.getResources()[0]?.id
+        const ime = info.event.title
+        const stariRes = info.oldResource ? info.oldResource.id : resId
+        const promijenjenoVozilo = info.newResource && info.newResource.id !== stariRes
+
+        const poruka = promijenjenoVozilo
+          ? `Sigurno premjestiti rezervaciju?\n\n👤 ${ime}\n🚗 Vozilo: ${stariRes} → ${resId}\n📅 Datum: ${startIso} – ${endIso}`
+          : `Sigurno promijeniti datum rezervacije?\n\n👤 ${ime}\n📅 Novi termin: ${startIso} – ${endIso}`
+
+        if (!window.confirm(poruka)) {
+          info.revert()
+          return
+        }
+
         const payload: any = { od_datuma: startIso, do_datuma: endIso }
         if (resId) payload.br_tablica = resId
         const { error } = await supabase.from('rezervacije').update(payload).eq('id', info.event.id)
