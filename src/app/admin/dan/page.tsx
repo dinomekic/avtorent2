@@ -189,7 +189,7 @@ export default function AdminDanPage() {
   const [preuzDepVracen, setPreuzDepVracen] = useState(false)
   const [preuzDepIznos, setPreuzDepIznos] = useState('')
   const [preuzDepRazlog, setPreuzDepRazlog] = useState('')
-  const [akcijaSaving, setAkcijaSaving] = useState(false)
+  const [regUpozorenje, setRegUpozorenje] = useState<{ istek: string; dana: number } | null>(null)
 
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
 
@@ -334,7 +334,7 @@ export default function AdminDanPage() {
   }
 
   // ─── AGENT AKCIJE — otvori modal ────────────────────────
-  function pokreniIzdaj(r: KalRezervacija) {
+  async function pokreniIzdaj(r: KalRezervacija) {
     const agent = getCookie('avtorent-agent-name') || logovanAgent
     setAkcijaRez(r)
     setAkcijaTip('izdavanje')
@@ -344,6 +344,25 @@ export default function AdminDanPage() {
     setIzdNacinPlacanja('Keš')
     setIzdKes('')
     setIzdKartica('')
+    setRegUpozorenje(null)
+
+    // Provjeri istek registracije
+    const { data: voz } = await supabase
+      .from('vozila_fleet')
+      .select('istek_reg')
+      .eq('license_plate', r.br_tablica)
+      .single()
+
+    if (voz?.istek_reg && r.do_datuma) {
+      const istek = new Date(voz.istek_reg)
+      const povratak = new Date(r.do_datuma)
+      if (istek < povratak) {
+        const dana = Math.ceil((povratak.getTime() - istek.getTime()) / 86400000)
+        const istekStr = istek.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        setRegUpozorenje({ istek: istekStr, dana })
+      }
+    }
+
     setShowAkcijaModal(true)
   }
 
@@ -368,6 +387,34 @@ export default function AdminDanPage() {
   async function potvrdiAkcijuIzdaj() {
     if (!akcijaRez || !akcijaAgent) return
     setAkcijaSaving(true)
+
+    // Provjeri istek registracije
+    const { data: voziloData } = await supabase
+      .from('vozila_fleet')
+      .select('istek_reg, agregirani_2')
+      .eq('license_plate', akcijaRez.br_tablica)
+      .single()
+
+    if (voziloData?.istek_reg) {
+      const istekReg = new Date(voziloData.istek_reg)
+      const datumPovratka = new Date(akcijaRez.do_datuma)
+      if (istekReg < datumPovratka) {
+        const istekStr = istekReg.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        const povratakStr = datumPovratka.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        const potvrda = window.confirm(
+          `⚠️ UPOZORENJE — REGISTRACIJA ISTIČE PRIJE POVRATKA!\n\n` +
+          `🚗 Vozilo: ${voziloData.agregirani_2 || akcijaRez.br_tablica}\n` +
+          `📋 Istek registracije: ${istekStr}\n` +
+          `📅 Datum povratka: ${povratakStr}\n\n` +
+          `Registracija ističe za vrijeme najma!\n\n` +
+          `Jesi li siguran/na da želiš izdati vozilo?`
+        )
+        if (!potvrda) {
+          setAkcijaSaving(false)
+          return
+        }
+      }
+    }
     const naplata = parseFloat(izdNaplata) || 0
     const depozitUzet = parseFloat(izdDepozit) || 0
     const rez = akcijaRez
@@ -895,6 +942,29 @@ export default function AdminDanPage() {
               )}
             </div>
 
+            {/* UPOZORENJE registracija */}
+            {regUpozorenje && (
+              <div style={{ background: '#FCEBEB', border: '2px solid #dc2626', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 24 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>
+                      REGISTRACIJA ISTIČE TOKOM NAJMA!
+                    </div>
+                    <div style={{ fontSize: 12, color: '#791F1F' }}>
+                      Istek registracije: <strong>{regUpozorenje.istek}</strong>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#791F1F' }}>
+                      Vozilo će biti {regUpozorenje.dana} {regUpozorenje.dana === 1 ? 'dan' : 'dana'} bez važeće registracije prije povratka.
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: '#dc2626', fontWeight: 700 }}>
+                      Potvrdom prihvataš odgovornost za ovo izdavanje.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* IZDAVANJE */}
             {akcijaTip === 'izdavanje' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -960,8 +1030,8 @@ export default function AdminDanPage() {
                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                   <button onClick={() => setShowAkcijaModal(false)} style={{ flex: 1, padding: 10, border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
                   <button onClick={potvrdiAkcijuIzdaj} disabled={akcijaSaving}
-                    style={{ flex: 2, padding: 10, background: akcijaSaving ? '#5DCAA5' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                    {akcijaSaving ? '⏳...' : '✓ Potvrdi izdavanje'}
+                    style={{ flex: 2, padding: 10, background: akcijaSaving ? '#5DCAA5' : regUpozorenje ? '#dc2626' : '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    {akcijaSaving ? '⏳...' : regUpozorenje ? '⚠️ Svjestan/na rizika — Izdaj' : '✓ Potvrdi izdavanje'}
                   </button>
                 </div>
                 {/* Otkaži dugme samo za izdavanje */}
