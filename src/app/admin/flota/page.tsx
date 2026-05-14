@@ -77,6 +77,7 @@ export default function AdminFleetPage() {
   const [filterStatus, setFilterStatus] = useState('SVE')
   const [filterMarka, setFilterMarka] = useState('SVE')
   const [filterClass, setFilterClass] = useState('SVE')
+  const [filterReg, setFilterReg] = useState('SVE') // SVE | istekla | skoro | ok | nema
 
   const [showForm, setShowForm] = useState(false)
   const [editVehicle, setEditVehicle] = useState<FleetVehicle | null>(null)
@@ -189,7 +190,14 @@ export default function AdminFleetPage() {
     const matchSt = filterStatus === 'SVE' || v.fleet_status === filterStatus
     const matchMarka = filterMarka === 'SVE' || v.marka === filterMarka
     const matchClass = filterClass === 'SVE' || v.vehicle_class === filterClass
-    return matchQ && matchLok && matchSt && matchMarka && matchClass
+    const d = v.dana_do_isteka
+    const matchReg = filterReg === 'SVE' ? true
+      : filterReg === 'istekla' ? (d !== null && d <= 0)
+      : filterReg === 'skoro' ? (d !== null && d > 0 && d <= 15)
+      : filterReg === 'ok' ? (d !== null && d > 15)
+      : filterReg === 'nema' ? (!v.istek_reg)
+      : true
+    return matchQ && matchLok && matchSt && matchMarka && matchClass && matchReg
   })
 
   const marke = ['SVE', ...Array.from(new Set(vehicles.map(v => v.marka).filter(Boolean))).sort()] as string[]
@@ -306,7 +314,77 @@ export default function AdminFleetPage() {
         ))}
       </div>
 
-      {/* FILTERI */}
+      {/* REGISTRACIJA REMINDER BANNER */}
+      {(() => {
+        const istekla = vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka <= 0)
+        const skoro15 = vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka > 0 && v.dana_do_isteka <= 15)
+        const skoro30 = vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka > 15 && v.dana_do_isteka <= 30)
+        if (istekla.length === 0 && skoro15.length === 0) return null
+        return (
+          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {istekla.length > 0 && (
+              <div style={{ background: '#FEE2E2', border: '1px solid #DC2626', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 20 }}>🚫</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Istekla registracija — {istekla.length} {istekla.length === 1 ? 'vozilo' : 'vozila'}!</div>
+                    <div style={{ fontSize: 12, color: '#7f1d1d' }}>{istekla.map(v => v.license_plate || v.agregirani_2).join(', ')}</div>
+                  </div>
+                </div>
+                <button onClick={() => setFilterReg('istekla')}
+                  style={{ padding: '5px 12px', fontSize: 11, border: '1px solid #DC2626', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#DC2626', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                  Prikaži
+                </button>
+              </div>
+            )}
+            {skoro15.length > 0 && (
+              <div style={{ background: '#FAEEDA', border: '1px solid #EF9F27', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 20 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#BA7517' }}>Registracija ističe za ≤15 dana — {skoro15.length} {skoro15.length === 1 ? 'vozilo' : 'vozila'}</div>
+                    <div style={{ fontSize: 12, color: '#713f12' }}>{skoro15.map(v => `${v.license_plate || ''} (${Math.round(v.dana_do_isteka!)}d)`).join(', ')}</div>
+                  </div>
+                </div>
+                <button onClick={() => setFilterReg('skoro')}
+                  style={{ padding: '5px 12px', fontSize: 11, border: '1px solid #EF9F27', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#BA7517', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                  Prikaži
+                </button>
+              </div>
+            )}
+            {skoro30.length > 0 && skoro15.length === 0 && (
+              <div style={{ background: '#fefce8', border: '1px solid #fbbf24', borderRadius: 10, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: '#713f12' }}>
+                  📅 {skoro30.length} {skoro30.length === 1 ? 'vozilo' : 'vozila'} sa registracijom za ≤30 dana: {skoro30.map(v => `${v.license_plate || ''} (${Math.round(v.dana_do_isteka!)}d)`).join(', ')}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* REG FILTERI */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        {[
+          ['SVE', 'Sve', '#6b7280', '#f3f4f6'],
+          ['istekla', '🚫 Istekla', '#DC2626', '#FEE2E2'],
+          ['skoro', '⚠️ ≤15 dana', '#BA7517', '#FAEEDA'],
+          ['ok', '✅ Uredna', '#1D9E75', '#E1F5EE'],
+          ['nema', '❓ Bez podatka', '#9CA3AF', '#F9FAFB'],
+        ].map(([val, label, color, bg]) => {
+          const count = val === 'SVE' ? vehicles.length
+            : val === 'istekla' ? vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka <= 0).length
+            : val === 'skoro' ? vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka > 0 && v.dana_do_isteka <= 15).length
+            : val === 'ok' ? vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka > 15).length
+            : vehicles.filter(v => !v.istek_reg).length
+          return (
+            <button key={val} onClick={() => setFilterReg(val)}
+              style={{ padding: '5px 12px', fontSize: 12, border: `1px solid ${filterReg === val ? color : '#e5e7eb'}`, borderRadius: 20, background: filterReg === val ? bg : '#fff', color: filterReg === val ? color : '#6b7280', cursor: 'pointer', fontWeight: filterReg === val ? 700 : 400 }}>
+              {label} {count > 0 && <span style={{ marginLeft: 3, opacity: 0.7 }}>({count})</span>}
+            </button>
+          )
+        })}
+      </div>
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Pretraži tablice, naziv..."
           style={{ ...inp, width: 220, marginBottom: 0 }} />
@@ -325,8 +403,8 @@ export default function AdminFleetPage() {
           <option value="SVE">Sve klase</option>
           {VEHICLE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {(searchQ || filterLok !== 'SVE' || filterStatus !== 'SVE' || filterMarka !== 'SVE' || filterClass !== 'SVE') && (
-          <button onClick={() => { setSearchQ(''); setFilterLok('SVE'); setFilterStatus('SVE'); setFilterMarka('SVE'); setFilterClass('SVE') }}
+        {(searchQ || filterLok !== 'SVE' || filterStatus !== 'SVE' || filterMarka !== 'SVE' || filterClass !== 'SVE' || filterReg !== 'SVE') && (
+          <button onClick={() => { setSearchQ(''); setFilterLok('SVE'); setFilterStatus('SVE'); setFilterMarka('SVE'); setFilterClass('SVE'); setFilterReg('SVE') }}
             style={{ padding: '7px 14px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#6b7280' }}>
             Poništi
           </button>
