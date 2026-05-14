@@ -355,7 +355,18 @@ export default function AdminDanPage() {
 
     if (voz?.istek_reg && r.do_datuma) {
       const istek = new Date(voz.istek_reg)
+      const danas = new Date(selectedDate)
+      danas.setHours(0, 0, 0, 0)
       const povratak = new Date(r.do_datuma)
+
+      // Ako je registracija već istekla — blokiraj
+      if (istek < danas) {
+        const istekStr = istek.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        alert(`🚫 NIJE MOGUĆE IZDATI VOZILO\n\nRegistracija je istekla: ${istekStr}\n\nRijesi registraciju prije izdavanja.`)
+        return
+      }
+
+      // Ako registracija ističe tokom najma — upozorenje
       if (istek < povratak) {
         const dana = Math.ceil((povratak.getTime() - istek.getTime()) / 86400000)
         const istekStr = istek.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -397,9 +408,20 @@ export default function AdminDanPage() {
 
     if (voziloData?.istek_reg) {
       const istekReg = new Date(voziloData.istek_reg)
+      const danas = new Date()
+      danas.setHours(0, 0, 0, 0)
       const datumPovratka = new Date(akcijaRez.do_datuma)
+      const istekStr = istekReg.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+      // Blokada — registracija već istekla
+      if (istekReg < danas) {
+        alert(`🚫 NIJE MOGUĆE IZDATI VOZILO\n\nRegistracija je istekla: ${istekStr}\n\nRijesi registraciju prije izdavanja.`)
+        setAkcijaSaving(false)
+        return
+      }
+
+      // Upozorenje — ističe tokom najma
       if (istekReg < datumPovratka) {
-        const istekStr = istekReg.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
         const povratakStr = datumPovratka.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
         const potvrda = window.confirm(
           `⚠️ UPOZORENJE — REGISTRACIJA ISTIČE PRIJE POVRATKA!\n\n` +
