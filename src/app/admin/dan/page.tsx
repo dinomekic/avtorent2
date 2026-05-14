@@ -178,10 +178,14 @@ export default function AdminDanPage() {
   const [izdNaplata, setIzdNaplata] = useState('')
   const [izdDepozit, setIzdDepozit] = useState('')
   const [izdNacinPlacanja, setIzdNacinPlacanja] = useState('Keš')
+  const [izdKes, setIzdKes] = useState('')
+  const [izdKartica, setIzdKartica] = useState('')
   // Preuzimanje
   const [preuzDugNaplacen, setPreuzDugNaplacen] = useState(false)
   const [preuzDugIznos, setPreuzDugIznos] = useState('')
   const [preuzDugNacin, setPreuzDugNacin] = useState('Keš')
+  const [preuzDugKes, setPreuzDugKes] = useState('')
+  const [preuzDugKartica, setPreuzDugKartica] = useState('')
   const [preuzDepVracen, setPreuzDepVracen] = useState(false)
   const [preuzDepIznos, setPreuzDepIznos] = useState('')
   const [preuzDepRazlog, setPreuzDepRazlog] = useState('')
@@ -338,6 +342,8 @@ export default function AdminDanPage() {
     setIzdNaplata(String(r.ukupno_naplata || 0))
     setIzdDepozit(String(r.depozit || 0))
     setIzdNacinPlacanja('Keš')
+    setIzdKes('')
+    setIzdKartica('')
     setShowAkcijaModal(true)
   }
 
@@ -351,6 +357,8 @@ export default function AdminDanPage() {
     setPreuzDugNaplacen(dug > 0)
     setPreuzDugIznos(dug > 0 ? String(dug.toFixed(2)) : '0')
     setPreuzDugNacin('Keš')
+    setPreuzDugKes('')
+    setPreuzDugKartica('')
     setPreuzDepVracen(dep > 0)
     setPreuzDepIznos(dep > 0 ? String(dep) : '0')
     setPreuzDepRazlog('')
@@ -364,12 +372,16 @@ export default function AdminDanPage() {
     const depozitUzet = parseFloat(izdDepozit) || 0
     const rez = akcijaRez
     const rezId = rez.id
+    const splitInfo = izdNacinPlacanja === 'Kartica + Keš'
+      ? ` (Keš: ${parseFloat(izdKes)||0}€, Kartica: ${parseFloat(izdKartica)||0}€)`
+      : ''
+    const nacinSaInfom = izdNacinPlacanja + splitInfo
 
     const { error } = await supabase.from('rezervacije').update({
       daily_status: 'Izdato', ko_je_izdao: akcijaAgent,
       naplaceno: naplata, depozit_uzet: depozitUzet > 0,
       depozit: depozitUzet > 0 ? depozitUzet : (rez.depozit || 0),
-      nacin_placanja: izdNacinPlacanja,
+      nacin_placanja: nacinSaInfom,
     }).eq('id', rezId)
     if (error) { alert('Greška: ' + error.message); setAkcijaSaving(false); return }
 
@@ -378,7 +390,7 @@ export default function AdminDanPage() {
     const inserti: any[] = []
     if (naplata > 0) {
       const p = Math.max(0, (rez.ukupno_naplata || 0) - naplata)
-      inserti.push({ id: Date.now()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: naplata, vozilo: rez.br_tablica, komentar: `Naplata pri izdavanju (REZ #${rezId}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      inserti.push({ id: Date.now()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: naplata, vozilo: rez.br_tablica, komentar: `Naplata pri izdavanju (REZ #${rezId}). Način: ${nacinSaInfom}.${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
     }
     if (depozitUzet > 0) {
       inserti.push({ id: Date.now()+'2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: depozitUzet, vozilo: rez.br_tablica, komentar: `Depozit pri izdavanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
@@ -396,6 +408,9 @@ export default function AdminDanPage() {
     const vracenDepozit = preuzDepVracen ? (parseFloat(preuzDepIznos) || 0) : 0
     const novoNaplaceno = (rez.naplaceno || 0) + naplataDuga
     const preostaliDug = (rez.ukupno_naplata || 0) - novoNaplaceno
+    const splitInfoPreuz = preuzDugNacin === 'Kartica + Keš'
+      ? ` (Keš: ${parseFloat(preuzDugKes)||0}€, Kartica: ${parseFloat(preuzDugKartica)||0}€)`
+      : ''
     let novaNapomena = rez.napomena || ''
     if (preuzDepRazlog) novaNapomena += ` | Zadržan depozit: ${preuzDepRazlog}`
 
@@ -408,7 +423,7 @@ export default function AdminDanPage() {
     const agentEmail = agentData?.email || ''
     const tranInsert: any[] = []
     if (naplataDuga > 0) {
-      tranInsert.push({ id: Date.now()+'r1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Duga', iznos: naplataDuga, vozilo: rez.br_tablica, komentar: `Naplata duga pri preuzimanju (REZ #${rezId}). Način: ${preuzDugNacin}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      tranInsert.push({ id: Date.now()+'r1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Duga', iznos: naplataDuga, vozilo: rez.br_tablica, komentar: `Naplata duga pri preuzimanju (REZ #${rezId}). Način: ${preuzDugNacin}${splitInfoPreuz}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
     }
     if (vracenDepozit > 0) {
       tranInsert.push({ id: Date.now()+'r2', tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Povrat Depozita', iznos: vracenDepozit, vozilo: rez.br_tablica, komentar: `Vraćen depozit pri preuzimanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
@@ -433,11 +448,13 @@ export default function AdminDanPage() {
     if (agentTip === 'izdavanje') {
       setAkcijaRez(rez); setAkcijaTip('izdavanje'); setAkcijaAgent(agent)
       setIzdNaplata(String(rez.ukupno_naplata || 0)); setIzdDepozit(String(rez.depozit || 0)); setIzdNacinPlacanja('Keš')
+      setIzdKes(''); setIzdKartica('')
       setShowAkcijaModal(true)
     } else {
       const dug = Math.max(0, (rez.ukupno_naplata || 0) - (rez.naplaceno || 0))
       setAkcijaRez(rez); setAkcijaTip('preuzimanje'); setAkcijaAgent(agent)
       setPreuzDugNaplacen(dug > 0); setPreuzDugIznos(dug > 0 ? dug.toFixed(2) : '0'); setPreuzDugNacin('Keš')
+      setPreuzDugKes(''); setPreuzDugKartica('')
       setPreuzDepVracen((rez.depozit || 0) > 0); setPreuzDepIznos(String(rez.depozit || 0)); setPreuzDepRazlog('')
       setShowAkcijaModal(true)
     }
@@ -890,12 +907,38 @@ export default function AdminDanPage() {
                   <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>💳 Način plaćanja</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                     {['Keš', 'Kartica', 'Kartica + Keš'].map(m => (
-                      <button key={m} onClick={() => setIzdNacinPlacanja(m)}
+                      <button key={m} onClick={() => { setIzdNacinPlacanja(m); setIzdKes(''); setIzdKartica('') }}
                         style={{ padding: '9px', border: `1px solid ${izdNacinPlacanja === m ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: izdNacinPlacanja === m ? '#E1F5EE' : '#fff', color: izdNacinPlacanja === m ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 12, fontWeight: izdNacinPlacanja === m ? 700 : 400 }}>
                         {m}
                       </button>
                     ))}
                   </div>
+                  {izdNacinPlacanja === 'Kartica + Keš' && (
+                    <div style={{ marginTop: 10, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 700, marginBottom: 8 }}>Podijeli iznos od {parseFloat(izdNaplata)||0}€</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3 }}>💵 Keš (€)</label>
+                          <input type="number" step="0.01" value={izdKes}
+                            onChange={e => { setIzdKes(e.target.value); const k = parseFloat(e.target.value)||0; const uk = parseFloat(izdNaplata)||0; setIzdKartica(uk > k ? (uk - k).toFixed(2) : '0') }}
+                            placeholder="0.00"
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 13, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3 }}>💳 Kartica (€)</label>
+                          <input type="number" step="0.01" value={izdKartica}
+                            onChange={e => { setIzdKartica(e.target.value); const ka = parseFloat(e.target.value)||0; const uk = parseFloat(izdNaplata)||0; setIzdKes(uk > ka ? (uk - ka).toFixed(2) : '0') }}
+                            placeholder="0.00"
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 13, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
+                        </div>
+                      </div>
+                      {(() => { const uk = parseFloat(izdNaplata)||0; const k = parseFloat(izdKes)||0; const ka = parseFloat(izdKartica)||0; const r = uk - k - ka; return Math.abs(r) > 0.01 ? (
+                        <div style={{ marginTop: 6, fontSize: 11, color: r > 0 ? '#dc2626' : '#9ca3af', fontWeight: 600 }}>
+                          {r > 0 ? `⚠️ Ostaje ${r.toFixed(2)}€ nerasporedjeno` : `ℹ️ Razlika ${Math.abs(r).toFixed(2)}€`}
+                        </div>
+                      ) : <div style={{ marginTop: 6, fontSize: 11, color: '#1D9E75', fontWeight: 600 }}>✓ Iznos raspoređen</div> })()}
+                    </div>
+                  )}
                 </div>
                 <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#0C447C' }}>
                   Agent <strong>{akcijaAgent}</strong> se zadužuje za naplaćeni iznos.
@@ -937,12 +980,36 @@ export default function AdminDanPage() {
                           style={{ width: '100%', padding: '9px 12px', fontSize: 14, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 8, color: '#111', boxSizing: 'border-box' as const }} />
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                           {['Keš', 'Kartica', 'Kartica + Keš'].map(m => (
-                            <button key={m} onClick={() => setPreuzDugNacin(m)}
+                            <button key={m} onClick={() => { setPreuzDugNacin(m); setPreuzDugKes(''); setPreuzDugKartica('') }}
                               style={{ padding: '7px', border: `1px solid ${preuzDugNacin === m ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: preuzDugNacin === m ? '#E1F5EE' : '#fff', color: preuzDugNacin === m ? '#085041' : '#6b7280', cursor: 'pointer', fontSize: 11, fontWeight: preuzDugNacin === m ? 700 : 400 }}>
                               {m}
                             </button>
                           ))}
                         </div>
+                        {preuzDugNacin === 'Kartica + Keš' && (
+                          <div style={{ marginTop: 8, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 700, marginBottom: 6 }}>Podijeli iznos od {parseFloat(preuzDugIznos)||0}€</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              <div>
+                                <label style={{ fontSize: 10, color: '#6b7280', display: 'block', marginBottom: 2 }}>💵 Keš (€)</label>
+                                <input type="number" step="0.01" value={preuzDugKes}
+                                  onChange={e => { setPreuzDugKes(e.target.value); const k = parseFloat(e.target.value)||0; const uk = parseFloat(preuzDugIznos)||0; setPreuzDugKartica(uk > k ? (uk - k).toFixed(2) : '0') }}
+                                  placeholder="0.00"
+                                  style={{ width: '100%', padding: '7px 10px', fontSize: 13, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 6, color: '#111', boxSizing: 'border-box' as const }} />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: 10, color: '#6b7280', display: 'block', marginBottom: 2 }}>💳 Kartica (€)</label>
+                                <input type="number" step="0.01" value={preuzDugKartica}
+                                  onChange={e => { setPreuzDugKartica(e.target.value); const ka = parseFloat(e.target.value)||0; const uk = parseFloat(preuzDugIznos)||0; setPreuzDugKes(uk > ka ? (uk - ka).toFixed(2) : '0') }}
+                                  placeholder="0.00"
+                                  style={{ width: '100%', padding: '7px 10px', fontSize: 13, fontWeight: 700, border: '1px solid #d1d5db', borderRadius: 6, color: '#111', boxSizing: 'border-box' as const }} />
+                              </div>
+                            </div>
+                            {(() => { const uk = parseFloat(preuzDugIznos)||0; const k = parseFloat(preuzDugKes)||0; const ka = parseFloat(preuzDugKartica)||0; const r = uk - k - ka; return Math.abs(r) > 0.01 ? (
+                              <div style={{ marginTop: 4, fontSize: 10, color: '#dc2626', fontWeight: 600 }}>⚠️ Ostaje {r.toFixed(2)}€ nerasporedjeno</div>
+                            ) : <div style={{ marginTop: 4, fontSize: 10, color: '#1D9E75', fontWeight: 600 }}>✓ Raspoređeno</div> })()}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
