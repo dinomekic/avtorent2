@@ -372,6 +372,9 @@ export default function AdminDanPage() {
     const depozitUzet = parseFloat(izdDepozit) || 0
     const rez = akcijaRez
     const rezId = rez.id
+    const kesIznos = izdNacinPlacanja === 'Kartica' ? 0
+      : izdNacinPlacanja === 'Kartica + Keš' ? (parseFloat(izdKes) || 0)
+      : naplata // Keš — sve je keš
     const splitInfo = izdNacinPlacanja === 'Kartica + Keš'
       ? ` (Keš: ${parseFloat(izdKes)||0}€, Kartica: ${parseFloat(izdKartica)||0}€)`
       : ''
@@ -388,15 +391,24 @@ export default function AdminDanPage() {
     const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', akcijaAgent).maybeSingle()
     const agentEmail = agentData?.email || ''
     const inserti: any[] = []
-    if (naplata > 0) {
+
+    // Agenta zadužujemo SAMO za keš iznos (kartica ide direktno u firmu)
+    if (kesIznos > 0) {
       const p = Math.max(0, (rez.ukupno_naplata || 0) - naplata)
-      inserti.push({ id: Date.now()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: naplata, vozilo: rez.br_tablica, komentar: `Naplata pri izdavanju (REZ #${rezId}). Način: ${nacinSaInfom}.${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      inserti.push({ id: Date.now()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: kesIznos, vozilo: rez.br_tablica, komentar: `Naplata pri izdavanju (REZ #${rezId}). Način: ${nacinSaInfom}.${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+    }
+    // Kartica — evidentira se odvojeno, ne zadužuje agenta (nema osoba/osobaemail)
+    const karticaIznos = izdNacinPlacanja === 'Kartica' ? naplata
+      : izdNacinPlacanja === 'Kartica + Keš' ? (parseFloat(izdKartica) || 0)
+      : 0
+    if (karticaIznos > 0) {
+      inserti.push({ id: Date.now()+'1k', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Karticom', iznos: karticaIznos, vozilo: rez.br_tablica, komentar: `Kartica pri izdavanju (REZ #${rezId}) — ${nacinSaInfom}. Agent: ${akcijaAgent}`, osoba: null, osobaemail: null, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
     }
     if (depozitUzet > 0) {
       inserti.push({ id: Date.now()+'2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: depozitUzet, vozilo: rez.br_tablica, komentar: `Depozit pri izdavanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
     }
     if (inserti.length > 0) await supabase.from('transakcije').insert(inserti)
-    await supabase.from('logovi').insert([{ akcija: `${akcijaAgent} izdao REZ #${rezId}. Naplaćeno: ${naplata}€. Depozit: ${depozitUzet}€` }])
+    await supabase.from('logovi').insert([{ akcija: `${akcijaAgent} izdao REZ #${rezId}. Naplaćeno: ${naplata}€ (keš: ${kesIznos}€). Depozit: ${depozitUzet}€` }])
     setAkcijaSaving(false); setShowAkcijaModal(false); loadAll(); loadOverdue()
   }
 
@@ -411,6 +423,9 @@ export default function AdminDanPage() {
     const splitInfoPreuz = preuzDugNacin === 'Kartica + Keš'
       ? ` (Keš: ${parseFloat(preuzDugKes)||0}€, Kartica: ${parseFloat(preuzDugKartica)||0}€)`
       : ''
+    const kesIznosPreuz = preuzDugNacin === 'Kartica' ? 0
+      : preuzDugNacin === 'Kartica + Keš' ? (parseFloat(preuzDugKes) || 0)
+      : naplataDuga
     let novaNapomena = rez.napomena || ''
     if (preuzDepRazlog) novaNapomena += ` | Zadržan depozit: ${preuzDepRazlog}`
 
@@ -423,7 +438,14 @@ export default function AdminDanPage() {
     const agentEmail = agentData?.email || ''
     const tranInsert: any[] = []
     if (naplataDuga > 0) {
-      tranInsert.push({ id: Date.now()+'r1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Duga', iznos: naplataDuga, vozilo: rez.br_tablica, komentar: `Naplata duga pri preuzimanju (REZ #${rezId}). Način: ${preuzDugNacin}${splitInfoPreuz}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      tranInsert.push({ id: Date.now()+'r1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Duga', iznos: kesIznosPreuz > 0 ? kesIznosPreuz : naplataDuga, vozilo: rez.br_tablica, komentar: `Naplata duga pri preuzimanju (REZ #${rezId}). Način: ${preuzDugNacin}${splitInfoPreuz}${kesIznosPreuz < naplataDuga ? ` — kartica ${(naplataDuga - kesIznosPreuz).toFixed(2)}€ ne zadužuje agenta` : ''}`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      // Kartica dio — evidentira se odvojeno
+      const karticaDugIznos = preuzDugNacin === 'Kartica' ? naplataDuga
+        : preuzDugNacin === 'Kartica + Keš' ? (parseFloat(preuzDugKartica) || 0)
+        : 0
+      if (karticaDugIznos > 0) {
+        tranInsert.push({ id: Date.now()+'r1k', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Naplata Karticom', iznos: karticaDugIznos, vozilo: rez.br_tablica, komentar: `Kartica pri preuzimanju (REZ #${rezId}) — ${preuzDugNacin}${splitInfoPreuz}. Agent: ${akcijaAgent}`, osoba: null, osobaemail: null, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
+      }
     }
     if (vracenDepozit > 0) {
       tranInsert.push({ id: Date.now()+'r2', tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Povrat Depozita', iznos: vracenDepozit, vozilo: rez.br_tablica, komentar: `Vraćen depozit pri preuzimanju (REZ #${rezId})`, osoba: akcijaAgent, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' })
@@ -484,17 +506,7 @@ export default function AdminDanPage() {
     if (!rez) return
 
     const doplata = dani * cijena
-    const novoNaplacenoProduzenje = parseFloat(produziNaplaceno || '0')
-
-    // Pitaj za naplatu samo ako nije već unešeno
-    const naplacenoStr = window.prompt(
-      `Produženje: ${dani} dana × ${cijena}€ = ${doplata}€\n` +
-      (rez.ukupno_naplata && rez.naplaceno ? `Postojeći dug: ${((rez.ukupno_naplata || 0) - (rez.naplaceno || 0)).toFixed(2)}€\n` : '') +
-      `Koliko je klijent sada platio za produženje?`,
-      String(doplata)
-    )
-    if (naplacenoStr === null) return
-    const naplacenoProduzenje = parseFloat(naplacenoStr) || 0
+    const naplacenoProduzenje = parseFloat(produziNaplaceno || '0')
 
     setProduziSaving(true)
     const novoDo = addDays(rez.do_datuma, dani)
@@ -502,14 +514,12 @@ export default function AdminDanPage() {
     const novoNaplaceno = (rez.naplaceno || 0) + naplacenoProduzenje
     const noviBrojDana = Math.ceil((new Date(novoDo).getTime() - new Date(rez.od_datuma).getTime()) / 86400000)
 
-    // Update rezervacije
     const { error } = await supabase.from('rezervacije').update({
       do_datuma: novoDo, ukupno_naplata: novoUkupno,
       naplaceno: novoNaplaceno, broj_dana: noviBrojDana,
     }).eq('id', produziRezId)
     if (error) { alert('Greška: ' + error.message); setProduziSaving(false); return }
 
-    // Kreiraj transakciju ako je nešto naplaćeno
     const agent = getCookie('avtorent-agent-name') || logovanAgent
     if (agent && naplacenoProduzenje > 0) {
       const { data: agentData } = await supabase.from('agents').select('email').eq('full_name', agent).maybeSingle()
@@ -527,7 +537,6 @@ export default function AdminDanPage() {
       }])
     }
 
-    // Ako postoji preostali dug (nije sve plaćeno), dodaj u dužnike
     const ukupniDug = novoUkupno - novoNaplaceno
     if (ukupniDug > 0.01 && rez.br_vozacke) {
       const { data: dData } = await supabase.from('duznici').select('*').eq('br_vozacke', rez.br_vozacke).maybeSingle()
@@ -535,23 +544,28 @@ export default function AdminDanPage() {
         datum: new Date().toLocaleString('sr-RS'), iznos: ukupniDug,
         komentar: `Dug nakon produženja REZ #${produziRezId} do ${novoDo}`, tip: 'zaduzenje'
       }]
-      if (dData) {
-        await supabase.from('duznici').update({ ukupan_dug: ukupniDug, istorija, telefon: rez.telefon || dData.telefon }).eq('br_vozacke', rez.br_vozacke)
-      } else if (ukupniDug > 0) {
-        await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: ukupniDug, istorija }])
-      }
+      if (dData) await supabase.from('duznici').update({ ukupan_dug: ukupniDug, istorija, telefon: rez.telefon || dData.telefon }).eq('br_vozacke', rez.br_vozacke)
+      else await supabase.from('duznici').insert([{ br_vozacke: rez.br_vozacke, ime_prezime: rez.ime_prezime, telefon: rez.telefon || '', ukupan_dug: ukupniDug, istorija }])
     }
 
     await supabase.from('logovi').insert([{
       akcija: `Produžena renta REZ #${produziRezId} za ${dani} dana do ${novoDo}. Doplata: ${doplata}€. Naplaćeno: ${naplacenoProduzenje}€.`
     }])
 
-    setProduziSaving(false); setShowProduziModal(false); loadAll(); loadOverdue()
+    // Dohvati ažurirane podatke PRIJE zatvaranja modala
+    const { data: azurRez } = await supabase.from('rezervacije').select('*').eq('id', produziRezId).single()
 
-    const stampa = confirm(`✅ Renta produžena do: ${toDMY(novoDo)}\nNaplaćeno: ${naplacenoProduzenje}€${ukupniDug > 0.01 ? `\nPreostali dug: ${ukupniDug.toFixed(2)}€` : ''}\n\nŽeliš li odštampati novi ugovor?`)
-    if (stampa) {
-      const { data: azurRez } = await supabase.from('rezervacije').select('*').eq('id', produziRezId).single()
-      if (azurRez) generateUgovor(rezToForm(azurRez as KalRezervacija), vozila)
+    setProduziSaving(false)
+    setShowProduziModal(false)
+    loadAll()
+    loadOverdue()
+
+    // Pitaj za ugovor — vozila su i dalje dostupna u closure
+    if (azurRez) {
+      const stampa = window.confirm(`✅ Renta produžena do: ${toDMY(novoDo)}\nNaplaćeno: ${naplacenoProduzenje}€${ukupniDug > 0.01 ? `\nPreostali dug: ${ukupniDug.toFixed(2)}€` : ''}\n\nŽeliš li odštampati novi ugovor?`)
+      if (stampa) {
+        generateUgovor(rezToForm(azurRez as KalRezervacija), vozila)
+      }
     }
   }
 
