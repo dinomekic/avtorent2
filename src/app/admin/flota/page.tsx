@@ -23,6 +23,13 @@ type FleetVehicle = {
   vehicle_class: string | null; features: string[] | null
 }
 
+type RegHistory = {
+  id: number; vehicle_id: number; license_plate: string | null
+  istek_reg: string | null; mjesto_reg: string | null
+  datum_registracije: string | null; napomena: string | null
+  created_at: string; created_by: string | null
+}
+
 const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
 
 const VEHICLE_CLASSES = [
@@ -53,6 +60,12 @@ function getStatusInfo(status: string) {
   return FLEET_STATUS_OPTS.find(s => s.value === status) || FLEET_STATUS_OPTS[FLEET_STATUS_OPTS.length - 1]
 }
 
+function getCookie(name: string): string {
+  if (typeof document === 'undefined') return ''
+  const match = document.cookie.match(new RegExp(`${name}=([^;]+)`))
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
 export default function AdminFleetPage() {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,6 +83,23 @@ export default function AdminFleetPage() {
   const [form, setForm] = useState<Partial<FleetVehicle>>(EMPTY_FORM)
   const [featuresStr, setFeaturesStr] = useState('')
 
+  // Registracija modal
+  const [showRegModal, setShowRegModal] = useState(false)
+  const [regVehicle, setRegVehicle] = useState<FleetVehicle | null>(null)
+  const [regHistory, setRegHistory] = useState<RegHistory[]>([])
+  const [regHistoryLoading, setRegHistoryLoading] = useState(false)
+  const [regForm, setRegForm] = useState({
+    license_plate: '',
+    istek_reg: '',
+    mjesto_reg: '',
+    datum_registracije: new Date().toISOString().split('T')[0],
+    napomena: '',
+  })
+  const [regSaving, setRegSaving] = useState(false)
+  const [regTab, setRegTab] = useState<'nova' | 'istorija'>('nova')
+
+  const agentName = getCookie('avtorent-agent-name')
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('vozila_fleet').select('*').order('marka')
@@ -78,6 +108,74 @@ export default function AdminFleetPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  async function openRegModal(v: FleetVehicle) {
+    setRegVehicle(v)
+    setRegForm({
+      license_plate: v.license_plate || '',
+      istek_reg: v.istek_reg || '',
+      mjesto_reg: v.mjesto_reg || '',
+      datum_registracije: new Date().toISOString().split('T')[0],
+      napomena: '',
+    })
+    setRegTab('nova')
+    setShowRegModal(true)
+    // Učitaj istoriju
+    setRegHistoryLoading(true)
+    const { data } = await supabase
+      .from('vehicle_reg_history')
+      .select('*')
+      .eq('vehicle_id', v.id)
+      .order('created_at', { ascending: false })
+    setRegHistory(data || [])
+    setRegHistoryLoading(false)
+  }
+
+  async function saveRegistracija() {
+    if (!regVehicle) return
+    if (!regForm.license_plate || !regForm.istek_reg) {
+      alert('Unesite tablice i datum isteka!'); return
+    }
+    setRegSaving(true)
+
+    // Arhiviraj stare podatke u historiju
+    await supabase.from('vehicle_reg_history').insert([{
+      vehicle_id: regVehicle.id,
+      license_plate: regVehicle.license_plate,
+      istek_reg: regVehicle.istek_reg,
+      mjesto_reg: regVehicle.mjesto_reg,
+      datum_registracije: regForm.datum_registracije,
+      napomena: `[Arhivirano] ${regForm.napomena || ''}`.trim(),
+      created_by: agentName || 'Agent',
+    }])
+
+    // Updateuj vozilo sa novim podacima
+    const noviAgregirani = `${regVehicle.marka} ${regVehicle.model} ${regForm.license_plate} ${regVehicle.year || ''} ${regVehicle.transmission === 'automatic' ? 'AUTOMATIC' : 'MANUAL'}`.trim()
+    await supabase.from('vozila_fleet').update({
+      license_plate: regForm.license_plate,
+      istek_reg: regForm.istek_reg,
+      mjesto_reg: regForm.mjesto_reg || regVehicle.mjesto_reg,
+      stare_tablice: regVehicle.license_plate !== regForm.license_plate ? regVehicle.license_plate : regVehicle.stare_tablice,
+      agregirani_2: noviAgregirani,
+      name: noviAgregirani,
+    }).eq('id', regVehicle.id)
+
+    // Unesi novi unos u historiju kao aktivni
+    await supabase.from('vehicle_reg_history').insert([{
+      vehicle_id: regVehicle.id,
+      license_plate: regForm.license_plate,
+      istek_reg: regForm.istek_reg,
+      mjesto_reg: regForm.mjesto_reg,
+      datum_registracije: regForm.datum_registracije,
+      napomena: regForm.napomena || null,
+      created_by: agentName || 'Agent',
+    }])
+
+    setRegSaving(false)
+    setShowRegModal(false)
+    setRegVehicle(null)
+    fetchData()
+  }
 
   const filtered = vehicles.filter(v => {
     const q = searchQ.toLowerCase()
@@ -163,11 +261,6 @@ export default function AdminFleetPage() {
     setVehicles(prev => prev.map(v => v.id === id ? { ...v, vehicle_class: cls } : v))
   }
 
-  async function quickPriceUpdate(id: number, price: number) {
-    await supabase.from('vozila_fleet').update({ price_per_day: price }).eq('id', id)
-    setVehicles(prev => prev.map(v => v.id === id ? { ...v, price_per_day: price } : v))
-  }
-
   function openEdit(v: FleetVehicle) {
     setEditVehicle(v)
     setForm({ ...v })
@@ -184,6 +277,7 @@ export default function AdminFleetPage() {
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
+  const inpSm: React.CSSProperties = { ...inp, fontSize: 12, padding: '7px 10px' }
 
   return (
     <div>
@@ -265,17 +359,13 @@ export default function AdminFleetPage() {
                       return (
                         <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff', marginBottom: 6, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1, overflow: 'hidden' }}>
                           <div style={{ display: 'flex', gap: 0 }}>
-                            {/* Slika */}
                             {v.image_url ? (
                               <img src={v.image_url} alt="" style={{ width: 80, height: 68, objectFit: 'cover', flexShrink: 0 }} />
                             ) : (
                               <div style={{ width: 80, height: 68, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0, color: '#d1d5db' }}>🚗</div>
                             )}
-
-                            {/* Sadržaj */}
                             <div style={{ flex: 1, padding: '8px 12px', minWidth: 0 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                                {/* Lijevo — naziv + tablice + badges */}
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
                                     <span style={{ fontWeight: 600, fontSize: 13, color: '#111' }}>{v.agregirani_2 || `${v.marka} ${v.model}`}</span>
@@ -293,24 +383,30 @@ export default function AdminFleetPage() {
                                     {v.color && <span>🎨 {v.color}</span>}
                                     <span style={{ background: '#f3f4f6', padding: '0 5px', borderRadius: 8, color: '#374151' }}>📍 {v.lokacija}</span>
                                     {v.price_per_day > 0 && <span style={{ color: '#1D9E75', fontWeight: 700 }}>{v.price_per_day}€/d</span>}
+                                    {v.istek_reg && (
+                                      <span style={{ color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#9ca3af' }}>
+                                        📋 Reg: {v.istek_reg}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
 
-                                {/* Desno — kontrole */}
                                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                  {/* Inline klasa */}
+                                  {/* Registracija dugme */}
+                                  <button onClick={() => openRegModal(v)}
+                                    title="Registracija vozila"
+                                    style={{ padding: '3px 10px', fontSize: 11, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 8, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>
+                                    📋 Reg
+                                  </button>
                                   <select value={v.vehicle_class || ''} onChange={e => quickClassUpdate(v.id, e.target.value)}
-                                    title="Klasa vozila (sajt)"
                                     style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 600 }}>
                                     <option value="">-- Klasa --</option>
                                     {VEHICLE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                                   </select>
-                                  {/* Status */}
                                   <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
                                     style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
                                     {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                   </select>
-                                  {/* Lokacija */}
                                   <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
                                     style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#374151', cursor: 'pointer' }}>
                                     {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
@@ -342,7 +438,6 @@ export default function AdminFleetPage() {
 
             <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', paddingRight: 4 }}>
 
-              {/* Slika */}
               <div style={{ marginBottom: 14 }}>
                 <label style={lbl}>Slika vozila</label>
                 {form.image_url && (
@@ -362,7 +457,6 @@ export default function AdminFleetPage() {
                 )}
               </div>
 
-              {/* Osnovno */}
               <SectionTitle>Osnovno</SectionTitle>
               <Grid2>
                 <Span2><label style={lbl}>Registarske tablice</label><input style={inp} value={form.license_plate || ''} onChange={e => setForm(f => ({ ...f, license_plate: e.target.value }))} placeholder="PG-AA111" /></Span2>
@@ -388,7 +482,6 @@ export default function AdminFleetPage() {
                 </div>
               </Grid2>
 
-              {/* Klasa & Sajt */}
               <SectionTitle>Klasa vozila & Sajt</SectionTitle>
               <Grid2>
                 <div>
@@ -411,7 +504,6 @@ export default function AdminFleetPage() {
                 </Span2>
               </Grid2>
 
-              {/* Tehnički */}
               <SectionTitle>Tehnički podaci</SectionTitle>
               <Grid2>
                 <div><label style={lbl}>Kubikaza (cc)</label><input style={inp} type="number" value={form.engine_cc || ''} onChange={e => setForm(f => ({ ...f, engine_cc: parseInt(e.target.value) || undefined }))} /></div>
@@ -420,7 +512,6 @@ export default function AdminFleetPage() {
                 <div><label style={lbl}>VIN / Šasija</label><input style={inp} value={form.vin || ''} onChange={e => setForm(f => ({ ...f, vin: e.target.value }))} /></div>
               </Grid2>
 
-              {/* Registracija */}
               <SectionTitle>Registracija & Vlasnik</SectionTitle>
               <Grid2>
                 <div><label style={lbl}>Istek registracije</label><input style={inp} value={form.istek_reg || ''} onChange={e => setForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2026." /></div>
@@ -431,7 +522,6 @@ export default function AdminFleetPage() {
                 <div><label style={lbl}>Trenutna km</label><input style={inp} type="number" value={form.current_mileage || ''} onChange={e => setForm(f => ({ ...f, current_mileage: parseInt(e.target.value) || undefined }))} /></div>
               </Grid2>
 
-              {/* Status & Lokacija */}
               <SectionTitle>Status & Lokacija</SectionTitle>
               <Grid2>
                 <div>
@@ -448,7 +538,6 @@ export default function AdminFleetPage() {
                 </div>
               </Grid2>
 
-              {/* Napomena */}
               <div style={{ marginBottom: 18 }}>
                 <label style={lbl}>Napomena</label>
                 <textarea value={form.fleet_notes || ''} onChange={e => setForm(f => ({ ...f, fleet_notes: e.target.value }))}
@@ -463,11 +552,165 @@ export default function AdminFleetPage() {
           </div>
         )}
       </div>
+
+      {/* REGISTRACIJA MODAL */}
+      {showRegModal && regVehicle && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+
+            {/* Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>📋 Registracija vozila</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{regVehicle.agregirani_2} · {regVehicle.license_plate}</div>
+              </div>
+              <button onClick={() => setShowRegModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+            </div>
+
+            {/* Trenutni status */}
+            <div style={{ padding: '12px 20px', background: '#f9fafb', borderBottom: '1px solid #f3f4f6', display: 'flex', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>Tablice</div>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: '#111' }}>{regVehicle.license_plate || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>Istek reg.</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: regVehicle.dana_do_isteka !== null && regVehicle.dana_do_isteka <= 0 ? '#DC2626' : regVehicle.dana_do_isteka !== null && regVehicle.dana_do_isteka <= 30 ? '#BA7517' : '#111' }}>
+                  {regVehicle.istek_reg || '—'}
+                  {regVehicle.dana_do_isteka !== null && (
+                    <span style={{ fontSize: 11, marginLeft: 6, color: regVehicle.dana_do_isteka <= 0 ? '#DC2626' : '#BA7517' }}>
+                      {regVehicle.dana_do_isteka <= 0 ? '(istekla)' : `(${Math.round(regVehicle.dana_do_isteka)}d)`}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>Mjesto reg.</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{regVehicle.mjesto_reg || '—'}</div>
+              </div>
+            </div>
+
+            {/* Tabovi */}
+            <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', padding: '0 20px' }}>
+              {[['nova', '+ Nova registracija'], ['istorija', '📜 Istorija']].map(([t, l]) => (
+                <button key={t} onClick={() => setRegTab(t as any)}
+                  style={{ padding: '10px 16px', fontSize: 13, border: 'none', background: 'none', cursor: 'pointer', fontWeight: regTab === t ? 600 : 400, color: regTab === t ? '#111' : '#9ca3af', borderBottom: regTab === t ? '2px solid #111' : '2px solid transparent', marginBottom: -2 }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ padding: '20px' }}>
+
+              {/* Nova registracija forma */}
+              {regTab === 'nova' && (
+                <div>
+                  <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#0C447C' }}>
+                    Unesi nove podatke registracije. Stari podaci bit će automatski arhivirani u istoriji.
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={lbl}>Registarske tablice *</label>
+                    <input style={{ ...inpSm, fontFamily: 'monospace', fontWeight: 700, fontSize: 15, letterSpacing: 1 }}
+                      value={regForm.license_plate}
+                      onChange={e => setRegForm(f => ({ ...f, license_plate: e.target.value.toUpperCase() }))}
+                      placeholder="PG-AA111" />
+                    {regVehicle.license_plate && regForm.license_plate !== regVehicle.license_plate && regForm.license_plate && (
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#185FA5', background: '#E6F1FB', padding: '3px 8px', borderRadius: 6 }}>
+                        ℹ️ Tablice se mijenjaju: {regVehicle.license_plate} → {regForm.license_plate}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <label style={lbl}>Istek registracije *</label>
+                      <input style={inpSm} value={regForm.istek_reg}
+                        onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))}
+                        placeholder="15.06.2027." />
+                    </div>
+                    <div>
+                      <label style={lbl}>Datum registracije</label>
+                      <input type="date" style={inpSm} value={regForm.datum_registracije}
+                        onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={lbl}>Mjesto registracije</label>
+                    <input style={inpSm} value={regForm.mjesto_reg}
+                      onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))}
+                      placeholder="Podgorica" />
+                  </div>
+
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={lbl}>Napomena</label>
+                    <textarea style={{ ...inpSm, minHeight: 50, resize: 'vertical' as const }}
+                      value={regForm.napomena}
+                      onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))}
+                      placeholder="Dodatne napomene..." />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setShowRegModal(false)}
+                      style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                      Odustani
+                    </button>
+                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.license_plate || !regForm.istek_reg}
+                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : !regForm.license_plate || !regForm.istek_reg ? '#9ca3af' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      {regSaving ? '⏳ Snimanje...' : '💾 Snimi registraciju'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Istorija */}
+              {regTab === 'istorija' && (
+                <div>
+                  {regHistoryLoading ? (
+                    <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Učitavanje istorije...</div>
+                  ) : regHistory.length === 0 ? (
+                    <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>
+                      Nema historije registracija.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {regHistory.map((r, i) => (
+                        <div key={r.id} style={{ border: `1px solid ${i === 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 10, padding: '12px 14px', background: i === 0 ? '#f0fdf8' : '#fff' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              {i === 0 && <span style={{ fontSize: 10, background: '#E1F5EE', color: '#085041', padding: '1px 7px', borderRadius: 20, fontWeight: 700 }}>Zadnji unos</span>}
+                              <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#111' }}>{r.license_plate || '—'}</span>
+                            </div>
+                            <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                              {new Date(r.created_at).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#6b7280' }}>
+                            {r.istek_reg && <span>Istek: <strong style={{ color: '#374151' }}>{r.istek_reg}</strong></span>}
+                            {r.mjesto_reg && <span>Mjesto: <strong style={{ color: '#374151' }}>{r.mjesto_reg}</strong></span>}
+                            {r.datum_registracije && <span>Datum: <strong style={{ color: '#374151' }}>{r.datum_registracije}</strong></span>}
+                          </div>
+                          {r.napomena && (
+                            <div style={{ marginTop: 4, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>{r.napomena}</div>
+                          )}
+                          {r.created_by && (
+                            <div style={{ marginTop: 4, fontSize: 10, color: '#d1d5db' }}>👤 {r.created_by}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Helper komponente za layout forme
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 10, marginTop: 16, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>
