@@ -22,6 +22,7 @@ type Rezervacija = {
   agent_name: string | null; created_at: string
   vehicles: { name: string } | null
   qr_source: string | null; site_domain: string | null
+  partners: { name: string } | null
 }
 
 const ST: Record<string, { bg: string; color: string; label: string }> = {
@@ -69,7 +70,7 @@ export default function AdminReservationsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: res }, { data: voz }] = await Promise.all([
-      supabase.from('reservations').select('*, vehicles(name)').order('created_at', { ascending: false }),
+      supabase.from('reservations').select('*, vehicles(name), partners(name)').order('created_at', { ascending: false }),
       supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').eq('fleet_status', 'available').order('marka'),
     ])
     setRezervacije(res || [])
@@ -251,7 +252,7 @@ export default function AdminReservationsPage() {
                         {r.qr_source ? (
                           <div>
                             <span style={{ fontSize: 11, background: '#FAEEDA', color: '#854F0B', padding: '2px 7px', borderRadius: 20, fontWeight: 500 }}>
-                              {r.agent_name || r.qr_source}
+                              {r.partners?.name || r.agent_name || r.qr_source}
                             </span>
                             <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Partner QR</div>
                           </div>
