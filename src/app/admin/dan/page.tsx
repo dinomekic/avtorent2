@@ -190,6 +190,7 @@ export default function AdminDanPage() {
   const [preuzDepIznos, setPreuzDepIznos] = useState('')
   const [preuzDepRazlog, setPreuzDepRazlog] = useState('')
   const [regUpozorenje, setRegUpozorenje] = useState<{ istek: string; dana: number } | null>(null)
+  const [akcijaSaving, setAkcijaSaving] = useState(false)
 
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok)
 
