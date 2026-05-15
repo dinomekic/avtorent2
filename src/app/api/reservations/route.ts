@@ -17,7 +17,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       vehicleId, partnerQrCode, guestName, guestEmail: gEmail, guestPhone,
-      guestNationality, pickupDate, returnDate, pickupTime, returnTime,
+      guestNationality, guestDob, guestLicense,
+      hasSecondDriver, driver2Name, driver2License, driver2Nationality,
+      insurance, insuranceTotal,
+      borderCrossing, flightNumber,
+      pickupDate, returnDate, pickupTime, returnTime,
       pickupLocation, dropoffLocation, transferFee, siteDomain, notes, lang = 'sr',
       extras = [], couponCode, couponDiscountPercent, couponDiscountAmount,
       partnerDiscountPercent, partnerDiscountAmount,
@@ -32,47 +36,28 @@ export async function POST(req: NextRequest) {
     const { data: vehicle } = await supabase.from('vehicles').select('*').eq('id', vehicleId).single()
     if (!vehicle) return NextResponse.json({ error: 'Vozilo nije pronađeno' }, { status: 404 })
 
-    // Pronađi partnera — prvo u partners tabeli, pa u partner_qr_codes
+    // Pronađi partnera
     let partner = null
     if (partnerQrCode) {
       const { data: directPartner } = await supabase
-        .from('partners')
-        .select('*')
-        .eq('qr_code', partnerQrCode)
-        .eq('is_active', true)
-        .single()
-
+        .from('partners').select('*').eq('qr_code', partnerQrCode).eq('is_active', true).single()
       if (directPartner) {
         partner = directPartner
       } else {
-        // Novi kod — traži u partner_qr_codes
         const { data: qrRow } = await supabase
-          .from('partner_qr_codes')
-          .select('partner_id')
-          .eq('qr_code', partnerQrCode)
-          .single()
-
+          .from('partner_qr_codes').select('partner_id').eq('qr_code', partnerQrCode).single()
         if (qrRow) {
           const { data: partnerData } = await supabase
-            .from('partners')
-            .select('*')
-            .eq('id', qrRow.partner_id)
-            .eq('is_active', true)
-            .single()
-
+            .from('partners').select('*').eq('id', qrRow.partner_id).eq('is_active', true).single()
           partner = partnerData
         }
       }
     }
 
-    // Pronađi label QR koda (za izvještaj)
     let qrLabel: string | null = null
     if (partnerQrCode) {
       const { data: qrRow } = await supabase
-        .from('partner_qr_codes')
-        .select('label')
-        .eq('qr_code', partnerQrCode)
-        .single()
+        .from('partner_qr_codes').select('label').eq('qr_code', partnerQrCode).single()
       qrLabel = qrRow?.label || null
     }
 
@@ -82,42 +67,31 @@ export async function POST(req: NextRequest) {
     const commissionPercent = partner?.commission_percent ?? 0
     const commissionAmount = finalTotal * (commissionPercent / 100)
 
-    // Kreiraj ili pronađi klijenta + Supabase nalog
+    // Kreiraj ili pronađi klijenta
     let clientId: string | null = null
     let tempPassword: string | null = null
     let isNewClient = false
 
     const { data: existingClient } = await supabase
-      .from('clients')
-      .select('id, user_id')
-      .eq('email', gEmail)
-      .single()
+      .from('clients').select('id, user_id').eq('email', gEmail).single()
 
     if (existingClient) {
       clientId = existingClient.id
     } else {
       tempPassword = generateTempPassword()
       isNewClient = true
-
       const { data: authData } = await supabase.auth.admin.createUser({
-        email: gEmail,
-        password: tempPassword,
-        email_confirm: true,
+        email: gEmail, password: tempPassword, email_confirm: true,
         user_metadata: { full_name: guestName },
       })
-
       const { data: newClient } = await supabase.from('clients').insert({
-        email: gEmail,
-        full_name: guestName,
-        phone: guestPhone,
-        nationality: guestNationality,
-        user_id: authData?.user?.id || null,
+        email: gEmail, full_name: guestName, phone: guestPhone,
+        nationality: guestNationality, user_id: authData?.user?.id || null,
       }).select().single()
-
       clientId = newClient?.id || null
     }
 
-    // Kreiraj rezervaciju
+    // Kreiraj rezervaciju sa svim novim poljima
     const { data: reservation, error: resErr } = await supabase.from('reservations').insert({
       vehicle_id: vehicleId,
       partner_id: partner?.id ?? null,
@@ -125,7 +99,17 @@ export async function POST(req: NextRequest) {
       guest_name: guestName,
       guest_email: gEmail,
       guest_phone: guestPhone,
-      guest_nationality: guestNationality,
+      guest_nationality: guestNationality || null,
+      guest_dob: guestDob || null,
+      guest_license: guestLicense || null,
+      has_second_driver: hasSecondDriver || false,
+      driver2_name: driver2Name || null,
+      driver2_license: driver2License || null,
+      driver2_nationality: driver2Nationality || null,
+      insurance: insurance || 'basic',
+      insurance_total: insuranceTotal || 0,
+      border_crossing: borderCrossing || 'allowed',
+      flight_number: flightNumber || null,
       pickup_date: pickupDate,
       return_date: returnDate,
       pickup_time: pickupTime || '10:00',
@@ -134,7 +118,7 @@ export async function POST(req: NextRequest) {
       dropoff_location: dropoffLocation || null,
       transfer_fee: transferFee || 0,
       site_domain: siteDomain || null,
-      notes,
+      notes: notes || null,
       base_price: finalBasePrice,
       extras_total: extrasTotal,
       total_price: finalTotal,
@@ -175,10 +159,8 @@ export async function POST(req: NextRequest) {
 
     if (partnerQrCode && partner) {
       await supabase.from('qr_scans').insert({
-        partner_id: partner.id,
-        qr_code: partnerQrCode,
-        converted: true,
-        reservation_id: reservation.id,
+        partner_id: partner.id, qr_code: partnerQrCode,
+        converted: true, reservation_id: reservation.id,
       })
     }
 
@@ -189,7 +171,8 @@ export async function POST(req: NextRequest) {
       const ge = guestEmail({
         guestName, vehicleName: vehicle.name, pickupDate, returnDate,
         pickupLocation, totalPrice: finalTotal, refCode: reservation.ref_code, lang,
-        isNewClient, tempPassword, siteUrl, pickupTime: pickupTime || '10:00', returnTime: returnTime || '10:00',
+        isNewClient, tempPassword, siteUrl,
+        pickupTime: pickupTime || '10:00', returnTime: returnTime || '10:00',
       })
       const ae = adminEmail({
         refCode: reservation.ref_code, guestName, guestEmail: gEmail, guestPhone,
