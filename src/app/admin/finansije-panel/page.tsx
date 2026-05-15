@@ -140,8 +140,9 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        if (mail) saldo[mail] = (saldo[mail] || 0) + iz
-        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
+        const delta = isPriliv(t) ? iz : -iz
+        if (mail) saldo[mail] = (saldo[mail] || 0) + delta
+        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - delta
       }
       if (kat.includes('OSTAVLJENO U SANDUCE')) sOst += Math.abs(iz)
       if (kat.includes('PREUZETO IZ SANDUCETA')) sPre += Math.abs(iz)
@@ -434,7 +435,7 @@ export default function AdminFinansijePanelPage() {
                             </span>
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {pril ? '+' : ''}{iznos.toFixed(2)}€
+                            {pril ? '+' : '-'}{iznos.toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
