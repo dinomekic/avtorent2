@@ -122,14 +122,14 @@ export default function AdminFinansijePanelPage() {
 
   const isPriliv = (t: Transakcija) => (t.tip_transakcije || '').toLowerCase() === 'priliv'
 
-  // Saldo po HTML logici
+  // Saldo po logici iz HTML — iznos direktno (pozitivan = zadužuje, negativan = razdužuje)
   const { saldo, dugFirma, stanjeSanduce } = useMemo(() => {
     const saldo: Record<string, number> = {}
     const dugFirma: Record<string, number> = {}
     let sOst = 0, sPre = 0
     transakcije.forEach(t => {
       if ((t.status || '').toLowerCase() !== 'zavrseno') return
-      const iz = Math.abs(t.iznos || 0)
+      const iz = t.iznos || 0
       const kat = (t.kategorija || '').toUpperCase()
       const mail = (t.osobaemail || '').toLowerCase().trim()
       const pMail = (t.primaocemail || '').toLowerCase().trim()
@@ -140,10 +140,9 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        const absIz = Math.abs(iz)
-        const delta = isPriliv(t) ? absIz : -absIz
-        if (mail) saldo[mail] = (saldo[mail] || 0) + delta
-        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - delta
+        // Direktno koristimo iznos — pozitivan zadužuje agenta, negativan razdužuje
+        if (mail) saldo[mail] = (saldo[mail] || 0) + iz
+        if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
       }
       if (kat.includes('OSTAVLJENO U SANDUCE')) sOst += Math.abs(iz)
       if (kat.includes('PREUZETO IZ SANDUCETA')) sPre += Math.abs(iz)
@@ -435,8 +434,8 @@ export default function AdminFinansijePanelPage() {
                               {pril ? '↑' : '↓'} {pril ? 'Priliv' : 'Odliv'}
                             </span>
                           </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
+                          <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: iznos >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
+                            {iznos.toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
