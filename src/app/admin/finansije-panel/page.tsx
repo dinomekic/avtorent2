@@ -434,8 +434,8 @@ export default function AdminFinansijePanelPage() {
                               {pril ? '↑' : '↓'} {pril ? 'Priliv' : 'Odliv'}
                             </span>
                           </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: iznos >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {iznos.toFixed(2)}€
+                          <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
+                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
