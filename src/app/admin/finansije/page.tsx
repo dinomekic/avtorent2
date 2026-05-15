@@ -517,6 +517,9 @@ export default function FinansijePage() {
                   if (jeSlao && t.primaocemail) razmjenaInfo = `→ ${getImeByEmail(t.primaocemail)}`
                   else if (!jeSlao) razmjenaInfo = `← od ${getImeByEmail(t.osobaemail)}`
                 }
+                // Prikazni iznos: ako je razmjena i nisi slao (primio si), prikaži pozitivno
+                const prikazIz = (jeRazmjenaT && !jeSlao) ? Math.abs(iz) : iz
+                const prikazBoja = prikazIz >= 0 ? '#1D9E75' : '#dc2626'
 
                 return (
                   <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f3f4f6', opacity: jePending ? 0.7 : 1 }}>
@@ -537,8 +540,8 @@ export default function FinansijePage() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       {slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}
-                      <div style={{ fontSize: 15, fontWeight: 800, color: iz >= 0 ? '#1D9E75' : '#dc2626', textAlign: 'right' as const }}>
-                        {iz >= 0 ? '+' : ''}{iz.toFixed(2)}€
+                      <div style={{ fontSize: 15, fontWeight: 800, color: prikazBoja, textAlign: 'right' as const }}>
+                        {prikazIz >= 0 ? '+' : ''}{prikazIz.toFixed(2)}€
                       </div>
                     </div>
                   </div>
@@ -700,8 +703,12 @@ export default function FinansijePage() {
                   }
                 }
 
+                // Prikazni iznos: razmjena primljena = pozitivno
+                const prikazIz2 = (jeRazmjenaT && !jeSlao) ? Math.abs(iz) : iz
+                const prikazBoja2 = prikazIz2 >= 0 ? '#1D9E75' : '#dc2626'
+
                 return (
-                  <div key={t.id} style={{ background: '#fff', border: `1px solid ${jePending ? '#fde68a' : '#f3f4f6'}`, borderLeft: `4px solid ${iz >= 0 ? '#1D9E75' : '#dc2626'}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <div key={t.id} style={{ background: '#fff', border: `1px solid ${jePending ? '#fde68a' : '#f3f4f6'}`, borderLeft: `4px solid ${prikazBoja2}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, color: '#111', marginBottom: 2 }}>
                         {t.kategorija}
@@ -722,8 +729,8 @@ export default function FinansijePage() {
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: iz >= 0 ? '#1D9E75' : '#dc2626' }}>
-                        {iz >= 0 ? '+' : ''}{iz.toFixed(2)}€
+                      <div style={{ fontSize: 16, fontWeight: 800, color: prikazBoja2 }}>
+                        {prikazIz2 >= 0 ? '+' : ''}{prikazIz2.toFixed(2)}€
                       </div>
                       {slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}
                     </div>
