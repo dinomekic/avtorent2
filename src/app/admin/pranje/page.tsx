@@ -69,6 +69,8 @@ export default function AdminPranjePage() {
   const [selfWashCost, setSelfWashCost] = useState('')
   const [selfWashNote, setSelfWashNote] = useState('')
   const [selfWashSaving, setSelfWashSaving] = useState(false)
+  const [selfPresetVehicleName, setSelfPresetVehicleName] = useState('')
+  const [selfPresetOrderId, setSelfPresetOrderId] = useState<string | null>(null)
 
   const WASH_TYPES = [
     { key: 'quick', label: 'Brzo pranje', price: 5 },
@@ -139,26 +141,38 @@ export default function AdminPranjePage() {
   }
 
   async function handleSelfWash() {
-    if (!selfSelectedVehicle || !selfWashCost) { alert('Unesite vozilo i iznos!'); return }
+    if ((!selfSelectedVehicle && !selfPresetVehicleName) || !selfWashCost) { alert('Unesite vozilo i iznos!'); return }
     setSelfWashSaving(true)
     const cost = parseFloat(selfWashCost)
-    const vehicleName = selfSelectedVehicle.agregirani_2 || selfSelectedVehicle.license_plate
+    const vehicleName = selfSelectedVehicle?.agregirani_2 || selfSelectedVehicle?.license_plate || selfPresetVehicleName
+    const licensePlate = selfSelectedVehicle?.license_plate || selfPresetVehicleName
 
-    // Upiši wash order
-    await supabase.from('wash_orders').insert({
-      reservation_id: null,
-      vehicle_name: vehicleName,
-      wash_type: 'self',
-      wash_type_label: 'Pranje — agent',
-      price: cost,
-      status: 'done',
-      assigned_to: 'agent',
-      agent_name: agentName || 'Agent',
-      notes: selfWashNote || null,
-      payout_status: null,
-      payout_amount: null,
-      completed_at: new Date().toISOString(),
-    })
+    // Ako je pokrenuto iz reda — ažuriraj postojeći order
+    if (selfPresetOrderId) {
+      await supabase.from('wash_orders').update({
+        status: 'done',
+        assigned_to: 'agent',
+        agent_name: agentName || 'Agent',
+        price: cost,
+        completed_at: new Date().toISOString(),
+        payout_status: null,
+      }).eq('id', selfPresetOrderId)
+    } else {
+      // Novi order
+      await supabase.from('wash_orders').insert({
+        reservation_id: null,
+        vehicle_name: vehicleName,
+        wash_type: 'self',
+        wash_type_label: 'Pranje — agent',
+        price: cost,
+        status: 'done',
+        assigned_to: 'agent',
+        agent_name: agentName || 'Agent',
+        notes: selfWashNote || null,
+        payout_status: null,
+        completed_at: new Date().toISOString(),
+      })
+    }
 
     // Upiši odliv u transakcije
     await supabase.from('transakcije').insert([{
@@ -167,7 +181,7 @@ export default function AdminPranjePage() {
       datum: new Date().toISOString().split('T')[0],
       kategorija: 'Pranje',
       iznos: -Math.abs(cost),
-      vozilo: selfSelectedVehicle.license_plate || vehicleName,
+      vozilo: licensePlate,
       komentar: `Pranje vozila: ${vehicleName}${selfWashNote ? ' — ' + selfWashNote : ''}`,
       osoba: agentName || 'Agent',
       osobaemail: agentEmail || null,
@@ -178,6 +192,7 @@ export default function AdminPranjePage() {
     setSelfWashSaving(false)
     setShowSelfWash(false)
     setSelfSelectedVehicle(null); setSelfVehicleSearch(''); setSelfWashCost(''); setSelfWashNote('')
+    setSelfPresetVehicleName(''); setSelfPresetOrderId(null)
     fetchData()
     alert(`✅ Pranje evidentirano! Odliv ${cost}€ upisan u finansije.`)
   }
@@ -329,12 +344,20 @@ export default function AdminPranjePage() {
                       ) : <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      {o.assigned_to === 'partner' && o.status === 'done' && o.payout_status === 'unpaid' && (
-                        <button onClick={() => { setPayoutOrder(o); setPayoutAmount(String(o.price)); setPayoutNote('') }}
-                          style={{ padding: '4px 12px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 6, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 500 }}>
-                          Isplati
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                        {o.assigned_to === 'partner' && o.status === 'done' && o.payout_status === 'unpaid' && (
+                          <button onClick={() => { setPayoutOrder(o); setPayoutAmount(String(o.price)); setPayoutNote('') }}
+                            style={{ padding: '4px 12px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 6, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 500 }}>
+                            Isplati
+                          </button>
+                        )}
+                        {o.status === 'pending' && (
+                          <button onClick={() => { setSelfSelectedVehicle(null); setSelfVehicleSearch(o.vehicle_name); setSelfWashCost(''); setSelfWashNote(''); setShowSelfWash(true); setSelfPresetVehicleName(o.vehicle_name); setSelfPresetOrderId(o.id) }}
+                            style={{ padding: '4px 12px', fontSize: 11, border: '1px solid #185FA5', borderRadius: 6, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>
+                            🧹 Ja ću oprati
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -428,15 +451,21 @@ export default function AdminPranjePage() {
               Unesite iznos koji ste potrošili — automatski će se upisati kao odliv u finansije.
             </div>
 
-            <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-              <label style={lbl}>Vozilo * (pretraži po tablicama)</label>
-              <VehicleSearch
-                search={selfVehicleSearch} setSearch={setSelfVehicleSearch}
-                selected={selfSelectedVehicle} setSelected={setSelfSelectedVehicle}
-                dropdown={selfVehicleDropdown} setDropdown={setSelfVehicleDropdown}
-                filtered={filteredSelfFleet}
-              />
-            </div>
+            {selfPresetVehicleName ? (
+              <div style={{ background: '#f0fdf8', border: '1px solid #1D9E75', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 13, fontWeight: 600, color: '#085041' }}>
+                🚗 Vozilo: {selfPresetVehicleName}
+              </div>
+            ) : (
+              <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
+                <label style={lbl}>Vozilo * (pretraži po tablicama)</label>
+                <VehicleSearch
+                  search={selfVehicleSearch} setSearch={setSelfVehicleSearch}
+                  selected={selfSelectedVehicle} setSelected={setSelfSelectedVehicle}
+                  dropdown={selfVehicleDropdown} setDropdown={setSelfVehicleDropdown}
+                  filtered={filteredSelfFleet}
+                />
+              </div>
+            )}
 
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Koliko ste potrošili za pranje? (€) *</label>
