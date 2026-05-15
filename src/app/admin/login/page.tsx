@@ -8,6 +8,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+const LOGO_URL = 'https://planetrentacar.me/wp-content/uploads/2023/03/logo-1.png'
+
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,7 +18,6 @@ export default function AdminLoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
 
   useEffect(() => {
-    // Samo hvata Google OAuth callback
     const hash = window.location.hash
     if (!hash || !hash.includes('access_token')) return
     setGoogleLoading(true)
@@ -28,62 +29,53 @@ export default function AdminLoginPage() {
 
   async function processLogin(userEmail: string, accessToken: string) {
     const { data: agent } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('email', userEmail)
-      .eq('is_active', true)
-      .single()
-
+      .from('agents').select('*').eq('email', userEmail).eq('is_active', true).single()
     if (!agent) {
       await supabase.auth.signOut()
       setError('Vaš nalog nije odobren. Kontaktirajte administratora.')
-      setGoogleLoading(false)
-      setLoading(false)
-      return
+      setGoogleLoading(false); setLoading(false); return
     }
-
     document.cookie = `avtorent-admin-token=${accessToken}; path=/; max-age=86400`
     document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || userEmail)}; path=/; max-age=86400`
-
-    // Svi idu na /admin — layout odlučuje šta prikazati
     window.location.href = '/admin'
   }
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
     if (!email || !password) { setError('Unesite email i lozinku.'); return }
-    setLoading(true)
-    setError('')
-
+    setLoading(true); setError('')
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
     if (err || !data.session) {
       setError(err?.message || 'Pogrešan email ili lozinka.')
-      setLoading(false)
-      return
+      setLoading(false); return
     }
     await processLogin(email, data.session.access_token)
   }
 
   async function handleGoogleLogin() {
-    setGoogleLoading(true)
-    setError('')
+    setGoogleLoading(true); setError('')
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/admin/login`,
-        queryParams: { prompt: 'select_account' }
-      },
+      options: { redirectTo: `${window.location.origin}/admin/login`, queryParams: { prompt: 'select_account' } },
     })
     if (err) { setError('Greška pri Google prijavi.'); setGoogleLoading(false) }
   }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', padding: 40, borderRadius: 12, width: 380, border: '1px solid #e5e7eb' }}>
-        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: '#111' }}>
-          Avto<span style={{ color: '#1D9E75' }}>Rent</span>
+      <div style={{ background: '#fff', padding: '36px 40px', borderRadius: 16, width: 380, border: '1px solid #e5e7eb', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
+
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <img
+            src={LOGO_URL}
+            alt="Planet Rent a Car"
+            style={{ height: 64, objectFit: 'contain', display: 'inline-block' }}
+          />
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
+            Admin panel
+          </div>
         </div>
-        <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 28 }}>Admin panel — prijava</div>
 
         {googleLoading && (
           <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#085041', marginBottom: 16, textAlign: 'center' }}>
@@ -123,7 +115,7 @@ export default function AdminLoginPage() {
             </div>
           )}
           <button type="submit" disabled={loading || googleLoading}
-            style={{ display: 'block', width: '100%', padding: 11, background: loading ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ display: 'block', width: '100%', padding: 11, background: loading ? '#e60012aa' : '#e60012', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Prijava...' : 'Prijavi se'}
           </button>
         </form>
