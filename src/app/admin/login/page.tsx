@@ -37,7 +37,7 @@ export default function AdminLoginPage() {
     }
     document.cookie = `avtorent-admin-token=${accessToken}; path=/; max-age=86400`
     document.cookie = `avtorent-agent-name=${encodeURIComponent(agent.full_name || userEmail)}; path=/; max-age=86400`
-    window.location.href = '/admin'
+    window.location.href = `${window.location.origin}/admin`
   }
 
   async function handleEmailLogin(e: React.FormEvent) {
