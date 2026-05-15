@@ -129,7 +129,7 @@ export default function AdminFinansijePanelPage() {
     let sOst = 0, sPre = 0
     transakcije.forEach(t => {
       if ((t.status || '').toLowerCase() !== 'zavrseno') return
-      const iz = t.iznos || 0
+      const iz = Math.abs(t.iznos || 0)
       const kat = (t.kategorija || '').toUpperCase()
       const mail = (t.osobaemail || '').toLowerCase().trim()
       const pMail = (t.primaocemail || '').toLowerCase().trim()
@@ -140,7 +140,8 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        const delta = isPriliv(t) ? iz : -iz
+        const absIz = Math.abs(iz)
+        const delta = isPriliv(t) ? absIz : -absIz
         if (mail) saldo[mail] = (saldo[mail] || 0) + delta
         if (pMail) saldo[pMail] = (saldo[pMail] || 0) - delta
       }
@@ -435,7 +436,7 @@ export default function AdminFinansijePanelPage() {
                             </span>
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {pril ? '+' : '-'}{iznos.toFixed(2)}€
+                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
