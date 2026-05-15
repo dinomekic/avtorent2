@@ -437,6 +437,20 @@ export default function AdminFinansijePanelPage() {
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
                             {iznos >= 0 ? '+' : ''}{iznos.toFixed(2)}€
                           </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {(() => {
+                              const st = (t.status || '').toLowerCase()
+                              const isPending = st === 'na cekanju' || st === 'pending'
+                              const pImeVal = t.primaocemail ? getName(t.primaocemail) : null
+                              if (isPending) return (
+                                <div>
+                                  <span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '2px 7px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap' as const }}>⏳ Na čekanju</span>
+                                  {pImeVal && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>→ {pImeVal}</div>}
+                                </div>
+                              )
+                              return <span style={{ fontSize: 10, background: '#dcfce7', color: '#166534', padding: '2px 7px', borderRadius: 20, fontWeight: 700 }}>✓ Završeno</span>
+                            })()}
+                          </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
                             <div style={{ fontWeight: 600, color: '#111' }}>{aIme}</div>
@@ -505,7 +519,7 @@ export default function AdminFinansijePanelPage() {
                       )
                     })}
                     {filteredTrans.length === 0 && (
-                      <tr><td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nema transakcija</td></tr>
+                      <tr><td colSpan={12} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Nema transakcija</td></tr>
                     )}
                   </tbody>
                 </table>
