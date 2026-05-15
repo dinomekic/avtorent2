@@ -261,6 +261,7 @@ export default function FinansijePage() {
     const izVal = parseFloat(iznos)
     if (!izVal || !kategorija) { alert('Unesite iznos i kategoriju!'); return }
     if (!agentEmail) { alert('Email nije učitan.'); return }
+    if (FOTO_KAT.includes(kategorija) && !photoUrl) { alert('⚠️ Ova kategorija zahtijeva sliku računa! Dodajte sliku prije unosa.'); return }
     setUnosSaving(true)
     const jeRazmjena = kategorija.toLowerCase().includes('razmjena') && primaoc
     await supabase.from('transakcije').insert([{
@@ -495,8 +496,8 @@ export default function FinansijePage() {
                 <label style={lbl}>Napomena</label>
                 <textarea value={komentar} onChange={e => setKomentar(e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' as const }} />
               </div>
-              <button onClick={saveTransakcija} disabled={unosSaving} style={{ width: '100%', padding: '13px', background: unosSaving ? '#5DCAA5' : tip === 'priliv' ? '#1D9E75' : '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                {unosSaving ? '⏳ Snimam...' : tip === 'priliv' ? '↑ UPIŠI PRILIV' : '↓ UPIŠI ODLIV'}
+              <button onClick={saveTransakcija} disabled={unosSaving || (FOTO_KAT.includes(kategorija) && !photoUrl)} style={{ width: '100%', padding: '13px', background: unosSaving ? '#5DCAA5' : (FOTO_KAT.includes(kategorija) && !photoUrl) ? '#9ca3af' : tip === 'priliv' ? '#1D9E75' : '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: (FOTO_KAT.includes(kategorija) && !photoUrl) ? 'not-allowed' : 'pointer' }}>
+                {unosSaving ? '⏳ Snimam...' : (FOTO_KAT.includes(kategorija) && !photoUrl) ? '📎 Dodaj sliku računa!' : tip === 'priliv' ? '↑ UPIŠI PRILIV' : '↓ UPIŠI ODLIV'}
               </button>
             </div>
 
