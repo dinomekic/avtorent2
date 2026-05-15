@@ -398,12 +398,12 @@ export default function AdminFinansijePanelPage() {
                       <th style={TH}>Datum</th>
                       <th style={TH}>Kategorija</th>
                       <th style={TH}>Iznos</th>
-                      <th style={TH}>Status</th>
                       <th style={TH}>Vozilo</th>
                       <th style={TH}>Agent</th>
                       <th style={TH}>Komentar</th>
                       <th style={TH}>Slike</th>
                       <th style={TH}>Admin notes</th>
+                      <th style={TH}>Status</th>
                       <th style={TH}>Upisano</th>
                       <th style={TH}></th>
                     </tr>
@@ -437,20 +437,6 @@ export default function AdminFinansijePanelPage() {
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
                             {iznos >= 0 ? '+' : ''}{iznos.toFixed(2)}€
                           </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            {(() => {
-                              const st = (t.status || '').toLowerCase()
-                              const isPending = st === 'na cekanju' || st === 'pending'
-                              const pImeVal = t.primaocemail ? getName(t.primaocemail) : null
-                              if (isPending) return (
-                                <div>
-                                  <span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '2px 7px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap' as const }}>⏳ Na čekanju</span>
-                                  {pImeVal && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>→ {pImeVal}</div>}
-                                </div>
-                              )
-                              return <span style={{ fontSize: 10, background: '#dcfce7', color: '#166534', padding: '2px 7px', borderRadius: 20, fontWeight: 700 }}>✓ Završeno</span>
-                            })()}
-                          </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
                             <div style={{ fontWeight: 600, color: '#111' }}>{aIme}</div>
@@ -470,29 +456,18 @@ export default function AdminFinansijePanelPage() {
                               const urlMatch = kom.match(/https?:\/\/[^\s]+/)
                               const slike = [t.slika1, t.slika2, t.slika3].filter(Boolean) as string[]
                               const sveUrls = urlMatch ? [urlMatch[0], ...slike] : slike
-
                               function toThumb(url: string): string {
                                 const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
                                 if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w80`
                                 return url
                               }
-
                               return sveUrls.length > 0 ? (
                                 <div style={{ display: 'flex', gap: 4 }}>
                                   {sveUrls.map((s, i) => (
                                     <a key={i} href={s} target="_blank" rel="noreferrer"
                                       style={{ display: 'block', width: 44, height: 34, borderRadius: 4, overflow: 'hidden', border: '1px solid #e5e7eb', flexShrink: 0, background: '#f3f4f6' }}>
-                                      <img
-                                        src={toThumb(s)}
-                                        alt=""
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        onError={(e) => {
-                                          const t = e.currentTarget
-                                          t.style.display = 'none'
-                                          const p = t.parentElement
-                                          if (p) p.innerHTML = '<span style="font-size:18px;display:flex;align-items:center;justify-content:center;height:100%;">📷</span>'
-                                        }}
-                                      />
+                                      <img src={toThumb(s)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => { const t = e.currentTarget; t.style.display = 'none'; const p = t.parentElement; if (p) p.innerHTML = '<span style="font-size:18px;display:flex;align-items:center;justify-content:center;height:100%;">📷</span>' }} />
                                     </a>
                                   ))}
                                 </div>
@@ -505,6 +480,20 @@ export default function AdminFinansijePanelPage() {
                                 📝 {t.admin_notes}
                               </div>
                             ) : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {(() => {
+                              const st = (t.status || '').toLowerCase()
+                              const isPending = st === 'na cekanju' || st === 'pending'
+                              const pImeVal = t.primaocemail ? getName(t.primaocemail) : null
+                              if (isPending) return (
+                                <div>
+                                  <span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '2px 7px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap' as const }}>⏳ Na čekanju</span>
+                                  {pImeVal && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>→ {pImeVal}</div>}
+                                </div>
+                              )
+                              return <span style={{ fontSize: 10, background: '#dcfce7', color: '#166534', padding: '2px 7px', borderRadius: 20, fontWeight: 700 }}>✓ Završeno</span>
+                            })()}
                           </td>
                           <td style={{ padding: '10px 12px', fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap' as const }}>
                             {t.timestamp_upisa
