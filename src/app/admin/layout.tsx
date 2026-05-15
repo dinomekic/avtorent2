@@ -59,19 +59,17 @@ function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
   )
 }
 
-// Helper — uvijek koristi trenutni origin da ne skoči na Vercel
-function navHref(path: string): string {
-  if (typeof window === 'undefined') return path
-  return `${window.location.origin}${path}`
-}
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [role, setRole] = useState<string | null>(null)
   const [agentName, setAgentName] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const [origin, setOrigin] = useState('')
+
+  useEffect(() => {
+    setOrigin(window.location.origin)
+    const check = () => setIsMobile(window.innerWidth < 768)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
@@ -118,11 +116,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.href = `${window.location.origin}/admin/login`
   }
 
+  // Linkovi sa punim origin-om da ostanu na istom domenu
+  const link = (path: string) => `${origin}${path}`
+
   if (isMobile) {
     return (
       <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <a href={`${origin}/admin`} style={{ textDecoration: 'none' }}><Logo size="sm" /></a>
+          <a href={link('/admin')} style={{ textDecoration: 'none' }}><Logo size="sm" /></a>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {agentName && <span style={{ fontSize: 12, color: '#6b7280' }}>{agentName.split(' ')[0]}</span>}
             <button onClick={() => setMenuOpen(o => !o)}
@@ -140,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {navItems.map(item => {
                   const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
                   return (
-                    <a key={item.href} href={`${origin}${item.href}`} onClick={() => setMenuOpen(false)}
+                    <a key={item.href} href={link(item.href)} onClick={() => setMenuOpen(false)}
                       style={{ display: 'block', padding: '11px 18px', fontSize: 14, textDecoration: 'none', color: isActive ? '#1D9E75' : '#374151', fontWeight: isActive ? 600 : 400, background: isActive ? '#f0fdf8' : 'transparent', borderLeft: isActive ? '3px solid #1D9E75' : '3px solid transparent' }}>
                       {item.label}
                     </a>
@@ -167,7 +168,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ width: 210, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb' }}>
-          <a href={`${origin}/admin`} style={{ textDecoration: 'none' }}><Logo size="md" /></a>
+          <a href={link('/admin')} style={{ textDecoration: 'none' }}><Logo size="md" /></a>
           <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, marginLeft: 36 }}>
             {role === 'admin' ? 'admin' : 'agent'}
           </div>
@@ -176,7 +177,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {navItems.map(item => {
             const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
             return (
-              <a key={item.href} href={`${origin}${item.href}`}
+              <a key={item.href} href={link(item.href)}
                 style={{ display: 'block', padding: '9px 16px', fontSize: 13, textDecoration: 'none', color: isActive ? '#1D9E75' : '#6b7280', fontWeight: isActive ? 600 : 400, background: isActive ? '#f0fdf8' : 'transparent', borderRight: isActive ? '2px solid #1D9E75' : '2px solid transparent' }}>
                 {item.label}
               </a>
