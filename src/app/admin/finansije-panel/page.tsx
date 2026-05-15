@@ -398,6 +398,7 @@ export default function AdminFinansijePanelPage() {
                       <th style={TH}>Datum</th>
                       <th style={TH}>Kategorija</th>
                       <th style={TH}>Iznos</th>
+                      <th style={TH}>Status</th>
                       <th style={TH}>Vozilo</th>
                       <th style={TH}>Agent</th>
                       <th style={TH}>Komentar</th>
