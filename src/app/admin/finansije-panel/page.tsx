@@ -140,7 +140,6 @@ export default function AdminFinansijePanelPage() {
         if (mail) dugFirma[mail] = (dugFirma[mail] || 0) - iz
         if (pMail) dugFirma[pMail] = (dugFirma[pMail] || 0) + iz
       } else {
-        // Direktno koristimo iznos — pozitivan zadužuje agenta, negativan razdužuje
         if (mail) saldo[mail] = (saldo[mail] || 0) + iz
         if (pMail) saldo[pMail] = (saldo[pMail] || 0) - iz
       }
@@ -435,7 +434,7 @@ export default function AdminFinansijePanelPage() {
                             </span>
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14, color: pril ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' as const }}>
-                            {pril ? '+' : '-'}{Math.abs(iznos).toFixed(2)}€
+                            {iznos >= 0 ? '+' : ''}{iznos.toFixed(2)}€
                           </td>
                           <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{t.vozilo || '—'}</td>
                           <td style={{ padding: '10px 12px', fontSize: 11, whiteSpace: 'nowrap' as const }}>
