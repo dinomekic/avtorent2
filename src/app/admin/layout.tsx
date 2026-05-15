@@ -10,7 +10,6 @@ const AGENT_NAV = [
   { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
   { href: '/admin/finansije', label: '💰 Finansije' },
-  { href: '/admin/finansije-panel', label: '💸 Finansije panel' },
   { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
   { href: '/admin/pranje', label: '💦 Pranje vozila' },
   { href: '/admin/servis', label: '🔧 Servis' },
@@ -49,6 +48,27 @@ function getCookie(name: string): string {
   if (typeof document === 'undefined') return ''
   const match = document.cookie.match(new RegExp(`${name}=([^;]+)`))
   return match ? decodeURIComponent(match[1]) : ''
+}
+
+function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const big = size === 'md'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: big ? 8 : 6 }}>
+      <div style={{ width: big ? 28 : 22, height: big ? 28 : 22, borderRadius: '50%', background: '#1a56a0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <svg width={big ? 14 : 11} height={big ? 14 : 11} viewBox="0 0 20 20" fill="none">
+          <path d="M3 11 Q7 7 10 9 Q13 11 17 7" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+          <path d="M3 14 Q7 10 10 12 Q13 14 17 10" stroke="#7ab8f5" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M8 4 L10 2 L12 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: big ? 14 : 12, color: '#1a56a0', letterSpacing: -0.5, lineHeight: 1 }}>
+          ADRIA<span style={{ fontWeight: 300, color: '#4a90d9', letterSpacing: 2 }}>DRIVE</span>
+        </div>
+        <div style={{ fontSize: big ? 7 : 6, color: '#4a90d9', letterSpacing: 2 }}>BALKAN · RENT A CAR</div>
+      </div>
+    </div>
+  )
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -110,11 +130,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>
-            Avto<span style={{ color: '#1D9E75' }}>Rent</span>
-            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>{role === 'admin' ? 'admin' : 'agent'}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Logo size="sm" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {agentName && <span style={{ fontSize: 12, color: '#6b7280' }}>{agentName.split(' ')[0]}</span>}
             <button onClick={() => setMenuOpen(o => !o)}
               style={{ background: menuOpen ? '#f0fdf8' : 'none', border: menuOpen ? '1px solid #1D9E75' : '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', fontSize: 18, cursor: 'pointer', color: menuOpen ? '#1D9E75' : '#374151', lineHeight: 1 }}>
@@ -157,13 +174,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ width: 210, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '20px 16px', borderBottom: '1px solid #e5e7eb', fontSize: 16, fontWeight: 700, color: '#111' }}>
-          Avto<span style={{ color: '#1D9E75' }}>Rent</span>
-          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb' }}>
+          <Logo size="md" />
+          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, marginLeft: 36 }}>
             {role === 'admin' ? 'admin' : 'agent'}
-          </span>
+          </div>
         </div>
-        <nav style={{ flex: 1, paddingTop: 8 }}>
+        <nav style={{ flex: 1, paddingTop: 8, overflowY: 'auto' }}>
           {navItems.map(item => {
             const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)
             return (
