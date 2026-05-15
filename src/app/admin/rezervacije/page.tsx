@@ -70,11 +70,24 @@ export default function AdminReservationsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: res }, { data: voz }] = await Promise.all([
-      supabase.from('reservations').select('*, vehicles(name), partners(name)').order('created_at', { ascending: false }),
-      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').eq('fleet_status', 'available').order('marka'),
+      supabase.from('reservations').select('*, partners(name)').order('created_at', { ascending: false }),
+      supabase.from('vozila_fleet').select('id, license_plate, marka, model, agregirani_2, fleet_status, lokacija').order('marka'),
     ])
-    setRezervacije(res || [])
-    setVozila(voz || [])
+
+    // Dodaj naziv vozila — ako je vehicle_id UUID traži u vehicles, ako je broj traži u vozila_fleet
+    const rezervacije = res || []
+    const enriched = rezervacije.map((r: any) => {
+      const isNumeric = /^\d+$/.test(String(r.vehicle_id))
+      if (isNumeric) {
+        const v = (voz || []).find((v: any) => String(v.id) === String(r.vehicle_id))
+        return { ...r, vehicles: v ? { name: v.agregirani_2 || `${v.marka} ${v.model}` } : null }
+      }
+      // Za UUID — ime vozila nije dostupno bez join-a, prikaži vehicle_id skraćeno
+      return { ...r, vehicles: r.vehicles || null }
+    })
+
+    setRezervacije(enriched)
+    setVozila((voz || []).filter((v: any) => v.fleet_status === 'available'))
     setLoading(false)
   }, [])
 
