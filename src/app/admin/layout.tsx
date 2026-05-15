@@ -50,24 +50,15 @@ function getCookie(name: string): string {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
+const LOGO_URL = 'https://planetrentacar.me/wp-content/uploads/2023/03/logo-1.png'
+
 function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const big = size === 'md'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: big ? 8 : 6 }}>
-      <div style={{ width: big ? 28 : 22, height: big ? 28 : 22, borderRadius: '50%', background: '#1a56a0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <svg width={big ? 14 : 11} height={big ? 14 : 11} viewBox="0 0 20 20" fill="none">
-          <path d="M3 11 Q7 7 10 9 Q13 11 17 7" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-          <path d="M3 14 Q7 10 10 12 Q13 14 17 10" stroke="#7ab8f5" strokeWidth="2" strokeLinecap="round"/>
-          <path d="M8 4 L10 2 L12 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </div>
-      <div>
-        <div style={{ fontWeight: 800, fontSize: big ? 14 : 12, color: '#1a56a0', letterSpacing: -0.5, lineHeight: 1 }}>
-          ADRIA<span style={{ fontWeight: 300, color: '#4a90d9', letterSpacing: 2 }}>DRIVE</span>
-        </div>
-        <div style={{ fontSize: big ? 7 : 6, color: '#4a90d9', letterSpacing: 2 }}>BALKAN · RENT A CAR</div>
-      </div>
-    </div>
+    <img
+      src={LOGO_URL}
+      alt="Planet Rent a Car"
+      style={{ height: size === 'md' ? 36 : 28, objectFit: 'contain', display: 'block' }}
+    />
   )
 }
 
