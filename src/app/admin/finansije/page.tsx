@@ -79,9 +79,9 @@ const DEFAULT_ODLIV = [
   'Pozajmica (u komenatru upisi preostali dug)','Ostalo',
 ]
 
-const inp: React.CSSProperties = { width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
-const card: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 20, marginBottom: 14 }
+const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid #e5e7eb', borderRadius: 10, background: '#fff', color: '#111', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }
+const card: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, marginBottom: 12 }
 
 export default function FinansijePage() {
   const [activeTab, setActiveTab] = useState<Tab>('transakcije')
@@ -127,23 +127,15 @@ export default function FinansijePage() {
   const [filterSearch, setFilterSearch] = useState('')
   const [pendingTrans, setPendingTrans] = useState<Transakcija[]>([])
 
-  // Učitaj kategorije posebno — ne čekaj ostale podatke
   useEffect(() => {
     async function loadKat() {
       try {
-        const { data, error } = await supabase
-          .from('konfiguracija')
-          .select('*')
-          .eq('id', 'kategorije_transakcija')
-          .maybeSingle()
-        
-        if (data && !error) {
+        const { data } = await supabase.from('konfiguracija').select('*').eq('id', 'kategorije_transakcija').maybeSingle()
+        if (data) {
           if (Array.isArray(data.priliv) && data.priliv.length > 0) setKatPriliv(data.priliv)
           if (Array.isArray(data.odliv) && data.odliv.length > 0) setKatOdliv(data.odliv)
         }
-      } catch (e) {
-        console.log('Kategorije: koristim defaultne')
-      }
+      } catch {}
       setKatLoaded(true)
     }
     loadKat()
@@ -165,7 +157,7 @@ export default function FinansijePage() {
     const { data: transMoje } = await supabase
       .from('transakcije').select('*')
       .or(`osobaemail.eq.${email},primaocemail.eq.${email}`)
-      .order('timestamp_upisa', { ascending: false }).limit(200)
+      .order('timestamp_upisa', { ascending: false }).limit(300)
     const trans = transMoje || []
     setAllTrans(trans)
 
@@ -178,6 +170,7 @@ export default function FinansijePage() {
     let s = 0, df = 0, uKm = 0
     const prikazano: Transakcija[] = []
     const pending: Transakcija[] = []
+
     trans.forEach(t => {
       const iz = parseFloat(t.iznos as any || 0)
       const kat = (t.kategorija || '').toLowerCase()
@@ -199,13 +192,11 @@ export default function FinansijePage() {
     setSaldo(s); setFirmaDug(df)
     setPrikazTrans(prikazano); setPendingTrans(pending); setPendingCount(pending.length)
 
-    const { data: km } = await supabase.from('koristenje').select('*')
-      .ilike('email', email).order('timestamp_upisa', { ascending: false })
+    const { data: km } = await supabase.from('koristenje').select('*').ilike('email', email).order('timestamp_upisa', { ascending: false })
     const svaKor = km || []
     let totalPredjeno = 0
     svaKor.forEach((k: any) => {
-      if ((k.status || '').trim() !== 'Aktivno')
-        totalPredjeno += parseFloat(k.predjena_km || k.kilometraza || 0)
+      if ((k.status || '').trim() !== 'Aktivno') totalPredjeno += parseFloat(k.predjena_km || k.kilometraza || 0)
     })
     setKmDug(((totalPredjeno / 100) * 1.44 * 8) - uKm)
     setAktivnoKor(svaKor.find((k: any) => (k.status || '').trim() === 'Aktivno') || null)
@@ -216,14 +207,10 @@ export default function FinansijePage() {
   const loadUgovori = useCallback(async () => {
     if (!agentIme) return
     setUgovoriLoading(true)
-    // Matchuj i sa i bez dijakritika
     const imeNorm = normalize(agentIme)
-    const { data } = await supabase.from('rezervacije').select('*')
-      .order('id', { ascending: false }).limit(200)
-    // Filtriraj na klijent strani zbog dijakritika
+    const { data } = await supabase.from('rezervacije').select('*').order('id', { ascending: false }).limit(200)
     const filtered = (data || []).filter((u: any) =>
-      normalize(u.ko_je_izdao || '') === imeNorm ||
-      normalize(u.ko_je_preuzeo || '') === imeNorm
+      normalize(u.ko_je_izdao || '') === imeNorm || normalize(u.ko_je_preuzeo || '') === imeNorm
     )
     setUgovori(filtered)
     setUgovoriLoading(false)
@@ -240,14 +227,10 @@ export default function FinansijePage() {
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1]
         try {
-          const res = await fetch(UPLOAD_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base64, contentType: file.type, name: naziv, folderId: FOLDER_ID })
-          })
+          const res = await fetch(UPLOAD_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, contentType: file.type, name: naziv, folderId: FOLDER_ID }) })
           const json = await res.json()
           if (json.status === 'success') resolve(json.url)
-          else reject(new Error('Upload failed: ' + JSON.stringify(json)))
+          else reject(new Error('Upload failed'))
         } catch (e) { reject(e) }
       }
       reader.onerror = () => reject(new Error('File read error'))
@@ -260,10 +243,7 @@ export default function FinansijePage() {
     try {
       const url = await uploadSlika(file, `RACUN_${Date.now()}`)
       setPhotoUrl(url); setUploadStatus('✅ Slika dodana')
-    } catch (err) {
-      console.error('Upload error:', err)
-      setUploadStatus('❌ Greška pri uploadu')
-    }
+    } catch { setUploadStatus('❌ Greška') }
   }
 
   async function handleUgovorUpload(e: React.ChangeEvent<HTMLInputElement>, rezId: number) {
@@ -271,25 +251,19 @@ export default function FinansijePage() {
     setUploadingRezId(rezId)
     try {
       const url = await uploadSlika(file, `UGOVOR_${rezId}_${Date.now()}`)
-      const { error } = await supabase.from('rezervacije').update({ ugovor_slika: url }).eq('id', rezId)
-      if (error) throw error
-      alert('✅ Ugovor uspješno uploadovan!')
-      loadUgovori()
-    } catch (err) {
-      console.error('Ugovor upload error:', err)
-      alert('❌ Greška pri uploadu. Provjeri da li route.ts postoji na /api/upload.')
-    }
-    setUploadingRezId(null)
-    e.target.value = ''
+      await supabase.from('rezervacije').update({ ugovor_slika: url }).eq('id', rezId)
+      alert('✅ Ugovor uploadovan!'); loadUgovori()
+    } catch { alert('❌ Greška pri uploadu') }
+    setUploadingRezId(null); e.target.value = ''
   }
 
   async function saveTransakcija() {
     const izVal = parseFloat(iznos)
     if (!izVal || !kategorija) { alert('Unesite iznos i kategoriju!'); return }
-    if (!agentEmail) { alert('Email nije učitan. Osvježi stranicu.'); return }
+    if (!agentEmail) { alert('Email nije učitan.'); return }
     setUnosSaving(true)
     const jeRazmjena = kategorija.toLowerCase().includes('razmjena') && primaoc
-    const { error } = await supabase.from('transakcije').insert([{
+    await supabase.from('transakcije').insert([{
       id: genId(), tip_transakcije: tip, datum, kategorija,
       iznos: tip === 'priliv' ? Math.abs(izVal) : -Math.abs(izVal),
       vozilo: voziloUnos || 'OPŠTE',
@@ -299,10 +273,8 @@ export default function FinansijePage() {
       status: jeRazmjena ? 'na cekanju' : 'Zavrseno',
       primaocemail: jeRazmjena ? primaoc : null,
     }])
-    if (error) { alert('Greška: ' + error.message); setUnosSaving(false); return }
-    setIznos(''); setKomentar(''); setVoziloUnos(''); setPhotoUrl('')
-    setUploadStatus(''); setPrimaoc(''); setUnosSaving(false)
-    alert('Upisano!'); loadAll(agentEmail, agentIme)
+    setIznos(''); setKomentar(''); setVoziloUnos(''); setPhotoUrl(''); setUploadStatus(''); setPrimaoc('')
+    setUnosSaving(false); alert('Upisano!'); loadAll(agentEmail, agentIme)
   }
 
   function getUgovorStatus(u: Rezervacija) {
@@ -311,89 +283,57 @@ export default function FinansijePage() {
     const isPreuzeo = normalize(u.ko_je_preuzeo) === imeNorm
     const fazaReturn = !!u.ko_je_preuzeo
     const uTrans = allTrans.filter(t => t.komentar?.includes(`REZ #${u.id}`))
-    const upisanNajam = uTrans
-      .filter(t => t.tip_transakcije === 'priliv' && ['Izdavanje vozila','Naplata Duga'].includes(t.kategorija))
-      .reduce((s, t) => s + Math.abs(parseFloat(t.iznos as any || 0)), 0)
+    const upisanNajam = uTrans.filter(t => t.tip_transakcije === 'priliv' && ['Izdavanje vozila','Naplata Duga'].includes(t.kategorija)).reduce((s, t) => s + Math.abs(parseFloat(t.iznos as any || 0)), 0)
     const depUzetUKasi = uTrans.some(t => t.tip_transakcije === 'priliv' && t.kategorija === 'Depozit')
     const depVracenIzKase = uTrans.some(t => t.tip_transakcije === 'odliv' && t.kategorija === 'Povrat Depozita')
     const fali = Math.max(0, (u.naplaceno || 0) - upisanNajam)
-    return {
-      isIzdao, isPreuzeo, fazaReturn,
-      depozit: u.depozit || 0,
-      vracenDep: u.vraceni_depozit_iznos || 0,
-      fali,
-      trebaSlika: !u.ugovor_slika && isIzdao,
-      trebaNajam: fali > 0.01 && !fazaReturn && isIzdao,
-      trebaDepozit: u.depozit_uzet && !depUzetUKasi && isIzdao,
-      trebaDug: fali > 0.01 && fazaReturn && isPreuzeo,
-      trebaDepVracen: u.depozit_vracen && (u.vraceni_depozit_iznos || 0) > 0 && !depVracenIzKase && isPreuzeo,
-    }
+    return { isIzdao, isPreuzeo, fazaReturn, depozit: u.depozit || 0, vracenDep: u.vraceni_depozit_iznos || 0, fali, trebaSlika: !u.ugovor_slika && isIzdao, trebaNajam: fali > 0.01 && !fazaReturn && isIzdao, trebaDepozit: u.depozit_uzet && !depUzetUKasi && isIzdao, trebaDug: fali > 0.01 && fazaReturn && isPreuzeo, trebaDepVracen: u.depozit_vracen && (u.vraceni_depozit_iznos || 0) > 0 && !depVracenIzKase && isPreuzeo }
   }
 
   async function trInsert(tip_t: 'priliv' | 'odliv', kat: string, iznT: number, voz: string, kom: string) {
-    await supabase.from('transakcije').insert([{
-      id: genId(), tip_transakcije: tip_t,
-      datum: new Date().toISOString().split('T')[0],
-      kategorija: kat, iznos: tip_t === 'odliv' ? -Math.abs(iznT) : Math.abs(iznT),
-      vozilo: voz, komentar: kom, osoba: agentIme, osobaemail: agentEmail,
-      timestamp_upisa: new Date().toISOString(), status: 'Zavrseno',
-    }])
+    await supabase.from('transakcije').insert([{ id: genId(), tip_transakcije: tip_t, datum: new Date().toISOString().split('T')[0], kategorija: kat, iznos: tip_t === 'odliv' ? -Math.abs(iznT) : Math.abs(iznT), vozilo: voz, komentar: kom, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' }])
   }
 
   async function zavediNajam(u: Rezervacija, iznT: number) {
-    if (!confirm(`Zaduži ${iznT}€ u kasu za ${u.br_tablica}?`)) return
-    const p = Math.max(0, (u.ukupno_naplata || 0) - (u.naplaceno || 0))
-    await trInsert('priliv', 'Izdavanje vozila', iznT, u.br_tablica,
-      `Početna naplata pri izdavanju (Ugovor REZ #${u.id}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ' Isplaćeno u potpunosti.'}`)
-    alert('Zaduženo!'); loadAll(agentEmail, agentIme); loadUgovori()
+    if (!confirm(`Zaduži ${iznT}€?`)) return
+    await trInsert('priliv', 'Izdavanje vozila', iznT, u.br_tablica, `Početna naplata pri izdavanju (Ugovor REZ #${u.id}).`)
+    loadAll(agentEmail, agentIme); loadUgovori()
   }
 
   async function zavediDepozit(u: Rezervacija, iznT: number) {
     if (!confirm(`Zaduži depozit ${iznT}€?`)) return
-    await trInsert('priliv', 'Depozit', iznT, u.br_tablica,
-      `Uzet depozit pri izdavanju (Ugovor REZ #${u.id})`)
-    alert('Depozit zadužen!'); loadAll(agentEmail, agentIme); loadUgovori()
+    await trInsert('priliv', 'Depozit', iznT, u.br_tablica, `Uzet depozit pri izdavanju (Ugovor REZ #${u.id})`)
+    loadAll(agentEmail, agentIme); loadUgovori()
   }
 
   async function zavediNajamIDepozit(u: Rezervacija, najam: number, dep: number) {
     if (!confirm(`Zaduži NAJAM (${najam}€) i DEPOZIT (${dep}€)?`)) return
-    const p = Math.max(0, (u.ukupno_naplata || 0) - (u.naplaceno || 0))
     await supabase.from('transakcije').insert([
-      { id: genId()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: najam, vozilo: u.br_tablica, komentar: `Početna naplata pri izdavanju (Ugovor REZ #${u.id}).${p > 0.01 ? ` Preostali dug: ${p.toFixed(2)}€` : ''}`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
-      { id: genId()+'2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: dep, vozilo: u.br_tablica, komentar: `Uzet depozit pri izdavanju (Ugovor REZ #${u.id})`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
+      { id: genId()+'1', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Izdavanje vozila', iznos: najam, vozilo: u.br_tablica, komentar: `Naplata pri izdavanju (Ugovor REZ #${u.id})`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
+      { id: genId()+'2', tip_transakcije: 'priliv', datum: new Date().toISOString().split('T')[0], kategorija: 'Depozit', iznos: dep, vozilo: u.br_tablica, komentar: `Uzet depozit (Ugovor REZ #${u.id})`, osoba: agentIme, osobaemail: agentEmail, timestamp_upisa: new Date().toISOString(), status: 'Zavrseno' },
     ])
-    alert('Sve zaduženo!'); loadAll(agentEmail, agentIme); loadUgovori()
+    loadAll(agentEmail, agentIme); loadUgovori()
   }
 
   async function zavediDug(u: Rezervacija, iznT: number) {
-    if (!confirm(`Zaduži naplatu duga ${iznT}€?`)) return
-    await trInsert('priliv', 'Naplata Duga', iznT, u.br_tablica,
-      `Naplata duga pri preuzimanju (Ugovor REZ #${u.id})`)
-    alert('Naplata zavedena!'); loadAll(agentEmail, agentIme); loadUgovori()
+    if (!confirm(`Zaduži dug ${iznT}€?`)) return
+    await trInsert('priliv', 'Naplata Duga', iznT, u.br_tablica, `Naplata duga pri preuzimanju (Ugovor REZ #${u.id})`)
+    loadAll(agentEmail, agentIme); loadUgovori()
   }
 
   async function zavediPovratDep(u: Rezervacija, iznT: number) {
-    if (!confirm(`Razdužuješ ${iznT}€ iz kase za povrat depozita?`)) return
-    await trInsert('odliv', 'Povrat Depozita', iznT, u.br_tablica,
-      `Vraćen depozit pri preuzimanju (Ugovor REZ #${u.id})`)
-    alert('Povrat razdužen!'); loadAll(agentEmail, agentIme); loadUgovori()
+    if (!confirm(`Razdužuješ ${iznT}€ za povrat depozita?`)) return
+    await trInsert('odliv', 'Povrat Depozita', iznT, u.br_tablica, `Vraćen depozit (Ugovor REZ #${u.id})`)
+    loadAll(agentEmail, agentIme); loadUgovori()
   }
 
   async function startPrivate() {
     if (!privVozilo || !kmStart) { alert('Unesite vozilo i KM!'); return }
-    if (!agentEmail) { alert('Email nije učitan! Osvježi stranicu.'); return }
     const vozilo = vozila.find(v => v.license_plate === privVozilo || normalize(v.agregirani_2 || '').includes(normalize(privVozilo)))
     const tablice = vozilo?.agregirani_2 || privVozilo.toUpperCase()
     setVozSaving(true)
-    const { error } = await supabase.from('koristenje').insert([{
-      id: genId(), email: agentEmail, ime_prezime: agentIme,
-      tablice, km_start: parseFloat(kmStart), kilometraza: 0,
-      destinacija: privDest, status: 'Aktivno',
-      vreme_zaduzenja: new Date().toLocaleString('sr-RS'),
-      timestamp_upisa: new Date().toISOString(),
-    }])
+    const { error } = await supabase.from('koristenje').insert([{ id: genId(), email: agentEmail, ime_prezime: agentIme, tablice, km_start: parseFloat(kmStart), kilometraza: 0, destinacija: privDest, status: 'Aktivno', vreme_zaduzenja: new Date().toLocaleString('sr-RS'), timestamp_upisa: new Date().toISOString() }])
     if (error) { alert('Greška: ' + error.message); setVozSaving(false); return }
-    alert(`Vozilo zaduženo: ${tablice}`)
     setPrivVozilo(''); setKmStart(''); setPrivDest('')
     setVozSaving(false); loadAll(agentEmail, agentIme)
   }
@@ -402,10 +342,7 @@ export default function FinansijePage() {
     if (!kmEnd) { alert('Unesite krajnje KM!'); return }
     const km_end = parseFloat(kmEnd)
     const predjena = kmS > 0 ? km_end - kmS : km_end
-    await supabase.from('koristenje').update({
-      km_end, predjena_km: predjena, kilometraza: predjena,
-      status: 'Završeno', vreme_povratka: new Date().toLocaleString('sr-RS')
-    }).eq('id', id)
+    await supabase.from('koristenje').update({ km_end, predjena_km: predjena, kilometraza: predjena, status: 'Završeno', vreme_povratka: new Date().toLocaleString('sr-RS') }).eq('id', id)
     setKmEnd(''); loadAll(agentEmail, agentIme)
   }
 
@@ -414,10 +351,17 @@ export default function FinansijePage() {
     loadAll(agentEmail, agentIme)
   }
 
+  // Helper za naziv kolege po emailu
+  function getImeByEmail(email: string): string {
+    if (!email) return '/'
+    const k = kolege.find(k => k.email.toLowerCase() === email.toLowerCase())
+    return k?.ime || email.split('@')[0]
+  }
+
   if (loading) return <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>Učitavanje...</div>
 
   const needsFoto = FOTO_KAT.includes(kategorija)
-  const isRazmjena = kategorija === 'Razmjena novca'
+  const isRazmjena = kategorija.toLowerCase().includes('razmjena')
   const katOptions = tip === 'priliv' ? katPriliv : katOdliv
 
   const sortedTrans = [...prikazTrans].sort((a, b) =>
@@ -425,7 +369,7 @@ export default function FinansijePage() {
   )
   const filteredTrans = sortedTrans.filter(t => {
     const matchTip = filterTip === 'sve' || t.tip_transakcije === filterTip
-    const matchSearch = !filterSearch || normalize(t.kategorija).includes(normalize(filterSearch)) || normalize(t.vozilo).includes(normalize(filterSearch))
+    const matchSearch = !filterSearch || normalize(t.kategorija).includes(normalize(filterSearch)) || normalize(t.vozilo || '').includes(normalize(filterSearch))
     return matchTip && matchSearch
   })
 
@@ -434,304 +378,391 @@ export default function FinansijePage() {
   const zavrsenoUgovori = ugovori.filter(u => { const s = getUgovorStatus(u); return !s.trebaSlika && !s.trebaNajam && !s.trebaDepozit && !s.trebaDug && !s.trebaDepVracen })
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
-    { id: 'transakcije', label: '💸 Transakcije' },
-    { id: 'ugovori', label: '📄 Ugovori', badge: (cekanjuUgovori.length + dugDepUgovori.length) || undefined },
-    { id: 'vozilo', label: '🚗 Vozilo' },
-    { id: 'spisak', label: '📊 Spisak' },
-    { id: 'potvrde', label: '🔔 Potvrde', badge: pendingCount || undefined },
+    { id: 'transakcije', label: '💸' },
+    { id: 'ugovori', label: '📄', badge: (cekanjuUgovori.length + dugDepUgovori.length) || undefined },
+    { id: 'vozilo', label: '🚗' },
+    { id: 'spisak', label: '📊' },
+    { id: 'potvrde', label: '🔔', badge: pendingCount || undefined },
   ]
 
+  const TAB_LABELS: Record<Tab, string> = {
+    transakcije: '💸 Transakcije',
+    ugovori: '📄 Ugovori',
+    vozilo: '🚗 Vozilo',
+    spisak: '📊 Spisak',
+    potvrde: '🔔 Potvrde',
+  }
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111', margin: 0 }}>Finansije</h1>
-          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4, margin: 0 }}>
-            {agentIme} · {katLoaded ? '' : '⏳ učitavam kategorije...'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ background: saldo >= 0 ? '#E1F5EE' : '#FCEBEB', border: `1px solid ${saldo >= 0 ? '#5DCAA5' : '#fecaca'}`, borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>SALDO</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: saldo >= 0 ? '#085041' : '#dc2626' }}>{saldo.toFixed(2)} €</div>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 0 80px' }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .fin-grid { grid-template-columns: 1fr !important; }
+          .saldo-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        input:focus, select:focus, textarea:focus { border-color: #1D9E75 !important; outline: none; box-shadow: 0 0 0 3px rgba(29,158,117,0.1); }
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 16px', position: 'sticky', top: 0, zIndex: 50 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>Finansije</div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>{agentIme}</div>
           </div>
-          <div style={{ background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>FIRMA DUG</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#633806' }}>{firmaDug.toFixed(2)} €</div>
-          </div>
-          <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>DUG KM</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: kmDug > 0 ? '#0C447C' : '#085041' }}>{kmDug.toFixed(2)} €</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: saldo >= 0 ? '#085041' : '#dc2626', background: saldo >= 0 ? '#E1F5EE' : '#FCEBEB', padding: '6px 14px', borderRadius: 20 }}>
+            SALDO: {saldo.toFixed(2)}€
           </div>
         </div>
+
+        {/* Mini saldo kartica */}
+        <div className="saldo-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ background: saldo >= 0 ? '#E1F5EE' : '#FCEBEB', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Saldo</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: saldo >= 0 ? '#085041' : '#dc2626' }}>{saldo.toFixed(0)}€</div>
+          </div>
+          <div style={{ background: '#FAEEDA', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Firma dug</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#633806' }}>{firmaDug.toFixed(0)}€</div>
+          </div>
+          <div style={{ background: '#E6F1FB', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>KM dug</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0C447C' }}>{kmDug.toFixed(0)}€</div>
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div style={{ display: 'flex', borderRadius: 10, background: '#f3f4f6', padding: 3, gap: 2 }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex: 1, padding: '8px 4px', fontSize: 18, border: 'none', borderRadius: 8, background: activeTab === t.id ? '#fff' : 'transparent', cursor: 'pointer', position: 'relative', boxShadow: activeTab === t.id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
+              {t.label}
+              {t.badge ? <span style={{ position: 'absolute', top: 2, right: 2, background: '#dc2626', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{t.badge}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', textAlign: 'center', marginTop: 6 }}>{TAB_LABELS[activeTab]}</div>
       </div>
 
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid #e5e7eb' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ padding: '9px 16px', fontSize: 13, border: 'none', background: 'none', cursor: 'pointer', fontWeight: activeTab === t.id ? 600 : 400, color: activeTab === t.id ? '#1D9E75' : '#6b7280', borderBottom: activeTab === t.id ? '2px solid #1D9E75' : '2px solid transparent', marginBottom: -1 }}>
-            {t.label}
-            {t.badge ? <span style={{ marginLeft: 5, background: '#dc2626', color: '#fff', borderRadius: 20, fontSize: 10, padding: '1px 5px', fontWeight: 700 }}>{t.badge}</span> : null}
-          </button>
-        ))}
-      </div>
+      <div style={{ padding: '16px' }}>
 
-      {activeTab === 'transakcije' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20 }}>
-          <div style={card}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 16 }}>Nova transakcija</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <button onClick={() => { setTip('priliv'); setKategorija('') }} style={{ flex: 1, padding: '10px', border: `2px solid ${tip === 'priliv' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: tip === 'priliv' ? '#E1F5EE' : '#fff', color: tip === 'priliv' ? '#085041' : '#6b7280', fontWeight: tip === 'priliv' ? 700 : 400, cursor: 'pointer', fontSize: 13 }}>↑ PRILIV</button>
-              <button onClick={() => { setTip('odliv'); setKategorija('') }} style={{ flex: 1, padding: '10px', border: `2px solid ${tip === 'odliv' ? '#dc2626' : '#e5e7eb'}`, borderRadius: 8, background: tip === 'odliv' ? '#FCEBEB' : '#fff', color: tip === 'odliv' ? '#dc2626' : '#6b7280', fontWeight: tip === 'odliv' ? 700 : 400, cursor: 'pointer', fontSize: 13 }}>↓ ODLIV</button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div><label style={lbl}>Datum</label><input type="date" value={datum} onChange={e => setDatum(e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>Iznos (€) *</label><input type="number" step="0.01" value={iznos} onChange={e => setIznos(e.target.value)} placeholder="0.00" style={{ ...inp, fontWeight: 700 }} /></div>
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={lbl}>Kategorija * {!katLoaded && <span style={{ color: '#9ca3af' }}>(učitavam...)</span>}</label>
-              <select value={kategorija} onChange={e => setKategorija(e.target.value)} style={inp}>
-                <option value="">-- Odaberi --</option>
-                {katOptions.map(k => <option key={k} value={k}>{k}</option>)}
-              </select>
-            </div>
-            {isRazmjena && (
+        {/* ═══ TRANSAKCIJE ═══ */}
+        {activeTab === 'transakcije' && (
+          <div>
+            {/* Nova transakcija */}
+            <div style={card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 14 }}>Nova transakcija</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                <button onClick={() => { setTip('priliv'); setKategorija('') }} style={{ padding: '12px', border: `2px solid ${tip === 'priliv' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 10, background: tip === 'priliv' ? '#E1F5EE' : '#fff', color: tip === 'priliv' ? '#085041' : '#6b7280', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>↑ PRILIV</button>
+                <button onClick={() => { setTip('odliv'); setKategorija('') }} style={{ padding: '12px', border: `2px solid ${tip === 'odliv' ? '#dc2626' : '#e5e7eb'}`, borderRadius: 10, background: tip === 'odliv' ? '#FCEBEB' : '#fff', color: tip === 'odliv' ? '#dc2626' : '#6b7280', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>↓ ODLIV</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div><label style={lbl}>Datum</label><input type="date" value={datum} onChange={e => setDatum(e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Iznos (€) *</label><input type="number" step="0.01" value={iznos} onChange={e => setIznos(e.target.value)} placeholder="0.00" style={{ ...inp, fontWeight: 700, fontSize: 16 }} /></div>
+              </div>
               <div style={{ marginBottom: 10 }}>
-                <label style={lbl}>Pošalji kolegi</label>
-                <select value={primaoc} onChange={e => setPrimaoc(e.target.value)} style={inp}>
-                  <option value="">→ Izaberi kolegu...</option>
-                  {kolege.map(k => <option key={k.email} value={k.email}>{k.ime}</option>)}
+                <label style={lbl}>Kategorija *</label>
+                <select value={kategorija} onChange={e => setKategorija(e.target.value)} style={inp}>
+                  <option value="">-- Odaberi --</option>
+                  {katOptions.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
               </div>
-            )}
-            <div style={{ marginBottom: 10 }}>
-              <label style={lbl}>Vozilo</label>
-              <input list="voz-unos" value={voziloUnos} onChange={e => setVoziloUnos(e.target.value)} placeholder="Pretraži po tablicama..." style={inp} />
-              <datalist id="voz-unos">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>)}</datalist>
-            </div>
-            {needsFoto && (
-              <div style={{ border: '1px dashed #d1d5db', borderRadius: 8, padding: 12, marginBottom: 10, background: '#f9fafb' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#1D9E75', marginBottom: 8 }}>📎 OBAVEZNA SLIKA RAČUNA</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <label style={{ flex: 1, background: '#E1F5EE', border: '1px solid #1D9E75', padding: '8px', borderRadius: 8, textAlign: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#085041' }}>📷 Slikaj<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFotoUpload} /></label>
-                  <label style={{ flex: 1, background: '#E1F5EE', border: '1px solid #1D9E75', padding: '8px', borderRadius: 8, textAlign: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#085041' }}>🖼️ Dodaj<input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} /></label>
+              {isRazmjena && (
+                <div style={{ marginBottom: 10, background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 10, padding: 12 }}>
+                  <label style={{ ...lbl, color: '#0C447C' }}>Pošalji kolegi</label>
+                  <select value={primaoc} onChange={e => setPrimaoc(e.target.value)} style={inp}>
+                    <option value="">→ Izaberi kolegu...</option>
+                    {kolege.map(k => <option key={k.email} value={k.email}>{k.ime}</option>)}
+                  </select>
                 </div>
-                {uploadStatus && <div style={{ fontSize: 12, marginTop: 6, color: uploadStatus.includes('✅') ? '#1D9E75' : uploadStatus.includes('⏳') ? '#633806' : '#dc2626', fontWeight: 600 }}>{uploadStatus}</div>}
-                {photoUrl && <img src={getDirectImg(photoUrl)} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid #1D9E75', cursor: 'pointer', marginTop: 8 }} onClick={() => window.open(photoUrl, '_blank')} alt="račun" />}
+              )}
+              <div style={{ marginBottom: 10 }}>
+                <label style={lbl}>Vozilo</label>
+                <input list="voz-unos" value={voziloUnos} onChange={e => setVoziloUnos(e.target.value)} placeholder="Pretraži po tablicama..." style={inp} />
+                <datalist id="voz-unos">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>)}</datalist>
+              </div>
+              {needsFoto && (
+                <div style={{ border: '1px dashed #1D9E75', borderRadius: 10, padding: 12, marginBottom: 10, background: '#f9fafb' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1D9E75', marginBottom: 8 }}>📎 OBAVEZNA SLIKA RAČUNA</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={{ flex: 1, background: '#E1F5EE', border: '1px solid #1D9E75', padding: '10px', borderRadius: 10, textAlign: 'center', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#085041' }}>📷 Slikaj<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFotoUpload} /></label>
+                    <label style={{ flex: 1, background: '#E1F5EE', border: '1px solid #1D9E75', padding: '10px', borderRadius: 10, textAlign: 'center', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#085041' }}>🖼️ Dodaj<input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} /></label>
+                  </div>
+                  {uploadStatus && <div style={{ fontSize: 12, marginTop: 6, color: uploadStatus.includes('✅') ? '#1D9E75' : '#dc2626', fontWeight: 600 }}>{uploadStatus}</div>}
+                  {photoUrl && <img src={getDirectImg(photoUrl)} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, marginTop: 8, cursor: 'pointer' }} onClick={() => window.open(photoUrl, '_blank')} alt="račun" />}
+                </div>
+              )}
+              <div style={{ marginBottom: 14 }}>
+                <label style={lbl}>Napomena</label>
+                <textarea value={komentar} onChange={e => setKomentar(e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' as const }} />
+              </div>
+              <button onClick={saveTransakcija} disabled={unosSaving} style={{ width: '100%', padding: '13px', background: unosSaving ? '#5DCAA5' : tip === 'priliv' ? '#1D9E75' : '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                {unosSaving ? '⏳ Snimam...' : tip === 'priliv' ? '↑ UPIŠI PRILIV' : '↓ UPIŠI ODLIV'}
+              </button>
+            </div>
+
+            {/* Zadnje transakcije */}
+            <div style={card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 12 }}>Zadnje transakcije</div>
+              {sortedTrans.slice(0, 15).map(t => {
+                const iz = parseFloat(t.iznos as any || 0)
+                const slikaUrl = t.komentar?.match(/https?:\/\/\S+/)?.[0]
+                const jeSlao = (t.osobaemail || '').toLowerCase() === agentEmail.toLowerCase()
+                const isPril = (t.tip_transakcije || '').toLowerCase() === 'priliv'
+                const jePending = (t.status || '').toLowerCase() === 'na cekanju'
+
+                // Razmjena logika
+                const jeRazmjenaT = (t.kategorija || '').toLowerCase().includes('razmjena')
+                let razmjenaInfo = ''
+                if (jeRazmjenaT) {
+                  if (jeSlao && t.primaocemail) razmjenaInfo = `→ ${getImeByEmail(t.primaocemail)}`
+                  else if (!jeSlao) razmjenaInfo = `← od ${getImeByEmail(t.osobaemail)}`
+                }
+
+                return (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f3f4f6', opacity: jePending ? 0.7 : 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>
+                        {t.kategorija}
+                        {jePending && <span style={{ marginLeft: 6, fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>⏳ čeka</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                        {t.vozilo && t.vozilo !== 'OPŠTE' ? t.vozilo + ' · ' : ''}{t.datum}
+                        {razmjenaInfo && <span style={{ color: '#185FA5', fontWeight: 600 }}> {razmjenaInfo}</span>}
+                      </div>
+                      {t.komentar && !t.komentar.startsWith('http') && (
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 200 }}>
+                          {t.komentar.replace(/https?:\/\/\S+/g, '').trim()}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      {slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}
+                      <div style={{ fontSize: 15, fontWeight: 800, color: iz >= 0 ? '#1D9E75' : '#dc2626', textAlign: 'right' as const }}>
+                        {iz >= 0 ? '+' : ''}{iz.toFixed(2)}€
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ UGOVORI ═══ */}
+        {activeTab === 'ugovori' && (
+          <div>
+            {ugovoriLoading ? <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Učitavanje...</div> : (<>
+              {cekanjuUgovori.length > 0 && (<>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#633806', background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 10, padding: '8px 14px', marginBottom: 10 }}>⏳ Čekaju akciju ({cekanjuUgovori.length})</div>
+                {cekanjuUgovori.map(u => { const s = getUgovorStatus(u); return (
+                  <div key={u.id} style={{ ...card, borderLeft: '4px solid #f59e0b' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.br_tablica} — {u.ime_prezime}</div>
+                    <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 6 }}>REZ #{u.id} · {u.od_datuma} → {u.do_datuma}</div>
+                    <div style={{ fontSize: 12, color: '#1D9E75', marginBottom: 10 }}>Naplaćeno: {u.naplaceno}€ · Duguje: {Math.max(0,(u.ukupno_naplata||0)-(u.naplaceno||0)).toFixed(2)}€</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                      {s.trebaSlika ? (
+                        <label style={{ padding: '10px 14px', background: '#6b7280', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                          {uploadingRezId === u.id ? '⏳...' : '📸 Slikaj ugovor'}
+                          <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUgovorUpload(e, u.id)} />
+                        </label>
+                      ) : (
+                        <a href={u.ugovor_slika} target="_blank" rel="noopener noreferrer" style={{ padding: '10px 14px', background: '#E1F5EE', color: '#085041', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>✅ Ugovor OK</a>
+                      )}
+                      {s.trebaNajam && s.trebaDepozit && <button onClick={() => zavediNajamIDepozit(u, s.fali, s.depozit)} style={{ padding: '10px 14px', background: '#185FA5', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>✅ Sve ({s.fali}€ + {s.depozit}€)</button>}
+                      {s.trebaNajam && !s.trebaDepozit && <button onClick={() => zavediNajam(u, s.fali)} style={{ padding: '10px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>💰 {s.fali}€</button>}
+                      {s.trebaDepozit && !s.trebaNajam && <button onClick={() => zavediDepozit(u, s.depozit)} style={{ padding: '10px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>🛡️ Dep {s.depozit}€</button>}
+                    </div>
+                  </div>
+                )})}
+              </>)}
+
+              {dugDepUgovori.length > 0 && (<>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#791F1F', background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 10, padding: '8px 14px', marginBottom: 10, marginTop: 16 }}>⚠️ Dug i povrat depozita ({dugDepUgovori.length})</div>
+                {dugDepUgovori.map(u => { const s = getUgovorStatus(u); return (
+                  <div key={u.id} style={{ ...card, borderLeft: '4px solid #dc2626' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.br_tablica} — {u.ime_prezime}</div>
+                    <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>REZ #{u.id}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {s.trebaDug && <button onClick={() => zavediDug(u, s.fali)} style={{ padding: '10px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>💰 Naplati dug {s.fali}€</button>}
+                      {s.trebaDepVracen && <button onClick={() => zavediPovratDep(u, s.vracenDep)} style={{ padding: '10px 14px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>🛡️ Povrat -{s.vracenDep}€</button>}
+                    </div>
+                  </div>
+                )})}
+              </>)}
+
+              {zavrsenoUgovori.length > 0 && (<>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#085041', marginBottom: 10, marginTop: 16 }}>✅ Završeni ({zavrsenoUgovori.length})</div>
+                {zavrsenoUgovori.slice(0, 20).map(u => (
+                  <div key={u.id} style={{ ...card, borderLeft: '4px solid #1D9E75' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{u.br_tablica} — {u.ime_prezime}</div>
+                        <div style={{ fontSize: 11, color: '#9ca3af' }}>REZ #{u.id} · {u.od_datuma} → {u.do_datuma}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>💰 {u.naplaceno}€{u.depozit > 0 ? ` · 🛡️ ${u.depozit}€` : ''}</div>
+                      </div>
+                      {u.ugovor_slika ? (
+                        <a href={u.ugovor_slika} target="_blank" rel="noopener noreferrer" style={{ padding: '8px 12px', background: '#E1F5EE', color: '#085041', borderRadius: 10, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📄 Ugovor</a>
+                      ) : (
+                        <label style={{ padding: '8px 12px', background: '#FAEEDA', color: '#633806', border: '1px solid #f59e0b', borderRadius: 10, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>📸 Dodaj<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUgovorUpload(e, u.id)} /></label>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>)}
+              {ugovori.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Nema ugovora.</div>}
+            </>)}
+          </div>
+        )}
+
+        {/* ═══ VOZILO ═══ */}
+        {activeTab === 'vozilo' && (
+          <div>
+            <div style={card}>
+              {aktivnoKor ? (<>
+                <div style={{ background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 10, padding: '14px', marginBottom: 14, textAlign: 'center' as const }}>
+                  <div style={{ fontSize: 11, color: '#633806', marginBottom: 4, fontWeight: 700 }}>AKTIVNO VOZILO</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: '#633806' }}>{aktivnoKor.tablice}</div>
+                  <div style={{ fontSize: 12, color: '#633806', marginTop: 4 }}>📍 {aktivnoKor.destinacija} · Start: {aktivnoKor.km_start} km</div>
+                </div>
+                <div style={{ marginBottom: 14 }}><label style={lbl}>Krajnje KM *</label><input type="number" value={kmEnd} onChange={e => setKmEnd(e.target.value)} placeholder="Unesite krajnje KM" style={{ ...inp, fontSize: 16, fontWeight: 700 }} /></div>
+                {kmEnd && aktivnoKor.km_start && (
+                  <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 14, color: '#0C447C', fontWeight: 700 }}>
+                    📏 Prešao: {Math.max(0, parseFloat(kmEnd) - aktivnoKor.km_start)} km
+                  </div>
+                )}
+                <button onClick={() => finishPrivate(aktivnoKor.id, aktivnoKor.km_start)} style={{ width: '100%', padding: '13px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>RAZDUŽI VOZILO</button>
+              </>) : (<>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 14 }}>Zaduži vozilo za privatno korišćenje</div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={lbl}>Vozilo</label>
+                  <input list="voz-priv" value={privVozilo} onChange={e => setPrivVozilo(e.target.value)} placeholder="Pretraži..." style={inp} />
+                  <datalist id="voz-priv">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>)}</datalist>
+                </div>
+                <div style={{ marginBottom: 10 }}><label style={lbl}>Početna KM</label><input type="number" value={kmStart} onChange={e => setKmStart(e.target.value)} placeholder="Npr. 45230" style={{ ...inp, fontSize: 16 }} /></div>
+                <div style={{ marginBottom: 14 }}><label style={lbl}>Destinacija</label><input value={privDest} onChange={e => setPrivDest(e.target.value)} placeholder="Npr. Aerodrom" style={inp} /></div>
+                <button onClick={startPrivate} disabled={vozSaving} style={{ width: '100%', padding: '13px', background: vozSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{vozSaving ? '⏳...' : 'ZADUŽI VOZILO'}</button>
+              </>)}
+              {kmDug > 0.01 && (
+                <div style={{ marginTop: 14, background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>DUG ZA KM KORIŠĆENJE</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#0C447C' }}>{kmDug.toFixed(2)} €</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>(km / 100) × 1.44 × 8€</div>
+                </div>
+              )}
+            </div>
+            {korHistory.length > 0 && (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 10 }}>Historija korišćenja</div>
+                {korHistory.map(k => (
+                  <div key={k.id} style={card}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <strong style={{ fontSize: 13 }}>{k.tablice}</strong>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>{k.vreme_zaduzenja}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>📍 {k.destinacija} · 📏 {k.predjena_km || 0} km</div>
+                  </div>
+                ))}
               </div>
             )}
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Napomena</label>
-              <textarea value={komentar} onChange={e => setKomentar(e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' as const }} />
-            </div>
-            <button onClick={saveTransakcija} disabled={unosSaving} style={{ width: '100%', padding: '11px', background: unosSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              {unosSaving ? '⏳ Snimam...' : 'POTVRDI UPIS'}
-            </button>
           </div>
-          <div style={card}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Zadnjih 10 transakcija</div>
-            {sortedTrans.slice(0, 10).map(t => {
-              const iz = parseFloat(t.iznos as any || 0)
-              const slikaUrl = t.komentar?.match(/https?:\/\/\S+/)?.[0]
-              return (
-                <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{t.kategorija}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af' }}>{t.vozilo} · {t.datum}</div>
+        )}
+
+        {/* ═══ SPISAK ═══ */}
+        {activeTab === 'spisak' && (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' as const }}>
+              {(['sve','priliv','odliv'] as const).map(f => (
+                <button key={f} onClick={() => setFilterTip(f)} style={{ padding: '8px 16px', fontSize: 13, border: `1.5px solid ${filterTip === f ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: filterTip === f ? '#E1F5EE' : '#fff', color: filterTip === f ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: filterTip === f ? 700 : 400 }}>
+                  {f === 'sve' ? 'Sve' : f === 'priliv' ? '↑ Prihodi' : '↓ Rashodi'}
+                </button>
+              ))}
+              <input value={filterSearch} onChange={e => setFilterSearch(e.target.value)} placeholder="Pretraži..." style={{ ...inp, width: 'auto', flex: 1, minWidth: 120 }} />
+            </div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10 }}>{filteredTrans.length} transakcija</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filteredTrans.slice(0, 60).map(t => {
+                const iz = parseFloat(t.iznos as any || 0)
+                const slikaUrl = t.komentar?.match(/https?:\/\/\S+/)?.[0]
+                const jeSlao = (t.osobaemail || '').toLowerCase() === agentEmail.toLowerCase()
+                const jeRazmjenaT = (t.kategorija || '').toLowerCase().includes('razmjena')
+                const jePending = (t.status || '').toLowerCase() === 'na cekanju'
+
+                // Razmjena info
+                let razmjenaLabel = ''
+                let razmjenaDir = ''
+                if (jeRazmjenaT) {
+                  if (jeSlao && t.primaocemail) {
+                    razmjenaLabel = getImeByEmail(t.primaocemail)
+                    razmjenaDir = 'Poslao'
+                  } else if (!jeSlao) {
+                    razmjenaLabel = getImeByEmail(t.osobaemail)
+                    razmjenaDir = 'Primio od'
+                  }
+                }
+
+                return (
+                  <div key={t.id} style={{ background: '#fff', border: `1px solid ${jePending ? '#fde68a' : '#f3f4f6'}`, borderLeft: `4px solid ${iz >= 0 ? '#1D9E75' : '#dc2626'}`, borderRadius: 10, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: '#111', marginBottom: 2 }}>
+                        {t.kategorija}
+                        {jePending && <span style={{ marginLeft: 6, fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>⏳</span>}
+                      </div>
+                      {jeRazmjenaT && razmjenaLabel && (
+                        <div style={{ fontSize: 12, color: '#185FA5', fontWeight: 600, marginBottom: 2 }}>
+                          {razmjenaDir === 'Poslao' ? '→ Poslao:' : '← Primio od:'} <strong>{razmjenaLabel}</strong>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                        {t.vozilo && t.vozilo !== 'OPŠTE' ? t.vozilo + ' · ' : ''}{t.datum}
+                      </div>
+                      {t.komentar && (
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                          {t.komentar.replace(/https?:\/\/\S+/g, '').trim()}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: iz >= 0 ? '#1D9E75' : '#dc2626' }}>
+                        {iz >= 0 ? '+' : ''}{iz.toFixed(2)}€
+                      </div>
+                      {slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}
+                    </div>
                   </div>
-                  {slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', marginRight: 8 }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}
-                  <div style={{ fontSize: 14, fontWeight: 700, color: iz > 0 ? '#1D9E75' : '#dc2626' }}>{iz > 0 ? '+' : ''}{iz.toFixed(2)}€</div>
+                )
+              })}
+              {filteredTrans.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Nema transakcija.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ POTVRDE ═══ */}
+        {activeTab === 'potvrde' && (
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 14 }}>🔔 Potvrde razmjene ({pendingTrans.length})</div>
+            {pendingTrans.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>Nema transakcija na čekanju.</div>
+            ) : pendingTrans.map(t => {
+              const iz = Math.abs(parseFloat(t.iznos as any || 0))
+              return (
+                <div key={t.id} style={{ ...card, borderLeft: '4px solid #f59e0b' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: '#1D9E75', marginBottom: 4 }}>
+                        ← Primio si <span style={{ color: '#111' }}>{iz.toFixed(2)}€</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: '#374151', marginBottom: 2 }}>
+                        od <strong>{t.osoba}</strong>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#9ca3af' }}>{t.kategorija} · {t.datum}</div>
+                    </div>
+                    <button onClick={() => confirmTrans(t.id)} style={{ padding: '12px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>POTVRDI ✓</button>
+                  </div>
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
-
-      {activeTab === 'ugovori' && (
-        <div>
-          {ugovoriLoading ? <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Učitavanje...</div> : (<>
-            {cekanjuUgovori.length > 0 && (<>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#633806', background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>⏳ Čekaju slikanje ili početnu naplatu ({cekanjuUgovori.length})</div>
-              {cekanjuUgovori.map(u => { const s = getUgovorStatus(u); return (
-                <div key={u.id} style={{ ...card, borderLeft: '4px solid #f59e0b' }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{u.br_tablica} — {u.ime_prezime}</div>
-                  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>REZ #{u.id} · {u.od_datuma} → {u.do_datuma}</div>
-                  <div style={{ fontSize: 12, color: '#1D9E75', marginBottom: 10 }}>Naplaćeno: {u.naplaceno}€ | Duguje: {Math.max(0,(u.ukupno_naplata||0)-(u.naplaceno||0)).toFixed(2)}€</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {s.trebaSlika ? (
-                      <label style={{ padding: '8px 14px', background: uploadingRezId === u.id ? '#9ca3af' : '#6b7280', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        {uploadingRezId === u.id ? '⏳ Uploading...' : '📸 Slikaj ugovor'}
-                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUgovorUpload(e, u.id)} disabled={uploadingRezId !== null} />
-                      </label>
-                    ) : (
-                      <a href={u.ugovor_slika} target="_blank" rel="noopener noreferrer" style={{ padding: '8px 14px', background: '#E1F5EE', color: '#085041', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none', border: '1px solid #1D9E75' }}>✅ Ugovor OK</a>
-                    )}
-                    {s.trebaNajam && s.trebaDepozit && <button onClick={() => zavediNajamIDepozit(u, s.fali, s.depozit)} style={{ padding: '8px 14px', background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>✅ Zaduži sve ({s.fali}€ + Dep {s.depozit}€)</button>}
-                    {s.trebaNajam && !s.trebaDepozit && <button onClick={() => zavediNajam(u, s.fali)} style={{ padding: '8px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>💰 Kasa najam: {s.fali}€</button>}
-                    {s.trebaDepozit && !s.trebaNajam && <button onClick={() => zavediDepozit(u, s.depozit)} style={{ padding: '8px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>🛡️ Kasa depozit: {s.depozit}€</button>}
-                  </div>
-                </div>
-              )})}
-            </>)}
-            {dugDepUgovori.length > 0 && (<>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#791F1F', background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', marginBottom: 12, marginTop: 20 }}>⚠️ Naplata duga i povrat depozita ({dugDepUgovori.length})</div>
-              {dugDepUgovori.map(u => { const s = getUgovorStatus(u); return (
-                <div key={u.id} style={{ ...card, borderLeft: '4px solid #dc2626' }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{u.br_tablica} — {u.ime_prezime}</div>
-                  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>REZ #{u.id}</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {s.trebaDug && <button onClick={() => zavediDug(u, s.fali)} style={{ padding: '8px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>💰 U kasu: {s.fali}€</button>}
-                    {s.trebaDepVracen && <button onClick={() => zavediPovratDep(u, s.vracenDep)} style={{ padding: '8px 14px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>🛡️ Povrat: -{s.vracenDep}€</button>}
-                  </div>
-                </div>
-              )})}
-            </>)}
-            {zavrsenoUgovori.length > 0 && (<>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#085041', marginBottom: 12, marginTop: 20 }}>Istorija završenih ugovora ({zavrsenoUgovori.length})</div>
-              {zavrsenoUgovori.slice(0, 20).map(u => (
-                <div key={u.id} style={{ ...card, borderLeft: '4px solid #1D9E75' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{u.br_tablica} — {u.ime_prezime}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>REZ #{u.id} · {u.od_datuma} → {u.do_datuma}</div>
-                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>💰 {u.naplaceno}€{u.depozit > 0 ? ` · 🛡️ Dep: ${u.depozit}€` : ''}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {u.ugovor_slika ? (<>
-                        <img src={getDirectImg(u.ugovor_slika)} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '2px solid #1D9E75', cursor: 'pointer' }} onClick={() => window.open(u.ugovor_slika, '_blank')} alt="ugovor" />
-                        <div>
-                          <a href={u.ugovor_slika} target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '5px 10px', background: '#E1F5EE', color: '#085041', border: '1px solid #1D9E75', borderRadius: 8, fontSize: 11, fontWeight: 600, textDecoration: 'none', marginBottom: 4 }}>✅ Pogledaj</a>
-                          <label style={{ display: 'block', padding: '5px 10px', background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 11, cursor: 'pointer', textAlign: 'center' }}>🔄 Zamijeni<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUgovorUpload(e, u.id)} /></label>
-                        </div>
-                      </>) : (
-                        <label style={{ padding: '8px 14px', background: '#FAEEDA', color: '#633806', border: '1px solid #f59e0b', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>📸 Dodaj ugovor<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUgovorUpload(e, u.id)} /></label>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>)}
-            {ugovori.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 13 }}>Nema ugovora.</div>}
-          </>)}
-        </div>
-      )}
-
-      {activeTab === 'vozilo' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
-          <div style={card}>
-            {aktivnoKor ? (<>
-              <div style={{ background: '#FAEEDA', border: '1px solid #f59e0b', borderRadius: 10, padding: '14px 18px', marginBottom: 14, textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#633806', marginBottom: 4 }}>AKTIVNO VOZILO</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#633806' }}>{aktivnoKor.tablice}</div>
-              </div>
-              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 14 }}>📍 {aktivnoKor.destinacija}<br />🕒 {aktivnoKor.vreme_zaduzenja}<br />📏 Start KM: {aktivnoKor.km_start}</div>
-              <div style={{ marginBottom: 14 }}><label style={lbl}>Krajnje KM *</label><input type="number" value={kmEnd} onChange={e => setKmEnd(e.target.value)} placeholder="KM..." style={inp} /></div>
-              {kmEnd && aktivnoKor.km_start && (
-                <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 13, color: '#0C447C', fontWeight: 600 }}>
-                  📏 Prešao: {Math.max(0, parseFloat(kmEnd) - aktivnoKor.km_start)} km
-                </div>
-              )}
-              <button onClick={() => finishPrivate(aktivnoKor.id, aktivnoKor.km_start)} style={{ width: '100%', padding: '11px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>RAZDUŽI VOZILO</button>
-            </>) : (<>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 16 }}>Zaduži vozilo</div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={lbl}>Vozilo</label>
-                <input list="voz-priv" value={privVozilo} onChange={e => setPrivVozilo(e.target.value)} placeholder="Pretraži..." style={inp} />
-                <datalist id="voz-priv">{vozila.map(v => <option key={v.id} value={v.license_plate || ''}>{v.agregirani_2}</option>)}</datalist>
-              </div>
-              <div style={{ marginBottom: 10 }}><label style={lbl}>Početna KM</label><input type="number" value={kmStart} onChange={e => setKmStart(e.target.value)} placeholder="Npr. 45230" style={inp} /></div>
-              <div style={{ marginBottom: 14 }}><label style={lbl}>Destinacija</label><input value={privDest} onChange={e => setPrivDest(e.target.value)} placeholder="Npr. Aerodrom" style={inp} /></div>
-              <button onClick={startPrivate} disabled={vozSaving} style={{ width: '100%', padding: '11px', background: vozSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{vozSaving ? '⏳...' : 'ZADUŽI VOZILO'}</button>
-            </>)}
-            {kmDug > 0 && (
-              <div style={{ marginTop: 16, background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>DUG ZA KM KORIŠĆENJE</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#0C447C' }}>{kmDug.toFixed(2)} €</div>
-                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>Formula: (km / 100) × 1.44 × 8€</div>
-              </div>
-            )}
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Historija korišćenja</div>
-            {korHistory.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema historije.</div>
-            ) : korHistory.map(k => (
-              <div key={k.id} style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <strong style={{ fontSize: 13 }}>{k.tablice}</strong>
-                  <span style={{ fontSize: 11, color: '#9ca3af' }}>{k.vreme_zaduzenja}</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>📍 {k.destinacija} · 📏 {k.predjena_km || 0} km{k.km_start && k.km_end ? ` (${k.km_start} → ${k.km_end})` : ''}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'spisak' && (
-        <div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {(['sve','priliv','odliv'] as const).map(f => (
-                <button key={f} onClick={() => setFilterTip(f)} style={{ padding: '6px 14px', fontSize: 12, border: `1px solid ${filterTip === f ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: filterTip === f ? '#E1F5EE' : '#fff', color: filterTip === f ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: filterTip === f ? 600 : 400 }}>
-                  {f === 'sve' ? 'Sve' : f === 'priliv' ? '↑ Prihodi' : '↓ Rashodi'}
-                </button>
-              ))}
-            </div>
-            <input value={filterSearch} onChange={e => setFilterSearch(e.target.value)} placeholder="Pretraži..." style={{ ...inp, width: 220 }} />
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>{filteredTrans.length} transakcija</span>
-          </div>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ background: '#f9fafb' }}>
-                {['Kategorija','Vozilo','Datum','Slika','Iznos'].map(h => (
-                  <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {filteredTrans.slice(0, 50).map(t => {
-                  const iz = parseFloat(t.iznos as any || 0)
-                  const slikaUrl = t.komentar?.match(/https?:\/\/\S+/)?.[0]
-                  return (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 500 }}>{t.kategorija}</td>
-                      <td style={{ padding: '10px 14px', color: '#6b7280', fontSize: 12 }}>{t.vozilo}</td>
-                      <td style={{ padding: '10px 14px', color: '#9ca3af', fontSize: 12 }}>{t.datum}</td>
-                      <td style={{ padding: '10px 14px' }}>{slikaUrl && <img src={getDirectImg(slikaUrl)} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(slikaUrl, '_blank')} alt="" />}</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: iz > 0 ? '#1D9E75' : '#dc2626' }}>{iz > 0 ? '+' : ''}{iz.toFixed(2)}€</td>
-                    </tr>
-                  )
-                })}
-                {filteredTrans.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>Nema transakcija.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'potvrde' && (
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 16 }}>Potvrde razmjene ({pendingTrans.length})</div>
-          {pendingTrans.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 13, border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema transakcija na čekanju.</div>
-          ) : pendingTrans.map(t => {
-            const iz = Math.abs(parseFloat(t.iznos as any || 0))
-            return (
-              <div key={t.id} style={{ ...card, borderLeft: '4px solid #f59e0b' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>Primio si {iz.toFixed(2)}€</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>od <strong>{t.osoba}</strong> · {t.datum}</div>
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>{t.kategorija}</div>
-                  </div>
-                  <button onClick={() => confirmTrans(t.id)} style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>POTVRDI</button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
