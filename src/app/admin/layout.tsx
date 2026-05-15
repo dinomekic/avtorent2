@@ -71,11 +71,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [agentName, setAgentName] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const [origin, setOrigin] = useState('')
-
-  useEffect(() => {
-    setOrigin(window.location.origin)
-    const check = () => setIsMobile(window.innerWidth < 768)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
