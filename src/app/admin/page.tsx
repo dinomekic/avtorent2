@@ -56,7 +56,24 @@ export default function AdminDashboardPage() {
   const [showPartners, setShowPartners] = useState(false)
   const [finSummary, setFinSummary] = useState<AgentFinSummary | null>(null)
 
-  const today = new Date().toISOString().split('T')[0]
+  const [dnevneStats, setDnevneStats] = useState({ izdavanja: 0, povratci: 0, aktivni: 0 })
+
+  useEffect(() => {
+    async function fetchDnevne() {
+      const today = new Date().toISOString().split('T')[0]
+      const { data } = await supabase
+        .from('rezervacije')
+        .select('od_datuma, do_datuma, daily_status')
+        .or(`od_datuma.eq.${today},do_datuma.eq.${today},and(od_datuma.lt.${today},do_datuma.gt.${today})`)
+      const rows = data || []
+      setDnevneStats({
+        izdavanja: rows.filter(r => r.od_datuma === today).length,
+        povratci: rows.filter(r => r.do_datuma === today).length,
+        aktivni: rows.filter(r => r.od_datuma < today && r.do_datuma > today && r.daily_status === 'Izdato').length,
+      })
+    }
+    fetchDnevne()
+  }, [])
 
   useEffect(() => {
     const name = getCookie('avtorent-agent-name')
@@ -156,16 +173,16 @@ export default function AdminDashboardPage() {
       {/* Metrike dana */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Preuzimanja danas', value: pickups.length, sub: 'vozila idu van', color: '#1D9E75', bg: '#E1F5EE' },
-          { label: 'Vraćanja danas', value: returns.length, sub: 'vozila dolaze', color: '#185FA5', bg: '#E6F1FB' },
-          { label: 'Aktivni najam', value: active.length, sub: 'vozila trenutno vani', color: '#BA7517', bg: '#FAEEDA' },
+          { label: 'Izdavanja danas', value: dnevneStats.izdavanja, sub: 'vozila idu van', color: '#1D9E75', bg: '#E1F5EE' },
+          { label: 'Povratci danas', value: dnevneStats.povratci, sub: 'vozila dolaze', color: '#185FA5', bg: '#E6F1FB' },
+          { label: 'Aktivni najam', value: dnevneStats.aktivni, sub: 'vozila trenutno vani', color: '#BA7517', bg: '#FAEEDA' },
           { label: 'Ukupno naplaćeno', value: `${netTotal.toFixed(0)}€`, sub: viewMode === 'today' ? 'danas' : 'sve', color: '#111', bg: '#f3f4f6' },
         ].map(m => (
-          <div key={m.label} style={{ background: m.bg, borderRadius: 10, padding: '16px' }}>
+          <a key={m.label} href={`${origin}/admin/dan`} style={{ background: m.bg, borderRadius: 10, padding: '16px', textDecoration: 'none', display: 'block', cursor: 'pointer' }}>
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>{m.label}</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: m.color }}>{m.value}</div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{m.sub}</div>
-          </div>
+          </a>
         ))}
       </div>
 
