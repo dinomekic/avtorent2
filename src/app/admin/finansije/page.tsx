@@ -172,30 +172,34 @@ export default function FinansijePage() {
     const pending: Transakcija[] = []
 
     trans.forEach(t => {
-      if ((t.status || 'Zavrseno').toLowerCase() !== 'zavrseno') {
-        if ((t.status || '').toLowerCase() === 'na cekanju' &&
-            (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) pending.push(t)
-        if ((t.osobaemail || '').toLowerCase().trim() === email.toLowerCase() ||
-            (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) prikazano.push(t)
-        return
-      }
-      const iz = t.iznos || 0
       const kat = (t.kategorija || '').toUpperCase()
       const sE = (t.osobaemail || '').toLowerCase().trim()
       const pE = (t.primaocemail || '').toLowerCase().trim()
-      if (kat.includes('UPLAT') && kat.includes('VOZILO')) {
-        if (sE === email.toLowerCase()) uKm += Math.abs(iz)
-      } else if (kat.includes('DUG PREMA FIRMI') && !kat.includes('UPLATA')) {
-        if (sE === email.toLowerCase()) df += iz
-        if (pE === email.toLowerCase()) df -= iz
-      } else if (kat.includes('UPLATA DUGA PREMA FIRMI')) {
-        if (sE === email.toLowerCase()) df -= iz
-        if (pE === email.toLowerCase()) df += iz
-      } else {
-        if (sE === email.toLowerCase()) s += iz
-        if (pE === email.toLowerCase()) s -= iz
+      const emailL = email.toLowerCase()
+
+      if ((t.status || 'Zavrseno').toLowerCase() !== 'zavrseno') {
+        if ((t.status || '').toLowerCase() === 'na cekanju' && pE === emailL) pending.push(t)
+        if (sE === emailL || pE === emailL) prikazano.push(t)
+        return
       }
-      if (sE === email.toLowerCase() || pE === email.toLowerCase()) prikazano.push(t)
+
+      const iz = t.iznos || 0
+
+      if (kat.includes('UPLAT') && kat.includes('VOZILO')) {
+        if (sE === emailL) uKm += Math.abs(iz)
+      } else if (kat.includes('OSTAVLJENO U SANDUCE') || kat.includes('PREUZETO IZ SANDUCETA')) {
+        // Sandučić — ne ulazi u saldo agenta
+      } else if (kat.includes('DUG PREMA FIRMI') && !kat.includes('UPLATA')) {
+        if (sE === emailL) df += iz
+        if (pE === emailL) df -= iz
+      } else if (kat.includes('UPLATA DUGA PREMA FIRMI')) {
+        if (sE === emailL) df -= iz
+        if (pE === emailL) df += iz
+      } else {
+        if (sE === emailL) s += iz
+        if (pE === emailL) s -= iz
+      }
+      if (sE === emailL || pE === emailL) prikazano.push(t)
     })
     setSaldo(s); setFirmaDug(df)
     setPrikazTrans(prikazano); setPendingTrans(pending); setPendingCount(pending.length)
