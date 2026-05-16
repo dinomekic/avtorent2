@@ -57,6 +57,7 @@ export default function AdminDashboardPage() {
   const [finSummary, setFinSummary] = useState<AgentFinSummary | null>(null)
 
   const [dnevneStats, setDnevneStats] = useState({ izdavanja: 0, povratci: 0, aktivni: 0 })
+  const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
     async function fetchDnevne() {
