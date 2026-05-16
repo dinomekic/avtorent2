@@ -160,7 +160,13 @@ export default function AdminDashboardPage() {
   const origin = getOrigin()
 
   return (
-    <div>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .stats-grid { grid-template-columns: 1fr 1fr !important; }
+          .fin-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+      `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111' }}>Dobrodošli{agentName ? `, ${agentName}` : ''}!</h1>
@@ -172,7 +178,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Metrike dana */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Izdavanja danas', value: dnevneStats.izdavanja, sub: 'vozila idu van', color: '#1D9E75', bg: '#E1F5EE' },
           { label: 'Povratci danas', value: dnevneStats.povratci, sub: 'vozila dolaze', color: '#185FA5', bg: '#E6F1FB' },
@@ -197,7 +203,7 @@ export default function AdminDashboardPage() {
               Otvori finansije →
             </a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div className="fin-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             <div style={{ background: finSummary.saldo >= 0 ? '#E1F5EE' : '#FCEBEB', borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Saldo</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: finSummary.saldo >= 0 ? '#085041' : '#dc2626' }}>{finSummary.saldo.toFixed(2)}€</div>
@@ -217,17 +223,17 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
         {/* Zaduženja agenta */}
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>Moja zaduženja</div>
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => setViewMode('today')} style={{ padding: '5px 12px', fontSize: 11, border: `1px solid ${viewMode === 'today' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: viewMode === 'today' ? '#E1F5EE' : '#fff', color: viewMode === 'today' ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: viewMode === 'today' ? 600 : 400 }}>Danas</button>
               <button onClick={() => setViewMode('all')} style={{ padding: '5px 12px', fontSize: 11, border: `1px solid ${viewMode === 'all' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 20, background: viewMode === 'all' ? '#E1F5EE' : '#fff', color: viewMode === 'all' ? '#085041' : '#6b7280', cursor: 'pointer', fontWeight: viewMode === 'all' ? 600 : 400 }}>Sve</button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
             {[
               { label: 'Keš', value: totalCash, color: '#1D9E75', bg: '#E1F5EE' },
               { label: 'Kartica', value: totalCard, color: '#185FA5', bg: '#E6F1FB' },
@@ -244,14 +250,14 @@ export default function AdminDashboardPage() {
               Povrati: -{totalReturned.toFixed(2)}€
             </div>
           )}
-          <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, color: '#6b7280' }}>Neto zaduženje</span>
             <span style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>{netTotal.toFixed(2)}€</span>
           </div>
           {loading ? <div style={{ color: '#9ca3af', fontSize: 13 }}>Učitavanje...</div> : collections.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 20, color: '#9ca3af', fontSize: 13 }}>Nema naplata za odabrani period</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
               {collections.map(c => (
                 <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#f9fafb', borderRadius: 8, fontSize: 12 }}>
                   <div>
@@ -270,63 +276,6 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
-
-        {/* Preuzimanja i vraćanja */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1D9E75' }} />
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>Preuzimanja danas</div>
-              <span style={{ fontSize: 12, background: '#E1F5EE', color: '#085041', padding: '1px 8px', borderRadius: 20, fontWeight: 600 }}>{pickups.length}</span>
-            </div>
-            {pickups.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>Nema preuzimanja danas</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {pickups.map(r => (
-                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#f9fafb', borderRadius: 8, fontSize: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 500, color: '#111' }}>{r.guest_name}</div>
-                      <div style={{ color: '#9ca3af', fontSize: 11 }}>{r.vehicles?.name} · {r.pickup_time?.slice(0,5)}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: r.status === 'confirmed' ? '#E1F5EE' : '#E6F1FB', color: r.status === 'confirmed' ? '#085041' : '#0C447C', fontWeight: 500 }}>
-                        {r.status === 'confirmed' ? 'Potvrđeno' : 'Izdato'}
-                      </div>
-                      <div style={{ color: '#1D9E75', fontWeight: 600, marginTop: 2 }}>{r.total_price}€</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#185FA5' }} />
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>Vraćanja danas</div>
-              <span style={{ fontSize: 12, background: '#E6F1FB', color: '#0C447C', padding: '1px 8px', borderRadius: 20, fontWeight: 600 }}>{returns.length}</span>
-            </div>
-            {returns.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>Nema vraćanja danas</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {returns.map(r => (
-                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#f9fafb', borderRadius: 8, fontSize: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 500, color: '#111' }}>{r.guest_name}</div>
-                      <div style={{ color: '#9ca3af', fontSize: 11 }}>{r.vehicles?.name} · {r.return_time?.slice(0,5)}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: '#E6F1FB', color: '#0C447C', fontWeight: 500 }}>Vraćanje</div>
-                      <div style={{ color: '#185FA5', fontWeight: 600, marginTop: 2 }}>{r.return_time?.slice(0,5)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Moji partneri */}
       {agentPartners.length > 0 && (
