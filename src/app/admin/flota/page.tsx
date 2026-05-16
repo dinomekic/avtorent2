@@ -21,6 +21,7 @@ type FleetVehicle = {
   current_mileage: number | null; fleet_notes: string | null
   dana_do_isteka: number | null; agregirani_2: string | null
   vehicle_class: string | null; features: string[] | null
+  saobracajna_url: string | null; polisa_url: string | null; polisa_istek: string | null
 }
 
 type RegHistory = {
@@ -90,7 +91,9 @@ export default function AdminFleetPage() {
   const [regHistoryLoading, setRegHistoryLoading] = useState(false)
   const [regForm, setRegForm] = useState({ license_plate: '', istek_reg: '', mjesto_reg: '', datum_registracije: new Date().toISOString().split('T')[0], napomena: '' })
   const [regSaving, setRegSaving] = useState(false)
-  const [regTab, setRegTab] = useState<'nova' | 'istorija'>('nova')
+  const [regTab, setRegTab] = useState<'produzenje' | 'nova' | 'dokumenti' | 'istorija'>('produzenje')
+  const [uploadingDoc, setUploadingDoc] = useState<'saobracajna' | 'polisa' | null>(null)
+  const [docUrls, setDocUrls] = useState({ saobracajna_url: '', polisa_url: '', polisa_istek: '' })
 
   const agentName = getCookie('avtorent-agent-name')
 
@@ -106,12 +109,45 @@ export default function AdminFleetPage() {
   async function openRegModal(v: FleetVehicle) {
     setRegVehicle(v)
     setRegForm({ license_plate: v.license_plate || '', istek_reg: v.istek_reg || '', mjesto_reg: v.mjesto_reg || '', datum_registracije: new Date().toISOString().split('T')[0], napomena: '' })
-    setRegTab('nova')
+    setDocUrls({ saobracajna_url: v.saobracajna_url || '', polisa_url: v.polisa_url || '', polisa_istek: v.polisa_istek || '' })
+    setRegTab('produzenje')
     setShowRegModal(true)
     setRegHistoryLoading(true)
     const { data } = await supabase.from('vehicle_reg_history').select('*').eq('vehicle_id', v.id).order('created_at', { ascending: false })
     setRegHistory(data || [])
     setRegHistoryLoading(false)
+  }
+
+  async function uploadDoc(file: File, tip: 'saobracajna' | 'polisa'): Promise<string | null> {
+    setUploadingDoc(tip)
+    try {
+      const reader = new FileReader()
+      return await new Promise((resolve) => {
+        reader.readAsDataURL(file)
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(',')[1]
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, contentType: file.type, name: `${tip}_${regVehicle?.license_plate}_${Date.now()}`, folderId: '1gFiCAgolZu9fAn5d-Ngmsx9qp3hWdIkN' }) })
+          const json = await res.json()
+          resolve(json.status === 'success' ? json.url : null)
+        }
+        reader.onerror = () => resolve(null)
+      })
+    } finally {
+      setUploadingDoc(null)
+    }
+  }
+
+  async function saveDokumenti() {
+    if (!regVehicle) return
+    setRegSaving(true)
+    await supabase.from('vozila_fleet').update({
+      saobracajna_url: docUrls.saobracajna_url || null,
+      polisa_url: docUrls.polisa_url || null,
+      polisa_istek: docUrls.polisa_istek || null,
+    }).eq('id', regVehicle.id)
+    setRegSaving(false)
+    alert('✅ Dokumenti sačuvani!')
+    fetchData()
   }
 
   async function saveRegistracija() {
@@ -415,37 +451,132 @@ export default function AdminFleetPage() {
               <div><div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700 }}>MJESTO</div><div style={{ fontWeight: 700 }}>{regVehicle.mjesto_reg || '—'}</div></div>
             </div>
 
-            <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6', padding: '0 16px' }}>
-              {[['nova', '+ Nova'], ['istorija', '📜 Istorija']].map(([t, l]) => (
-                <button key={t} onClick={() => setRegTab(t as any)}
-                  style={{ padding: '10px 14px', fontSize: 13, border: 'none', background: 'none', cursor: 'pointer', fontWeight: regTab === t ? 600 : 400, color: regTab === t ? '#111' : '#9ca3af', borderBottom: regTab === t ? '2px solid #111' : '2px solid transparent', marginBottom: -1 }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6', padding: '0 16px', overflowX: 'auto' as const }}>
+              {([['produzenje', '🔄 Produži'], ['nova', '🆕 Nove tablice'], ['dokumenti', '📁 Dokumenti'], ['istorija', '📜 Istorija']] as const).map(([t, l]) => (
+                <button key={t} onClick={() => setRegTab(t)}
+                  style={{ padding: '10px 12px', fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', fontWeight: regTab === t ? 600 : 400, color: regTab === t ? '#111' : '#9ca3af', borderBottom: regTab === t ? '2px solid #111' : '2px solid transparent', marginBottom: -1, whiteSpace: 'nowrap' as const }}>
                   {l}
                 </button>
               ))}
             </div>
 
             <div style={{ padding: 16 }}>
-              {regTab === 'nova' && (
+              {/* PRODUŽI REGISTRACIJU — iste tablice, novi datum */}
+              {regTab === 'produzenje' && (
                 <div>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={lbl}>Tablice *</label>
-                    <input style={{ ...inpSm, fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }} value={regForm.license_plate} onChange={e => setRegForm(f => ({ ...f, license_plate: e.target.value.toUpperCase() }))} />
+                  <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#085041' }}>
+                    Produži registraciju sa istim tablicama — samo unesite novi datum isteka.
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div><label style={lbl}>Istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
-                    <div><label style={lbl}>Datum reg.</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
+                    <div><label style={lbl}>Novi istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum registracije</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
-                  <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 50, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setShowRegModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
-                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.license_plate || !regForm.istek_reg}
-                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.license_plate || !regForm.istek_reg ? '#9ca3af' : '#1D9E75'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                      {regSaving ? '⏳...' : '💾 Snimi'}
+                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.istek_reg}
+                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.istek_reg ? '#9ca3af' : '#1D9E75'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      {regSaving ? '⏳...' : '🔄 Produži registraciju'}
                     </button>
                   </div>
                 </div>
               )}
+
+              {/* NOVA REGISTRACIJA — nove tablice */}
+              {regTab === 'nova' && (
+                <div>
+                  <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#0C447C' }}>
+                    Nova registracija sa novim tablicama — stare tablice bit će arhivirane.
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={lbl}>Nove tablice *</label>
+                    <input style={{ ...inpSm, fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }} value={regForm.license_plate} onChange={e => setRegForm(f => ({ ...f, license_plate: e.target.value.toUpperCase() }))} placeholder="PG-BB222" />
+                    {regVehicle?.license_plate && regForm.license_plate && regForm.license_plate !== regVehicle.license_plate && (
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#185FA5', background: '#E6F1FB', padding: '3px 8px', borderRadius: 6 }}>
+                        {regVehicle.license_plate} → {regForm.license_plate}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                    <div><label style={lbl}>Istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum registracije</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
+                  </div>
+                  <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setShowRegModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
+                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.license_plate || !regForm.istek_reg}
+                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.license_plate || !regForm.istek_reg ? '#9ca3af' : '#185FA5'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      {regSaving ? '⏳...' : '🆕 Snimi novu registraciju'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* DOKUMENTI */}
+              {regTab === 'dokumenti' && (
+                <div>
+                  {/* Saobraćajna */}
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111', marginBottom: 8 }}>📄 Saobraćajna dozvola</div>
+                    {docUrls.saobracajna_url ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                        <a href={docUrls.saobracajna_url} target="_blank" rel="noreferrer"
+                          style={{ padding: '6px 14px', background: '#E1F5EE', color: '#085041', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                          📄 Otvori dokument
+                        </a>
+                        <button onClick={() => setDocUrls(d => ({ ...d, saobracajna_url: '' }))}
+                          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button>
+                      </div>
+                    ) : null}
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', border: '1px dashed #1D9E75', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: '#1D9E75', background: '#f9fafb', fontWeight: 600 }}>
+                      {uploadingDoc === 'saobracajna' ? '⏳ Uploaduje se...' : '📷 Slikaj / Dodaj saobraćajnu'}
+                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc}
+                        onChange={async e => {
+                          const file = e.target.files?.[0]; if (!file) return
+                          const url = await uploadDoc(file, 'saobracajna')
+                          if (url) setDocUrls(d => ({ ...d, saobracajna_url: url }))
+                        }} />
+                    </label>
+                  </div>
+
+                  {/* Polisa */}
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111', marginBottom: 8 }}>🛡️ Polisa osiguranja</div>
+                    {docUrls.polisa_url ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                        <a href={docUrls.polisa_url} target="_blank" rel="noreferrer"
+                          style={{ padding: '6px 14px', background: '#E6F1FB', color: '#0C447C', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                          🛡️ Otvori polisu
+                        </a>
+                        <button onClick={() => setDocUrls(d => ({ ...d, polisa_url: '' }))}
+                          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button>
+                      </div>
+                    ) : null}
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', border: '1px dashed #185FA5', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: '#185FA5', background: '#f9fafb', fontWeight: 600 }}>
+                      {uploadingDoc === 'polisa' ? '⏳ Uploaduje se...' : '📷 Slikaj / Dodaj polisu'}
+                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc}
+                        onChange={async e => {
+                          const file = e.target.files?.[0]; if (!file) return
+                          const url = await uploadDoc(file, 'polisa')
+                          if (url) setDocUrls(d => ({ ...d, polisa_url: url }))
+                        }} />
+                    </label>
+                    <div style={{ marginTop: 10 }}>
+                      <label style={lbl}>Istek polise</label>
+                      <input style={inpSm} value={docUrls.polisa_istek} onChange={e => setDocUrls(d => ({ ...d, polisa_istek: e.target.value }))} placeholder="31.12.2026." />
+                    </div>
+                  </div>
+
+                  <button onClick={saveDokumenti} disabled={regSaving || !!uploadingDoc}
+                    style={{ width: '100%', padding: '12px', background: regSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    {regSaving ? '⏳ Snimanje...' : '💾 Sačuvaj dokumente'}
+                  </button>
+                </div>
+              )}
+
+              {/* ISTORIJA */}
               {regTab === 'istorija' && (
                 <div>
                   {regHistoryLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
