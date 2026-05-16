@@ -94,25 +94,31 @@ export default function AdminDashboardPage() {
 
   async function fetchFinSummary(email: string) {
     const { data: trans } = await supabase
-      .from('transakcije').select('iznos, tip_transakcije, kategorija, status, primaocemail, osobaemail')
+      .from('transakcije').select('*')
       .or(`osobaemail.eq.${email},primaocemail.eq.${email}`)
-    
+      .limit(300)
+
     let s = 0, df = 0, pending = 0
     ;(trans || []).forEach((t: any) => {
-      const iz = parseFloat(t.iznos || 0)
-      const kat = (t.kategorija || '').toLowerCase()
-      const sE = (t.osobaemail || '').toLowerCase().trim()
-      const pE = (t.primaocemail || '').toLowerCase().trim()
-      const status = (t.status || '').toLowerCase()
-      if (status === 'zavrseno') {
-        if (sE === email.toLowerCase()) {
-          if (kat.includes('dug prema firmi')) df += Math.abs(iz)
-          else if (kat.includes('uplata duga prema firmi')) df -= Math.abs(iz)
-          else s += iz
-        }
-        if (pE === email.toLowerCase()) s -= iz
+      if ((t.status || '').toLowerCase() !== 'zavrseno') {
+        if ((t.status || '').toLowerCase() === 'na cekanju' &&
+            (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) pending++
+        return
       }
-      if (status === 'na cekanju' && pE === email.toLowerCase()) pending++
+      const iz = t.iznos || 0
+      const kat = (t.kategorija || '').toUpperCase()
+      const mail = (t.osobaemail || '').toLowerCase().trim()
+      const pMail = (t.primaocemail || '').toLowerCase().trim()
+      if (kat.includes('DUG PREMA FIRMI') && !kat.includes('UPLATA')) {
+        if (mail === email.toLowerCase()) df += iz
+        if (pMail === email.toLowerCase()) df -= iz
+      } else if (kat.includes('UPLATA DUGA PREMA FIRMI')) {
+        if (mail === email.toLowerCase()) df -= iz
+        if (pMail === email.toLowerCase()) df += iz
+      } else {
+        if (mail === email.toLowerCase()) s += iz
+        if (pMail === email.toLowerCase()) s -= iz
+      }
     })
     setFinSummary({ saldo: s, firmaDug: df, pendingCount: pending })
   }
