@@ -172,22 +172,30 @@ export default function FinansijePage() {
     const pending: Transakcija[] = []
 
     trans.forEach(t => {
-      const iz = parseFloat(t.iznos as any || 0)
-      const kat = (t.kategorija || '').toLowerCase()
+      if ((t.status || 'Zavrseno').toLowerCase() !== 'zavrseno') {
+        if ((t.status || '').toLowerCase() === 'na cekanju' &&
+            (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) pending.push(t)
+        if ((t.osobaemail || '').toLowerCase().trim() === email.toLowerCase() ||
+            (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) prikazano.push(t)
+        return
+      }
+      const iz = t.iznos || 0
+      const kat = (t.kategorija || '').toUpperCase()
       const sE = (t.osobaemail || '').toLowerCase().trim()
       const pE = (t.primaocemail || '').toLowerCase().trim()
-      const status = (t.status || 'Zavrseno').toLowerCase()
-      if (status === 'zavrseno') {
-        if (sE === email) {
-          if (kat.includes('uplat') && kat.includes('vozilo')) uKm += Math.abs(iz)
-          if (kat.includes('dug prema firmi')) df += Math.abs(iz)
-          else if (kat.includes('uplata duga prema firmi')) df -= Math.abs(iz)
-          else s += iz
-        }
-        if (pE === email) s -= iz
+      if (kat.includes('UPLAT') && kat.includes('VOZILO')) {
+        if (sE === email.toLowerCase()) uKm += Math.abs(iz)
+      } else if (kat.includes('DUG PREMA FIRMI') && !kat.includes('UPLATA')) {
+        if (sE === email.toLowerCase()) df += iz
+        if (pE === email.toLowerCase()) df -= iz
+      } else if (kat.includes('UPLATA DUGA PREMA FIRMI')) {
+        if (sE === email.toLowerCase()) df -= iz
+        if (pE === email.toLowerCase()) df += iz
+      } else {
+        if (sE === email.toLowerCase()) s += iz
+        if (pE === email.toLowerCase()) s -= iz
       }
-      if (status === 'na cekanju' && pE === email) pending.push(t)
-      if (sE === email || pE === email) prikazano.push(t)
+      if (sE === email.toLowerCase() || pE === email.toLowerCase()) prikazano.push(t)
     })
     setSaldo(s); setFirmaDug(df)
     setPrikazTrans(prikazano); setPendingTrans(pending); setPendingCount(pending.length)
