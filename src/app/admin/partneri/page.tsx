@@ -724,6 +724,24 @@ async function deletePartner(p: Partner) {
             <button onClick={savePartner} disabled={saving || !form.name} style={{ width: '100%', padding: 10, background: !form.name ? '#9ca3af' : saving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: !form.name ? 'not-allowed' : 'pointer' }}>
               {saving ? 'Snimanje...' : editPartner?.is_draft ? 'Aktiviraj partnera' : editPartner ? 'Sačuvaj' : 'Dodaj partnera'}
             </button>
+            {editPartner && !editPartner.is_draft && (form.portal_email || form.email) && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`Poslati novu privremenu lozinku na ${form.portal_email || form.email}?`)) return
+                  const res = await fetch('/api/partner-reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnerName: form.name, partnerEmail: form.portal_email || form.email }),
+                  })
+                  const data = await res.json()
+                  if (data.success) alert('Nova lozinka je poslata partneru.')
+                  else alert(`Greška: ${data.error}`)
+                }}
+                style={{ width: '100%', marginTop: 8, padding: 10, background: 'transparent', color: '#6b7280', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}
+              >
+                Resetuj lozinku i pošalji email
+              </button>
+            )}
           </div>
         )}
 
