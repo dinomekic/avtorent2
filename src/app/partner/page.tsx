@@ -45,17 +45,25 @@ export default function PartnerPortalPage() {
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [qrCodes, setQrCodes] = useState<PartnerQrCode[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info' | 'outdoor'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'qr' | 'info' | 'outdoor' | 'security'>('overview')
   const [outdoorSlug, setOutdoorSlug] = useState<string | null>(null)
+  const [partnerEmail, setPartnerEmail] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
 
   useEffect(() => {
     const pid = getCookie('avtorent-partner-id')
     const pname = getCookie('avtorent-partner-name')
+    const pemail = getCookie('avtorent-partner-email')
     if (!pid) { window.location.href = '/partner/login'; return }
     setPartnerId(pid)
     setPartnerName(pname)
+    setPartnerEmail(pemail)
     fetchData(pid)
   }, [])
 
@@ -103,6 +111,40 @@ export default function PartnerPortalPage() {
     setConfirming(null)
   }
 
+  async function changePassword() {
+    if (!newPassword || !confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'Unesite novu lozinku i potvrdu.' }); return
+    }
+    if (newPassword.length < 6) {
+      setPasswordMsg({ type: 'error', text: 'Lozinka mora imati najmanje 6 karaktera.' }); return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'Lozinke se ne podudaraju.' }); return
+    }
+    setPasswordSaving(true)
+    setPasswordMsg(null)
+
+    // Prvo se prijavi sa trenutnom lozinkom da verifikujemo
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: partnerEmail,
+      password: currentPassword,
+    })
+    if (signInErr) {
+      setPasswordMsg({ type: 'error', text: 'Trenutna lozinka nije ispravna.' })
+      setPasswordSaving(false); return
+    }
+
+    // Promijeni lozinku
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      setPasswordMsg({ type: 'error', text: 'Greška pri promjeni lozinke.' })
+    } else {
+      setPasswordMsg({ type: 'success', text: 'Lozinka je uspješno promijenjena!' })
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+    }
+    setPasswordSaving(false)
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     document.cookie = 'avtorent-partner-token=; path=/; max-age=0'
@@ -141,7 +183,7 @@ export default function PartnerPortalPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
-          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`], ['info', 'Moja stranica'], ['outdoor', 'Outdoor']].map(([key, label]) => (
+          {[['overview', 'Pregled'], ['qr', `QR kodovi (${qrCodes.length})`], ['info', 'Moja stranica'], ['outdoor', 'Outdoor'], ['security', 'Sigurnost']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
@@ -439,6 +481,66 @@ export default function PartnerPortalPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div style={{ maxWidth: 480 }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#111', marginBottom: 4 }}>Promjena lozinke</div>
+              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>Unesite trenutnu lozinku i novu lozinku koju želite postaviti.</div>
+
+              {passwordMsg && (
+                <div style={{ background: passwordMsg.type === 'success' ? '#E1F5EE' : '#fef2f2', border: `1px solid ${passwordMsg.type === 'success' ? '#5DCAA5' : '#fecaca'}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: passwordMsg.type === 'success' ? '#085041' : '#dc2626', marginBottom: 16 }}>
+                  {passwordMsg.text}
+                </div>
+              )}
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Trenutna lozinka</label>
+                <input
+                  type="password"
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' as const }}
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Nova lozinka</label>
+                <input
+                  type="password"
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' as const }}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  placeholder="Najmanje 6 karaktera"
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Potvrda nove lozinke</label>
+                <input
+                  type="password"
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: `1px solid ${confirmPassword && confirmPassword !== newPassword ? '#fca5a5' : '#d1d5db'}`, borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' as const }}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+                {confirmPassword && confirmPassword !== newPassword && (
+                  <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Lozinke se ne podudaraju</div>
+                )}
+              </div>
+
+              <button
+                onClick={changePassword}
+                disabled={passwordSaving}
+                style={{ width: '100%', padding: '11px', background: passwordSaving ? '#5DCAA5' : '#0e2d5e', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: passwordSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {passwordSaving ? 'Promjena u toku...' : 'Promijeni lozinku'}
+              </button>
+            </div>
           </div>
         )}
       </main>
