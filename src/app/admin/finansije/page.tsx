@@ -154,11 +154,21 @@ export default function FinansijePage() {
 
   const loadAll = useCallback(async (email: string, ime: string) => {
     setLoading(true)
-    const { data: transMoje } = await supabase
-      .from('transakcije').select('*')
-      .or(`osobaemail.eq.${email},primaocemail.eq.${email}`)
-      .order('timestamp_upisa', { ascending: false }).limit(300)
-    const trans = transMoje || []
+
+    // Učitaj SVE transakcije kao panel — jedino tako je saldo tačan
+    let allTrans: any[] = []
+    let from = 0
+    const step = 1000
+    while (true) {
+      const { data } = await supabase.from('transakcije').select('*')
+        .order('timestamp_upisa', { ascending: false })
+        .range(from, from + step - 1)
+      if (!data || data.length === 0) break
+      allTrans = [...allTrans, ...data]
+      if (data.length < step) break
+      from += step
+    }
+    const trans = allTrans
     setAllTrans(trans)
 
     const { data: v } = await supabase.from('vozila_fleet').select('id, license_plate, agregirani_2').order('agregirani_2')
