@@ -93,13 +93,20 @@ export default function AdminDashboardPage() {
   useEffect(() => { fetchData() }, [selectedDate, viewMode])
 
   async function fetchFinSummary(email: string) {
-    const { data: trans } = await supabase
-      .from('transakcije').select('*')
-      .or(`osobaemail.eq.${email},primaocemail.eq.${email}`)
-      .limit(300)
+    let allTrans: any[] = []
+    let from = 0
+    const step = 1000
+    while (true) {
+      const { data } = await supabase.from('transakcije').select('*')
+        .range(from, from + step - 1)
+      if (!data || data.length === 0) break
+      allTrans = [...allTrans, ...data]
+      if (data.length < step) break
+      from += step
+    }
 
     let s = 0, df = 0, pending = 0
-    ;(trans || []).forEach((t: any) => {
+    allTrans.forEach((t: any) => {
       if ((t.status || '').toLowerCase() !== 'zavrseno') {
         if ((t.status || '').toLowerCase() === 'na cekanju' &&
             (t.primaocemail || '').toLowerCase().trim() === email.toLowerCase()) pending++
