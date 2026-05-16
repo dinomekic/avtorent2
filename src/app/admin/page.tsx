@@ -117,10 +117,6 @@ export default function AdminDashboardPage() {
       const mail = (t.osobaemail || '').toLowerCase().trim()
       const pMail = (t.primaocemail || '').toLowerCase().trim()
       const emailL = email.toLowerCase()
-
-      // Sandučić se isključuje iz salda agenta
-      if (kat.includes('OSTAVLJENO U SANDUCE') || kat.includes('PREUZETO IZ SANDUCETA')) return
-
       if (kat.includes('DUG PREMA FIRMI') && !kat.includes('UPLATA')) {
         if (mail === emailL) df += iz
         if (pMail === emailL) df -= iz
