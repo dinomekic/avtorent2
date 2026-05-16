@@ -57,6 +57,7 @@ export default function AdminPartneriPage() {
   const [outdoorRedirect, setOutdoorRedirect] = useState('')
   const [savingOutdoor, setSavingOutdoor] = useState(false)
   const [savedOutdoor, setSavedOutdoor] = useState(false)
+  const [infoPage, setInfoPage] = useState<{ id: string; slug: string; is_published: boolean } | null>(null)
   const qrRef = useRef<HTMLDivElement>(null)
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rent-cars.me'
@@ -179,6 +180,9 @@ body: JSON.stringify({
     supabase.from('partner_outdoor_pages').select('*').eq('partner_id', p.id).single().then(({ data }) => {
       if (data) { setOutdoorPage(data); setOutdoorRedirect(data.redirect_url || '') }
       else { setOutdoorPage(null); setOutdoorRedirect('') }
+    })
+    supabase.from('partner_info_pages').select('id, slug, is_published').eq('partner_id', p.id).single().then(({ data }) => {
+      setInfoPage(data || null)
     })
   }
 
@@ -549,6 +553,36 @@ async function deletePartner(p: Partner) {
               ))}
             </div>
 
+            {/* Info stranica QR kod */}
+            {infoPage && (
+              <div style={{ background: '#f0f7ff', border: '1px solid #c3d9f7', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#0e2d5e', marginBottom: 10, letterSpacing: 1 }}>INFO STRANICA ZA GOSTE</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${siteUrl}/info/${infoPage.slug}`)}&format=png`}
+                    alt="Info QR"
+                    style={{ width: 56, height: 56, borderRadius: 4, flexShrink: 0 }}
+                  />
+                  <div>
+                    <a href={`${siteUrl}/info/${infoPage.slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1a56a0', textDecoration: 'none', display: 'block', marginBottom: 4 }}>
+                      /info/{infoPage.slug} ↗
+                    </a>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        onClick={() => setShowQR({ qr_code: `info-${infoPage.slug}`, name: showQrPanel?.name || '', label: 'Info stranica' })}
+                        style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #185FA5', borderRadius: 6, background: '#E6F1FB', cursor: 'pointer', color: '#185FA5' }}
+                      >
+                        Prikaži QR
+                      </button>
+                      <span style={{ fontSize: 10, color: infoPage.is_published ? '#085041' : '#9ca3af', background: infoPage.is_published ? '#E1F5EE' : '#f3f4f6', padding: '2px 8px', borderRadius: 20 }}>
+                        {infoPage.is_published ? 'Objavljena' : 'Skrivena'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Outdoor QR kod */}
             {outdoorPage && (
               <div style={{ background: '#0a1628', borderRadius: 10, padding: 14, marginBottom: 16 }}>
@@ -746,15 +780,20 @@ async function deletePartner(p: Partner) {
       {/* QR Modal */}
       {showQR && (() => {
         const isOutdoor = showQR.qr_code.startsWith('outdoor-')
-        const slug = isOutdoor ? showQR.qr_code.replace('outdoor-', '') : null
+        const isInfo = showQR.qr_code.startsWith('info-')
+        const outdoorSlug = isOutdoor ? showQR.qr_code.replace('outdoor-', '') : null
+        const infoSlug = isInfo ? showQR.qr_code.replace('info-', '') : null
         const qrUrl = isOutdoor
-          ? `${siteUrl}/outdoor/${slug}`
+          ? `${siteUrl}/outdoor/${outdoorSlug}`
+          : isInfo
+          ? `${siteUrl}/info/${infoSlug}`
           : `${siteUrl}/?ref=${showQR.qr_code}`
+        const downloadName = isOutdoor ? 'outdoor' : isInfo ? 'info' : showQR.qr_code
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
             <div style={{ background: '#fff', borderRadius: 12, padding: '28px 24px', maxWidth: 380, width: '90%', textAlign: 'center' }}>
               <div style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>
-                QR kod — {isOutdoor ? 'Outdoor' : showQR.qr_code}
+                QR kod — {isOutdoor ? 'Outdoor' : isInfo ? 'Info stranica' : showQR.qr_code}
               </div>
               {showQR.label && <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 500, marginBottom: 4 }}>{showQR.label}</div>}
               {showQR.name && <div style={{ fontSize: 13, color: '#374151', marginBottom: 12 }}>{showQR.name}</div>}
@@ -769,14 +808,14 @@ async function deletePartner(p: Partner) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <a
                   href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}&format=png`}
-                  download={`QR-${isOutdoor ? 'outdoor' : showQR.qr_code}.png`}
+                  download={`QR-${downloadName}.png`}
                   target="_blank"
                   rel="noreferrer"
                   style={{ flex: 1, padding: '9px', border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', fontSize: 13, cursor: 'pointer', color: '#085041', fontWeight: 500, textDecoration: 'none', display: 'block' }}
                 >
                   Preuzmi PNG
                 </a>
-                <button onClick={() => printQR(isOutdoor ? `outdoor-${slug}` : showQR.qr_code, showQR.name, showQR.label)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
+                <button onClick={() => printQR(downloadName, showQR.name, showQR.label)} style={{ flex: 1, padding: '9px', border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', fontSize: 13, cursor: 'pointer', color: '#185FA5', fontWeight: 500 }}>
                   Štampaj
                 </button>
                 <button onClick={() => setShowQR(null)} style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#6b7280' }}>
