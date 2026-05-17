@@ -57,71 +57,47 @@ const FC_CSS = `
   .fc .fc-license-message { display: none !important; }
   .fc-theme-standard td, .fc-theme-standard th { border-color: #e2e8f0 !important; }
   .fc .fc-scrollgrid { border-color: #e2e8f0 !important; }
-
-  /* Toolbar */
   .fc .fc-toolbar { padding: 10px 14px; background: #fff; border-bottom: 1px solid #e2e8f0; margin: 0 !important; gap: 8px; flex-wrap: wrap; }
   .fc .fc-toolbar-title { font-size: 15px !important; font-weight: 800 !important; color: #0f172a !important; text-transform: capitalize; letter-spacing: -0.3px; }
   .fc .fc-button { background: #f8fafc !important; border: 1px solid #e2e8f0 !important; color: #374151 !important; font-size: 11px !important; font-weight: 600 !important; padding: 6px 12px !important; border-radius: 8px !important; box-shadow: none !important; text-transform: none !important; transition: all 0.15s !important; }
   .fc .fc-button:hover { background: #f1f5f9 !important; border-color: #cbd5e1 !important; }
   .fc .fc-button-active, .fc .fc-button-primary:not(:disabled).fc-button-active { background: #1D9E75 !important; border-color: #1D9E75 !important; color: #fff !important; }
   .fc .fc-today-button { background: #E1F5EE !important; border-color: #1D9E75 !important; color: #085041 !important; font-weight: 700 !important; }
-
-  /* Kolone dana */
   .fc .fc-col-header-cell { background: #f8fafc; }
   .fc .fc-col-header-cell-cushion { color: #64748b !important; font-weight: 700 !important; font-size: 10px !important; text-decoration: none !important; padding: 4px 2px !important; text-transform: uppercase; letter-spacing: 0.3px; }
   .fc .fc-day-today .fc-col-header-cell-cushion { color: #1D9E75 !important; font-weight: 900 !important; }
   .fc .fc-day-today { background-color: rgba(29,158,117,0.05) !important; }
   .fc .fc-day-today .fc-datagrid-cell-frame { background: rgba(29,158,117,0.05) !important; }
-
-  /* Resource kolona - lijepa i čitljiva */
   .fc .fc-datagrid-cell { width: 160px !important; min-width: 160px !important; max-width: 160px !important; background: #fff; }
   .fc .fc-datagrid-header { width: 160px !important; min-width: 160px !important; background: #f8fafc; }
   .fc .fc-datagrid-cell-cushion { padding: 4px 10px !important; display: block !important; }
-  
-  /* Resource group - marka automobila */
   .fc .fc-resource-group .fc-datagrid-cell { background: #0f172a !important; }
   .fc .fc-resource-group .fc-datagrid-cell-cushion { background: #0f172a !important; color: #94a3b8 !important; font-weight: 800 !important; font-size: 9px !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; padding: 8px 10px !important; }
   .fc .fc-resource-group td { background: #0f172a !important; border-color: #1e293b !important; }
   .fc .fc-resource-group .fc-timeline-lane { background: #0f172a !important; }
-
-  /* Visina redova - fiksna i sinhronizovana */
   .fc .fc-datagrid-body tr { height: 44px !important; }
   .fc .fc-timeline-body tr { height: 44px !important; }
   .fc .fc-datagrid-cell-frame { height: 44px !important; min-height: 44px !important; max-height: 44px !important; display: flex !important; align-items: center !important; }
   .fc .fc-timeline-lane-frame { height: 44px !important; min-height: 44px !important; }
   .fc .fc-timeline-lane { height: 44px !important; min-height: 44px !important; max-height: 44px !important; overflow: hidden !important; }
   .fc .fc-timeline-slot-frame { height: 44px !important; }
-
-  /* Zebra stripe za lakše čitanje */
   .fc .fc-datagrid-body tr:nth-child(even) .fc-datagrid-cell { background: #fafafa !important; }
   .fc .fc-timeline-body tr:nth-child(even) .fc-timeline-lane { background: rgba(0,0,0,0.012) !important; }
-
-  /* Eventi - veći i čitljiviji */
   .fc .fc-event { border-radius: 4px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 2px 5px !important; cursor: pointer !important; margin: 2px 0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important; }
   .fc .fc-event:hover { filter: brightness(0.92); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important; }
   .ev-cekanje { background: linear-gradient(135deg, #f97316, #fb923c) !important; color: #fff !important; }
   .ev-izdato { background: linear-gradient(135deg, #1D9E75, #10b981) !important; color: #fff !important; }
   .ev-nije-izdato { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: #fff !important; }
-
-  /* Slot */
   .fc .fc-timeline-slot { min-width: 28px !important; border-right: 1px solid #f1f5f9 !important; }
   .fc .fc-timeline-slot:hover { background: rgba(29,158,117,0.04) !important; }
-
-  /* Scrollbar */
   .fc .fc-scroller::-webkit-scrollbar { height: 4px; width: 4px; }
   .fc .fc-scroller::-webkit-scrollbar-track { background: #f8fafc; }
   .fc .fc-scroller::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   .fc .fc-scroller::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-  /* Now indicator */
   .fc .fc-highlight { background: rgba(29,158,117,0.1) !important; }
   .fc .fc-now-indicator-line { border-color: #1D9E75 !important; border-width: 2px !important; }
   .fc .fc-now-indicator-arrow { border-top-color: #1D9E75 !important; }
-
-  /* Fix scroll sync */
   .fc .fc-datagrid-body { overflow: hidden !important; }
-  
-  /* Mobile touch */
   .fc .fc-event { touch-action: none; }
 `
 
@@ -150,7 +126,6 @@ export default function AdminKalendarPage() {
   const [showLogovi, setShowLogovi] = useState(false)
   const [logovi, setLogovi] = useState<any[]>([])
 
-  // Učitaj FullCalendar
   useEffect(() => {
     const injectStyle = () => {
       if (document.getElementById('fc-planet-style')) return
@@ -205,7 +180,6 @@ export default function AdminKalendarPage() {
       }))
   }
 
-  // Init kalendar
   useEffect(() => {
     if (!fcLoaded || loading || !calendarRef.current) return
     const FC = (window as any).FullCalendar
@@ -215,7 +189,7 @@ export default function AdminKalendarPage() {
     const cal = new FC.Calendar(calendarRef.current, {
       schedulerLicenseKey: 'CC-Attribution-NonCommercialNoDerivatives',
       initialView: 'resourceTimelineMonth',
-      initialDate: today, // Uvijek počni od danas
+      initialDate: today,
       editable: true,
       selectable: true,
       nowIndicator: true,
@@ -229,8 +203,8 @@ export default function AdminKalendarPage() {
       slotLabelFormat: [{ weekday: 'short' }, { day: 'numeric' }],
       height: 'calc(100vh - 180px)',
       resources: getResources(),
-      scrollTime: undefined, // Scroll na today automatski
-      
+      scrollTime: undefined,
+
       events: (_info: any, successCallback: any) => {
         successCallback(rezervacijeRef.current.filter(r => r.br_tablica).map(r => ({
           id: String(r.id),
@@ -242,22 +216,24 @@ export default function AdminKalendarPage() {
         })))
       },
 
-      // Resource label — kompaktno, 2 reda
+      // ═══ HIRURSKI PRECIZAN NAZIV — prati agregirani_2 kolonu, tablice zeleno ispod ═══
       resourceLabelContent: (arg: any) => {
         const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
-        const plate = v?.license_plate || ''
-        const naziv = (v?.agregirani_2 || '').replace(plate, '').replace(/\s+/g, ' ').trim()
-        // Skrati naziv
-        const kratko = naziv.length > 22 ? naziv.substring(0, 20) + '…' : naziv
+        const plate = (v?.license_plate || arg.resource.id || '').trim()
+        // Uzmi agregirani_2 direktno — bez ikakvih izmjena ili skraćivanja
+        const agregirani = (v?.agregirani_2 || '').trim()
+        // Ako agregirani_2 sadrži tablicu, ukloni je da ne bude duplikat
+        const naziv = agregirani.replace(plate, '').replace(/\s+/g, ' ').trim()
+          || `${(v?.marka || '').trim()} ${(v?.model || '').trim()}`.trim()
+          || plate
         return {
-          html: `<div style="padding:2px 0;line-height:1.3;">
-            <div style="font-size:10px;font-weight:700;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${kratko}</div>
-            <div style="font-size:9px;color:#1D9E75;font-family:monospace;font-weight:800;letter-spacing:0.5px;">${plate}</div>
+          html: `<div style="width:140px;padding:1px 0;line-height:1.4;overflow:hidden;">
+            <div style="font-size:10px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${agregirani}">${naziv}</div>
+            <div style="font-size:9px;color:#1D9E75;font-family:monospace;font-weight:900;letter-spacing:0.8px;white-space:nowrap;">${plate}</div>
           </div>`
         }
       },
 
-      // Slot label — dan + broj zauzetih
       slotLabelContent: (arg: any) => {
         const text = arg.text.trim()
         const isDay = !isNaN(parseInt(text)) && text.length <= 2
@@ -310,9 +286,7 @@ export default function AdminKalendarPage() {
         setIsNewRez(true); setShowRezModal(true); cal.unselect()
       },
 
-      // Scroll na danas nakon rendera
       datesSet: () => {
-        // Scroll na today kolonu
         setTimeout(() => {
           const todayEl = calendarRef.current?.querySelector('.fc-day-today') as HTMLElement
           if (todayEl) {
@@ -430,69 +404,36 @@ export default function AdminKalendarPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
-
-      {/* HEADER — kompaktan */}
       <div style={{ padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        
-        {/* Red 1 — Naslov + Stats + Akcije */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', marginRight: 4 }}>📅 Kalendar</div>
-          
-          {/* Stats badges */}
           <div style={{ display: 'flex', gap: 6, flex: 1 }}>
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#dc2626', whiteSpace: 'nowrap' as const }}>
-              🔴 {stats.zauzeto}/{stats.total}
-            </div>
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#15803d', whiteSpace: 'nowrap' as const }}>
-              🟢 {stats.total - stats.zauzeto}
-            </div>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#dc2626', whiteSpace: 'nowrap' as const }}>🔴 {stats.zauzeto}/{stats.total}</div>
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#15803d', whiteSpace: 'nowrap' as const }}>🟢 {stats.total - stats.zauzeto}</div>
           </div>
-
-          {/* Akcijska dugmad */}
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }}
-              style={{ padding: '7px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-              + Nova
-            </button>
-            <button onClick={() => setShowDuznici(true)}
-              style={{ padding: '7px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              📝 {duznici.length}
-            </button>
-            <button onClick={otvoriLogove}
-              style={{ padding: '7px 12px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
-              📜
-            </button>
+            <button onClick={() => { setRezForm(EMPTY_REZ_FORM); setIsNewRez(true); setShowRezModal(true) }} style={{ padding: '7px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>+ Nova</button>
+            <button onClick={() => setShowDuznici(true)} style={{ padding: '7px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📝 {duznici.length}</button>
+            <button onClick={otvoriLogove} style={{ padding: '7px 12px', background: '#64748b', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>📜</button>
           </div>
         </div>
-
-        {/* Red 2 — Lokacije + Search + Zoom */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {/* Lokacije */}
           <div style={{ display: 'flex', gap: 4 }}>
             {LOKACIJE.map(l => (
-              <button key={l} onClick={() => setLokacija(l)}
-                style={{ padding: '5px 10px', fontSize: 11, fontWeight: 700, border: `1.5px solid ${currentLok === l ? '#1D9E75' : '#e2e8f0'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#f8fafc', color: currentLok === l ? '#085041' : '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+              <button key={l} onClick={() => setLokacija(l)} style={{ padding: '5px 10px', fontSize: 11, fontWeight: 700, border: `1.5px solid ${currentLok === l ? '#1D9E75' : '#e2e8f0'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#f8fafc', color: currentLok === l ? '#085041' : '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
                 {LOK_FLAG[l]} {l === 'CRNA GORA' ? 'CG' : l}
               </button>
             ))}
           </div>
-
-          {/* Search */}
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži vozilo..."
-            style={{ flex: 1, minWidth: 120, maxWidth: 180, padding: '5px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', background: '#f8fafc' }} />
-
-          {/* Zoom */}
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži vozilo..." style={{ flex: 1, minWidth: 120, maxWidth: 180, padding: '5px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', background: '#f8fafc' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '3px 8px' }}>
             <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>↔</span>
             <button onClick={() => setSlotWidth(w => Math.max(14, w - 4))} style={{ width: 20, height: 20, border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#374151', minWidth: 18, textAlign: 'center' }}>{slotWidth}</span>
             <button onClick={() => setSlotWidth(w => Math.min(80, w + 4))} style={{ width: 20, height: 20, border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
           </div>
-          
           <button onClick={() => setSlotWidth(26)} title="Reset" style={{ width: 28, height: 28, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', cursor: 'pointer', fontSize: 13, color: '#94a3b8' }}>↺</button>
         </div>
-
-        {/* Legenda */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {[['#f97316', 'Na čekanju'], ['#1D9E75', 'Izdato'], ['#dc2626', 'Nije izdato']].map(([c, l]) => (
             <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#64748b' }}>
@@ -503,28 +444,16 @@ export default function AdminKalendarPage() {
         </div>
       </div>
 
-      {/* KALENDAR */}
       <div style={{ flex: 1, background: '#fff', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📅</div>
-              <div>Učitavanje...</div>
-            </div>
-          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: 32, marginBottom: 12 }}>📅</div><div>Učitavanje...</div></div></div>
         ) : !fcLoaded ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-              <div>Inicijalizacija kalendara...</div>
-            </div>
-          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div><div>Inicijalizacija kalendara...</div></div></div>
         ) : (
           <div ref={calendarRef} style={{ height: '100%' }} />
         )}
       </div>
 
-      {/* REZ MODAL */}
       {showRezModal && (
         <RezervacijaModal form={rezForm} setForm={setRezForm} vozila={vozilaLok}
           onSave={saveRezervacija} onClose={() => setShowRezModal(false)}
@@ -532,7 +461,6 @@ export default function AdminKalendarPage() {
           saving={saving} isNew={isNewRez} />
       )}
 
-      {/* DUŽNICI MODAL */}
       {showDuznici && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
@@ -554,10 +482,7 @@ export default function AdminKalendarPage() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ fontWeight: 800, fontSize: 16, color: '#dc2626' }}>{d.ukupan_dug.toFixed(2)}€</div>
-                        <button onClick={() => razduziDuznika(d.br_vozacke, d.ukupan_dug)}
-                          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>
-                          Uplata
-                        </button>
+                        <button onClick={() => razduziDuznika(d.br_vozacke, d.ukupan_dug)} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>Uplata</button>
                       </div>
                     </div>
                   ))}
@@ -568,7 +493,6 @@ export default function AdminKalendarPage() {
         </div>
       )}
 
-      {/* LOGOVI MODAL */}
       {showLogovi && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 700, maxHeight: '85vh', overflowY: 'auto' }}>
