@@ -410,65 +410,7 @@ export default function AdminFleetPage() {
 
       {/* ═══ TAB: KLASE ═══ */}
       {activeTab === 'klase' && (
-        <div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>
-            Pregled flote po klasama vozila. Klikni na klasu da filtriraš listu.
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-            {klaseStats.map(cls => {
-              const clsColor = CLASS_COLOR[cls.key] || CLASS_COLOR['Hatchback']
-              const total = cls.vozila.length
-              if (total === 0) return null
-              return (
-                <div key={cls.key}
-                  className="class-pill"
-                  onClick={() => { setFilterClass(cls.key); setActiveTab('lista') }}
-                  style={{ border: `1.5px solid ${clsColor.border}`, borderRadius: 12, padding: '14px 16px', background: clsColor.bg, cursor: 'pointer', transition: 'all 0.15s' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div style={{ fontSize: 28 }}>{cls.icon}</div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 24, fontWeight: 900, color: clsColor.color, lineHeight: 1 }}>{total}</div>
-                      <div style={{ fontSize: 10, color: clsColor.color, opacity: 0.7 }}>vozila</div>
-                    </div>
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: clsColor.color, marginBottom: 6 }}>{cls.label}</div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.6)', color: clsColor.color, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                      ✅ {cls.available} dostupno
-                    </span>
-                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.6)', color: clsColor.color, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                      🔴 {total - cls.available} zauzeto
-                    </span>
-                  </div>
-                  {/* Mini lista tablica */}
-                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap' as const, gap: 3 }}>
-                    {cls.vozila.slice(0, 6).map(v => (
-                      <span key={v.id} style={{ fontSize: 9, fontFamily: 'monospace', background: 'rgba(255,255,255,0.7)', color: clsColor.color, padding: '1px 5px', borderRadius: 6, fontWeight: 700 }}>
-                        {v.license_plate || v.model}
-                      </span>
-                    ))}
-                    {cls.vozila.length > 6 && <span style={{ fontSize: 9, color: clsColor.color, opacity: 0.6 }}>+{cls.vozila.length - 6}</span>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Vozila bez klase */}
-          {vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).length > 0 && (
-            <div style={{ border: '1px dashed #e5e7eb', borderRadius: 10, padding: 14, background: '#f9fafb' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', marginBottom: 8 }}>❓ Bez klase ({vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).length})</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
-                {vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).map(v => (
-                  <span key={v.id} style={{ fontSize: 11, fontFamily: 'monospace', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
-                    {v.license_plate || '—'}
-                  </span>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>Dodijeli klasu kroz listu vozila koristeći padajući meni klase.</div>
-            </div>
-          )}
-        </div>
+        <KlaseTab vehicles={vehicles} onFilterClick={(naziv) => { setFilterClass(naziv); setActiveTab('lista') }} />
       )}
 
       {/* FORMA MODAL */}
@@ -654,6 +596,172 @@ export default function AdminFleetPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══ KLASE TAB KOMPONENTA ═══
+type VehicleClass = { id: number; naziv: string; created_at: string }
+
+function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFilterClick: (naziv: string) => void }) {
+  const [klase, setKlase] = useState<VehicleClass[]>([])
+  const [loading, setLoading] = useState(true)
+  const [noviNaziv, setNoviNaziv] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editNaziv, setEditNaziv] = useState('')
+
+  const inp: React.CSSProperties = { padding: '8px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' as const }
+
+  useEffect(() => { fetchKlase() }, [])
+
+  async function fetchKlase() {
+    setLoading(true)
+    const { data } = await supabase.from('vehicle_classes').select('*').order('naziv')
+    setKlase(data || [])
+    setLoading(false)
+  }
+
+  async function addKlasa() {
+    const naziv = noviNaziv.trim()
+    if (!naziv) return
+    setSaving(true)
+    await supabase.from('vehicle_classes').insert({ naziv })
+    setNoviNaziv('')
+    setSaving(false)
+    fetchKlase()
+  }
+
+  async function saveEdit(id: number) {
+    const naziv = editNaziv.trim()
+    if (!naziv) return
+    const stari = klase.find(k => k.id === id)?.naziv
+    await supabase.from('vehicle_classes').update({ naziv }).eq('id', id)
+    // Ažuriraj i vozila koja imaju staru klasu
+    if (stari && stari !== naziv) {
+      await supabase.from('vozila_fleet').update({ vehicle_class: naziv }).eq('vehicle_class', stari)
+    }
+    setEditingId(null)
+    fetchKlase()
+  }
+
+  async function deleteKlasa(id: number, naziv: string) {
+    const count = vehicles.filter(v => v.vehicle_class === naziv).length
+    if (count > 0) {
+      if (!confirm(`Klasa "${naziv}" koristi se za ${count} vozil${count === 1 ? 'o' : 'a'}. Svakako obrisati? Vozila će ostati bez klase.`)) return
+      await supabase.from('vozila_fleet').update({ vehicle_class: null }).eq('vehicle_class', naziv)
+    } else {
+      if (!confirm(`Obrisati klasu "${naziv}"?`)) return
+    }
+    await supabase.from('vehicle_classes').delete().eq('id', id)
+    fetchKlase()
+  }
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
+
+  return (
+    <div>
+      {/* Dodaj novu klasu */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 10 }}>Dodaj novu klasu</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            style={{ ...inp, flex: 1 }}
+            value={noviNaziv}
+            onChange={e => setNoviNaziv(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addKlasa()}
+            placeholder="npr. Minivan, Pickup..."
+          />
+          <button onClick={addKlasa} disabled={saving || !noviNaziv.trim()}
+            style={{ padding: '8px 18px', background: noviNaziv.trim() ? '#1D9E75' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+            + Dodaj
+          </button>
+        </div>
+      </div>
+
+      {/* Lista klasa */}
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
+          <span>Naziv klase</span>
+          <span>Vozila</span>
+        </div>
+
+        {klase.length === 0 ? (
+          <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Nema klasa. Dodaj prvu klasu gore.</div>
+        ) : klase.map((k, i) => {
+          const count = vehicles.filter(v => v.vehicle_class === k.naziv).length
+          const available = vehicles.filter(v => v.vehicle_class === k.naziv && v.fleet_status === 'available').length
+          const isEditing = editingId === k.id
+
+          return (
+            <div key={k.id} style={{ borderBottom: i < klase.length - 1 ? '1px solid #f3f4f6' : 'none', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, background: isEditing ? '#f0fdf8' : '#fff' }}>
+              {isEditing ? (
+                <>
+                  <input
+                    style={{ ...inp, flex: 1, fontSize: 13, padding: '6px 10px' }}
+                    value={editNaziv}
+                    onChange={e => setEditNaziv(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(k.id); if (e.key === 'Escape') setEditingId(null) }}
+                    autoFocus
+                  />
+                  <button onClick={() => saveEdit(k.id)}
+                    style={{ padding: '6px 12px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    ✓ Snimi
+                  </button>
+                  <button onClick={() => setEditingId(null)}
+                    style={{ padding: '6px 10px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 12, cursor: 'pointer' }}>
+                    Odustani
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{k.naziv}</div>
+                    {count > 0 && (
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                        {available} dostupno · {count - available} zauzeto
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Broj vozila + klik za filter */}
+                  <div
+                    onClick={() => count > 0 && onFilterClick(k.naziv)}
+                    style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? '#1D9E75' : '#d1d5db', background: count > 0 ? '#E1F5EE' : '#f9fafb', border: `1px solid ${count > 0 ? '#1D9E75' : '#e5e7eb'}`, padding: '3px 10px', borderRadius: 20, cursor: count > 0 ? 'pointer' : 'default', minWidth: 32, textAlign: 'center' as const }}>
+                    {count}
+                  </div>
+
+                  <button onClick={() => { setEditingId(k.id); setEditNaziv(k.naziv) }}
+                    style={{ padding: '5px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#374151' }}>
+                    ✏️
+                  </button>
+                  <button onClick={() => deleteKlasa(k.id, k.naziv)}
+                    style={{ padding: '5px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>
+                    ✕
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Vozila bez klase */}
+      {vehicles.filter(v => !v.vehicle_class || !klase.find(k => k.naziv === v.vehicle_class)).length > 0 && (
+        <div style={{ marginTop: 14, border: '1px dashed #e5e7eb', borderRadius: 10, padding: 12, background: '#f9fafb' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 6 }}>
+            Bez klase — {vehicles.filter(v => !v.vehicle_class || !klase.find(k => k.naziv === v.vehicle_class)).length} vozila
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
+            {vehicles.filter(v => !v.vehicle_class || !klase.find(k => k.naziv === v.vehicle_class)).map(v => (
+              <span key={v.id} style={{ fontSize: 11, fontFamily: 'monospace', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
+                {v.license_plate || '—'}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>Dodijeli klasu kroz listu vozila.</div>
         </div>
       )}
     </div>
