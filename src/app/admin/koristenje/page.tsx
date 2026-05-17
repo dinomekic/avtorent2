@@ -99,6 +99,12 @@ export default function AdminKoristenjePage() {
     const matchAgent = !filterAgent || k.ime_prezime === filterAgent || k.email === filterAgent
     const matchTablice = !filterTablice || k.tablice === filterTablice
     return matchQ && matchAgent && matchTablice
+  }).sort((a, b) => {
+    // Aktivna uvijek na vrhu
+    if (a.status === 'Aktivno' && b.status !== 'Aktivno') return -1
+    if (b.status === 'Aktivno' && a.status !== 'Aktivno') return 1
+    // Onda po datumu — najnoviji prvo
+    return new Date(b.timestamp_upisa || 0).getTime() - new Date(a.timestamp_upisa || 0).getTime()
   })
 
   const totalKm = filtered.reduce((s, k) => s + parseFloat(String(k.predjena_km || k.kilometraza || 0)), 0)
@@ -111,6 +117,11 @@ export default function AdminKoristenjePage() {
           <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>Korišćenje vozila</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Evidencija i dugovi za km</div>
         </div>
+        {koristenje.filter(k => k.status === 'Aktivno').length > 0 && (
+          <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 20, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: '#085041' }}>
+            🟢 {koristenje.filter(k => k.status === 'Aktivno').length} aktivno
+          </div>
+        )}
       </div>
 
       {/* DUGOVI BANNER */}
@@ -180,8 +191,9 @@ export default function AdminKoristenjePage() {
                     {filtered.map(k => {
                       const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
                       const cijena = km * KM_CIJENA
+                      const isAktivno = k.status === 'Aktivno'
                       return (
-                        <tr key={k.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <tr key={k.id} style={{ borderBottom: '1px solid #f3f4f6', background: isAktivno ? '#f0fdf8' : '#fff', borderLeft: isAktivno ? '3px solid #1D9E75' : '3px solid transparent' }}>
                           <td style={{ padding: '8px 10px', color: '#9ca3af', whiteSpace: 'nowrap' as const }}>
                             {k.timestamp_upisa ? new Date(k.timestamp_upisa).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: '2-digit' }) : k.timestamp_tekst || '—'}
                           </td>
@@ -200,7 +212,11 @@ export default function AdminKoristenjePage() {
                           <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11 }}>{k.vreme_povratka || '—'}</td>
                           <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11, whiteSpace: 'nowrap' as const }}>{k.ukupno_vremena || '—'}</td>
                           <td style={{ padding: '8px 10px' }}>
-                            {k.status && <span style={{ fontSize: 10, background: '#E1F5EE', color: '#085041', padding: '2px 7px', borderRadius: 20 }}>{k.status}</span>}
+                            {k.status && (
+                              <span style={{ fontSize: 10, background: isAktivno ? '#E1F5EE' : '#f3f4f6', color: isAktivno ? '#085041' : '#6b7280', padding: '2px 8px', borderRadius: 20, fontWeight: isAktivno ? 700 : 400 }}>
+                                {isAktivno ? '🟢 Aktivno' : k.status}
+                              </span>
+                            )}
                           </td>
                           <td style={{ padding: '8px 10px' }}>
                             <button onClick={() => deleteRow(k.id)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
