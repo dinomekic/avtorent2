@@ -360,24 +360,27 @@ export default function AdminKalendarPage() {
     }
 
     if (rezForm.id) {
-      await supabase.from('rezervacije').update(payload).eq('id', rezForm.id)
+      const { error: updErr } = await supabase.from('rezervacije').update(payload).eq('id', rezForm.id)
+      addLog(`UPDATE #${rezForm.id} err=${updErr?.message || 'ok'}`)
       await supabase.from('logovi').insert([{ akcija: `Izmijenjena REZ #${rezForm.id}` }])
     } else {
-      await supabase.from('rezervacije').insert([payload])
+      const { data: ins, error: insErr } = await supabase.from('rezervacije').insert([payload]).select().single()
+      addLog(`INSERT id=${ins?.id} err=${insErr?.message || 'ok'}`)
       await supabase.from('logovi').insert([{ akcija: `Kreirana rezervacija za ${rezForm.ime_prezime}` }])
     }
 
     setSaving(false)
     setShowRezModal(false)
     const { data: newRez } = await supabase.from('rezervacije').select('*')
+    addLog(`FETCH count=${newRez?.length} calAlive=${!!calInstanceRef.current}`)
     if (newRez) {
       rezervacijeRef.current = newRez
       updateStats(vozilaRef.current, newRez)
       setRezervacije([...newRez])
-      // Pozovi refetchEvents direktno — kalendar je živ jer se loading nije mijenjao
       setTimeout(() => {
+        addLog(`REFETCH calAlive=${!!calInstanceRef.current}`)
         calInstanceRef.current?.refetchEvents()
-      }, 50)
+      }, 300)
     }
   }
 
@@ -426,7 +429,9 @@ export default function AdminKalendarPage() {
     setShowLogovi(true)
   }
 
+  const vozilaLokRef = useRef<VoziloOption[]>([])
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok && (v.fleet_status || '').toLowerCase() === 'available')
+  vozilaLokRef.current = vozilaLok
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
