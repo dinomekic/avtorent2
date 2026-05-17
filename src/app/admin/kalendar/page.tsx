@@ -112,6 +112,7 @@ export default function AdminKalendarPage() {
 
   const [agentLokacije, setAgentLokacije] = useState<string[]>(['CRNA GORA'])
   const agentLokacijeRef = useRef<string[]>(['CRNA GORA'])
+  const [showRezModal, setShowRezModal] = useState(false)
   const [showDuznici, setShowDuznici] = useState(false)
   const [rezForm, setRezForm] = useState<RezForm>(EMPTY_REZ_FORM)
   const [isNewRez, setIsNewRez] = useState(false)
