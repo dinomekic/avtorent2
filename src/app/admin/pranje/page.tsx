@@ -413,7 +413,7 @@ function PeraciTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', portal_email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 })
+  const [form, setForm] = useState({ name: '', phone: '', portal_email: '', email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchPeraci() }, [])
@@ -425,14 +425,15 @@ function PeraciTab() {
     setLoading(false)
   }
 
-  function openNew() { setEditId(null); setForm({ name: '', phone: '', portal_email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 }); setShowForm(true) }
-  function openEdit(p: WashPartner) { setEditId(p.id); setForm({ name: p.name, phone: p.phone || '', portal_email: p.portal_email || '', is_active: p.is_active, price_quick: p.price_quick || 5, price_detailed: p.price_detailed || 10, price_deep_quick: p.price_deep_quick || 40, price_deep_detailed: p.price_deep_detailed || 80 }); setShowForm(true) }
+  function openNew() { setEditId(null); setForm({ name: '', phone: '', portal_email: '', email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 }); setShowForm(true) }
+  function openEdit(p: WashPartner) { setEditId(p.id); setForm({ name: p.name, phone: p.phone || '', portal_email: p.portal_email || '', email: p.portal_email || '', is_active: p.is_active, price_quick: p.price_quick || 5, price_detailed: p.price_detailed || 10, price_deep_quick: p.price_deep_quick || 40, price_deep_detailed: p.price_deep_detailed || 80 }); setShowForm(true) }
 
   async function save() {
     if (!form.name.trim()) { alert('Unesite ime perača!'); return }
     setSaving(true)
-    if (editId) await supabase.from('wash_partners').update(form).eq('id', editId)
-    else await supabase.from('wash_partners').insert(form)
+    const payload = { ...form, email: form.portal_email }
+    if (editId) await supabase.from('wash_partners').update(payload).eq('id', editId)
+    else await supabase.from('wash_partners').insert(payload)
     setSaving(false); setShowForm(false); fetchPeraci()
   }
 
