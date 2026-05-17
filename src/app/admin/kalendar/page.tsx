@@ -78,6 +78,7 @@ export default function AdminKalendarPage() {
   function addLog(msg: string) {
     setDebugLog(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${msg}`])
   }
+  const [stats, setStats] = useState({ total: 0, zauzeto: 0 })
   const [slotWidth, setSlotWidth] = useState(28)
   const [rowHeight, setRowHeight] = useState(48)
   const [showLogovi, setShowLogovi] = useState(false)
