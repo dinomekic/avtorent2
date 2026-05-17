@@ -23,6 +23,7 @@ type FleetVehicle = {
 type WashPartner = {
   id: string; name: string; phone: string | null; is_active: boolean
   price_quick: number; price_detailed: number; price_deep_quick: number; price_deep_detailed: number
+  portal_email: string | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
@@ -335,9 +336,8 @@ export default function AdminPranjePage() {
             )}
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Ko pere?</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setNewWashAssignedTo('partner')} style={{ flex: 1, padding: '9px', border: `1px solid ${newWashAssignedTo === 'partner' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: newWashAssignedTo === 'partner' ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: newWashAssignedTo === 'partner' ? 600 : 400, color: newWashAssignedTo === 'partner' ? '#085041' : '#374151' }}>Praonica</button>
-                <button onClick={() => setNewWashAssignedTo('agent')} style={{ flex: 1, padding: '9px', border: `1px solid ${newWashAssignedTo === 'agent' ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: newWashAssignedTo === 'agent' ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: newWashAssignedTo === 'agent' ? 600 : 400, color: newWashAssignedTo === 'agent' ? '#085041' : '#374151' }}>Agent sam</button>
+              <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#0C447C', fontWeight: 600 }}>
+                Praonica
               </div>
             </div>
             <div style={{ marginBottom: 18 }}>
@@ -413,7 +413,7 @@ function PeraciTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 })
+  const [form, setForm] = useState({ name: '', phone: '', portal_email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchPeraci() }, [])
@@ -425,8 +425,8 @@ function PeraciTab() {
     setLoading(false)
   }
 
-  function openNew() { setEditId(null); setForm({ name: '', phone: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 }); setShowForm(true) }
-  function openEdit(p: WashPartner) { setEditId(p.id); setForm({ name: p.name, phone: p.phone || '', is_active: p.is_active, price_quick: p.price_quick || 5, price_detailed: p.price_detailed || 10, price_deep_quick: p.price_deep_quick || 40, price_deep_detailed: p.price_deep_detailed || 80 }); setShowForm(true) }
+  function openNew() { setEditId(null); setForm({ name: '', phone: '', portal_email: '', is_active: true, price_quick: 5, price_detailed: 10, price_deep_quick: 40, price_deep_detailed: 80 }); setShowForm(true) }
+  function openEdit(p: WashPartner) { setEditId(p.id); setForm({ name: p.name, phone: p.phone || '', portal_email: p.portal_email || '', is_active: p.is_active, price_quick: p.price_quick || 5, price_detailed: p.price_detailed || 10, price_deep_quick: p.price_deep_quick || 40, price_deep_detailed: p.price_deep_detailed || 80 }); setShowForm(true) }
 
   async function save() {
     if (!form.name.trim()) { alert('Unesite ime perača!'); return }
@@ -465,6 +465,7 @@ function PeraciTab() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{p.name}</div>
                 {p.phone && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>📞 {p.phone}</div>}
+                {p.portal_email && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>✉️ {p.portal_email}</div>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button onClick={() => toggleActive(p.id, p.is_active)}
@@ -502,7 +503,12 @@ function PeraciTab() {
               <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ marginBottom: 12 }}><label style={lbl}>Ime perača *</label><input style={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="npr. Autoperionica Centar" /></div>
-            <div style={{ marginBottom: 14 }}><label style={lbl}>Telefon</label><input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+382 67 123 456" /></div>
+            <div style={{ marginBottom: 12 }}><label style={lbl}>Telefon</label><input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+382 67 123 456" /></div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Email za login na portal (Google)</label>
+              <input style={inp} type="email" value={form.portal_email} onChange={e => setForm(f => ({ ...f, portal_email: e.target.value }))} placeholder="peraonica@gmail.com" />
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>Perač se loguje na /pranje/login sa ovim Google nalogom</div>
+            </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Cijene po kategoriji (€)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {[
