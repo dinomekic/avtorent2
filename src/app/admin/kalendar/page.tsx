@@ -25,8 +25,6 @@ type KalRezervacija = {
 
 type Duznik = { id?: number; br_vozacke: string; ime_prezime: string; telefon?: string; ukupan_dug: number; istorija?: any[] }
 
-const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
-const SIFRE: Record<string, string> = { 'CRNA GORA': 'cg810805', 'BiH': 'bih000', 'SRBIJA': 'srb222', 'ALBANIJA': 'alb333' }
 const LOK_FLAG: Record<string, string> = { 'CRNA GORA': '🇲🇪', 'BiH': '🇧🇦', 'SRBIJA': '🇷🇸', 'ALBANIJA': '🇦🇱' }
 
 function rezToForm(r: KalRezervacija): RezForm {
@@ -112,7 +110,8 @@ export default function AdminKalendarPage() {
   const searchQRef = useRef('')
   const today = new Date().toISOString().split('T')[0]
 
-  const [showRezModal, setShowRezModal] = useState(false)
+  const [agentLokacije, setAgentLokacije] = useState<string[]>(['CRNA GORA'])
+  const agentLokacijeRef = useRef<string[]>(['CRNA GORA'])
   const [showDuznici, setShowDuznici] = useState(false)
   const [rezForm, setRezForm] = useState<RezForm>(EMPTY_REZ_FORM)
   const [isNewRez, setIsNewRez] = useState(false)
@@ -121,6 +120,25 @@ export default function AdminKalendarPage() {
   const [slotWidth, setSlotWidth] = useState(26)
   const [showLogovi, setShowLogovi] = useState(false)
   const [logovi, setLogovi] = useState<any[]>([])
+
+  // Učitaj lokacije agenta iz baze — bez šifri
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user?.email) return
+      const { data: agent } = await supabase
+        .from('agents').select('kalendar_lokacije, role')
+        .eq('email', session.user.email).single()
+      const loks: string[] = agent?.role === 'admin'
+        ? ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
+        : (agent?.kalendar_lokacije || ['CRNA GORA'])
+      setAgentLokacije(loks)
+      agentLokacijeRef.current = loks
+      if (loks.length > 0 && !loks.includes(currentLokRef.current)) {
+        currentLokRef.current = loks[0]
+        setCurrentLokState(loks[0])
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const injectStyle = () => {
@@ -314,11 +332,8 @@ export default function AdminKalendarPage() {
   }, [slotWidth])
 
   function setLokacija(lok: string) {
-    const key = `auth_${lok.replace(/\s+/g, '')}`
-    if (sessionStorage.getItem(key) === 'ok') { currentLokRef.current = lok; setCurrentLokState(lok); return }
-    const uneto = window.prompt(`Lozinka za: ${lok}`)
-    if (uneto === SIFRE[lok]) { sessionStorage.setItem(key, 'ok'); currentLokRef.current = lok; setCurrentLokState(lok) }
-    else if (uneto !== null) alert('Pogrešna lozinka!')
+    currentLokRef.current = lok
+    setCurrentLokState(lok)
   }
 
   async function saveRezervacija() {
@@ -417,7 +432,7 @@ export default function AdminKalendarPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 4 }}>
-            {LOKACIJE.map(l => (
+            {agentLokacije.map(l => (
               <button key={l} onClick={() => setLokacija(l)} style={{ padding: '5px 10px', fontSize: 11, fontWeight: 700, border: `1.5px solid ${currentLok === l ? '#1D9E75' : '#e2e8f0'}`, borderRadius: 20, background: currentLok === l ? '#E1F5EE' : '#f8fafc', color: currentLok === l ? '#085041' : '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
                 {LOK_FLAG[l]} {l === 'CRNA GORA' ? 'CG' : l}
               </button>
