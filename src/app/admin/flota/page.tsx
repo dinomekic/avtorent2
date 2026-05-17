@@ -631,6 +631,10 @@ export default function AdminFleetPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
