@@ -160,9 +160,11 @@ export default function AdminKalendarPage() {
   async function fetchRez() {
     const { data } = await supabase.from('rezervacije').select('*')
     if (data) {
-      setRezervacije(data)
+      // Ref mora biti ažuriran PRIJE state-a jer refetchEvents čita iz ref-a
       rezervacijeRef.current = data
       updateStats(vozilaRef.current, data)
+      // State update triggeruje useEffect koji poziva refetchEvents
+      setRezervacije([...data])
     }
   }
 
@@ -305,7 +307,7 @@ export default function AdminKalendarPage() {
 
   // Kad se rezervacije promijene — pozovi refetchEvents
   useEffect(() => {
-    if (calInstanceRef.current && !loading) {
+    if (calInstanceRef.current) {
       calInstanceRef.current.refetchEvents()
     }
   }, [rezervacije])
@@ -375,8 +377,10 @@ export default function AdminKalendarPage() {
 
     setSaving(false)
     setShowRezModal(false)
-    // fetchRez ažurira state → useEffect detektuje promjenu → refetchEvents
-    await fetchRez()
+    // Sačekaj da se modal zatvori pa onda fetchuj
+    setTimeout(async () => {
+      await fetchRez()
+    }, 100)
   }
 
   async function deleteRezervacija() {
@@ -387,7 +391,9 @@ export default function AdminKalendarPage() {
     await supabase.from('rezervacije').delete().eq('id', rezForm.id)
     await supabase.from('logovi').insert([{ akcija: `Obrisana REZ #${rezForm.id}` }])
     setShowRezModal(false)
-    await fetchRez()
+    setTimeout(async () => {
+      await fetchRez()
+    }, 100)
   }
 
   async function razduziDuznika(br_v: string, trenutniDug: number) {
