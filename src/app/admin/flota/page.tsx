@@ -619,8 +619,8 @@ export default function AdminFleetPage() {
                         </div>
                         {r.napomena && !r.napomena.startsWith('[Stari') && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' }}>{r.napomena}</div>}
                       </div>
-                    )})
-                </div>
+                    )
+                  })
               )}
             </div>
           </div>
