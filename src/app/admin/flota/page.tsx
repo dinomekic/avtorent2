@@ -196,13 +196,27 @@ export default function AdminFleetPage() {
 
     const noviAgregirani = `${regVehicle.marka} ${regVehicle.model} ${noviPlate} ${regVehicle.year || ''} ${regVehicle.transmission === 'automatic' ? 'AUTOMATIC' : 'MANUAL'}`.trim()
 
+    // Izračunaj dana_do_isteka iz novog istek_reg
+    let danaDo: number | null = null
+    if (regForm.istek_reg) {
+      try {
+        // Format DD.MM.YYYY.
+        const parts = regForm.istek_reg.replace(/\.$/, '').split('.')
+        if (parts.length >= 3) {
+          const istekDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
+          danaDo = Math.round((istekDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        }
+      } catch {}
+    }
+
     await supabase.from('vozila_fleet').update({
       license_plate: noviPlate,
       istek_reg: regForm.istek_reg,
       mjesto_reg: regForm.mjesto_reg || regVehicle.mjesto_reg,
       stare_tablice: regVehicle.license_plate !== noviPlate ? regVehicle.license_plate : regVehicle.stare_tablice,
       agregirani_2: noviAgregirani,
-      name: noviAgregirani
+      name: noviAgregirani,
+      dana_do_isteka: danaDo,
     }).eq('id', regVehicle.id)
 
     // Ažuriraj regVehicle state sa novim podacima
