@@ -91,12 +91,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .select().single().then(({ data: sess }) => {
           if (sess) {
             const sessionId = sess.id
+
+            // Heartbeat — svake 30s ažurira last_active (radi i na mobilnom)
+            const heartbeat = () => {
+              supabase.from('agent_sessions')
+                .update({ last_active: new Date().toISOString() })
+                .eq('id', sessionId)
+                .then()
+            }
+            heartbeat() // odmah prvi put
+            const heartbeatInterval = setInterval(heartbeat, 30000)
+
+            // Desktop — precizno trajanje via beforeunload
             const logEnd = () => {
+              clearInterval(heartbeatInterval)
               const start = new Date(sess.logged_in_at).getTime()
               const minutes = Math.round((Date.now() - start) / 60000)
               navigator.sendBeacon('/api/session-end', JSON.stringify({ id: sessionId, minutes }))
             }
             window.addEventListener('beforeunload', logEnd)
+
+            // Cleanup kad se komponenta unmountuje
+            return () => {
+              clearInterval(heartbeatInterval)
+              window.removeEventListener('beforeunload', logEnd)
+            }
           }
         })
     }
