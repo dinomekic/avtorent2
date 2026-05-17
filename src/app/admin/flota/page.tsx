@@ -165,13 +165,51 @@ export default function AdminFleetPage() {
 
   async function saveRegistracija() {
     if (!regVehicle) return
-    if (!regForm.license_plate || !regForm.istek_reg) { alert('Unesite tablice i datum isteka!'); return }
+    if (!regForm.istek_reg) { alert('Unesite datum isteka!'); return }
+
+    // U "Produži" tabu tablice ostaju iste — koristi postojeće
+    const noviPlate = regForm.license_plate || regVehicle.license_plate || ''
+
     setRegSaving(true)
-    await supabase.from('vehicle_reg_history').insert([{ vehicle_id: regVehicle.id, license_plate: regVehicle.license_plate, istek_reg: regVehicle.istek_reg, mjesto_reg: regVehicle.mjesto_reg, datum_registracije: regForm.datum_registracije, napomena: `[Arhivirano] ${regForm.napomena || ''}`.trim(), created_by: agentName || 'Agent' }])
-    const noviAgregirani = `${regVehicle.marka} ${regVehicle.model} ${regForm.license_plate} ${regVehicle.year || ''} ${regVehicle.transmission === 'automatic' ? 'AUTOMATIC' : 'MANUAL'}`.trim()
-    await supabase.from('vozila_fleet').update({ license_plate: regForm.license_plate, istek_reg: regForm.istek_reg, mjesto_reg: regForm.mjesto_reg || regVehicle.mjesto_reg, stare_tablice: regVehicle.license_plate !== regForm.license_plate ? regVehicle.license_plate : regVehicle.stare_tablice, agregirani_2: noviAgregirani, name: noviAgregirani }).eq('id', regVehicle.id)
-    await supabase.from('vehicle_reg_history').insert([{ vehicle_id: regVehicle.id, license_plate: regForm.license_plate, istek_reg: regForm.istek_reg, mjesto_reg: regForm.mjesto_reg, datum_registracije: regForm.datum_registracije, napomena: regForm.napomena || null, created_by: agentName || 'Agent' }])
-    setRegSaving(false); setShowRegModal(false); setRegVehicle(null); fetchData()
+
+    // Arhiviraj stari zapis
+    await supabase.from('vehicle_reg_history').insert([{
+      vehicle_id: regVehicle.id,
+      license_plate: regVehicle.license_plate,
+      istek_reg: regVehicle.istek_reg,
+      mjesto_reg: regVehicle.mjesto_reg,
+      datum_registracije: regForm.datum_registracije,
+      napomena: `[Stari zapis] ${regForm.napomena || ''}`.trim(),
+      created_by: agentName || 'Agent'
+    }])
+
+    // Upiši novi zapis u historiju
+    await supabase.from('vehicle_reg_history').insert([{
+      vehicle_id: regVehicle.id,
+      license_plate: noviPlate,
+      istek_reg: regForm.istek_reg,
+      mjesto_reg: regForm.mjesto_reg || regVehicle.mjesto_reg,
+      datum_registracije: regForm.datum_registracije,
+      napomena: regForm.napomena || null,
+      created_by: agentName || 'Agent'
+    }])
+
+    const noviAgregirani = `${regVehicle.marka} ${regVehicle.model} ${noviPlate} ${regVehicle.year || ''} ${regVehicle.transmission === 'automatic' ? 'AUTOMATIC' : 'MANUAL'}`.trim()
+
+    await supabase.from('vozila_fleet').update({
+      license_plate: noviPlate,
+      istek_reg: regForm.istek_reg,
+      mjesto_reg: regForm.mjesto_reg || regVehicle.mjesto_reg,
+      stare_tablice: regVehicle.license_plate !== noviPlate ? regVehicle.license_plate : regVehicle.stare_tablice,
+      agregirani_2: noviAgregirani,
+      name: noviAgregirani
+    }).eq('id', regVehicle.id)
+
+    setRegSaving(false)
+    setShowRegModal(false)
+    setRegVehicle(null)
+    fetchData()
+    alert('✅ Registracija sačuvana!')
   }
 
   const filtered = vehicles.filter(v => {
