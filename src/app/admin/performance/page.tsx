@@ -43,7 +43,7 @@ export default function PerformancePage() {
         .gte('od_datuma', from).lte('od_datuma', to),
       supabase.from('transakcije').select('osoba, osobaemail, iznos, kategorija, tip_transakcije, datum, status')
         .gte('datum', from).lte('datum', to).eq('status', 'Zavrseno'),
-      supabase.from('agent_sessions').select('agent_name, duration_minutes, logged_in_at').gte('logged_in_at', `${from}T00:00:00`).lte('logged_in_at', `${to}T23:59:59`),
+      supabase.from('agent_sessions').select('agent_name, duration_minutes, logged_in_at, last_active').gte('logged_in_at', `${from}T00:00:00`).lte('logged_in_at', `${to}T23:59:59`),
     ])
 
     setAgents(ag || [])
@@ -103,8 +103,16 @@ export default function PerformancePage() {
 
     // Sesije
     const agentSessions = sessions.filter(s => normIme(s.agent_name || '') === imeNorm)
-    const totalMinutes = agentSessions.reduce((s: number, sess: any) => s + (sess.duration_minutes || 0), 0)
-    const activeSessions = agentSessions.filter((s: any) => s.duration_minutes !== null).length
+    const totalMinutes = agentSessions.reduce((s: number, sess: any) => {
+      if (sess.duration_minutes != null) return s + sess.duration_minutes
+      // Mobilni — računaj iz last_active - logged_in_at
+      if (sess.last_active && sess.logged_in_at) {
+        const mins = Math.round((new Date(sess.last_active).getTime() - new Date(sess.logged_in_at).getTime()) / 60000)
+        return s + Math.max(0, mins)
+      }
+      return s
+    }, 0)
+    const activeSessions = agentSessions.filter((s: any) => s.duration_minutes !== null || s.last_active).length
 
     // Bonusi
     const bonusIssue = izdavanja.length * (agent.bonus_per_issue || 0)
@@ -222,7 +230,7 @@ export default function PerformancePage() {
                   <span style={{ fontWeight: 700, color: '#1D9E75' }}>{agent.totalComp.toFixed(0)}€</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, color: '#9ca3af' }}>
-                  <span>⏱ {Math.floor(agent.totalMinutes / 60)}h {agent.totalMinutes % 60}m (desktop)</span>
+                  <span>⏱ {Math.floor(agent.totalMinutes / 60)}h {agent.totalMinutes % 60}m online</span>
                   <span>{agent.sessionCount} prijava</span>
                 </div>
               </div>
@@ -267,8 +275,8 @@ export default function PerformancePage() {
                   ['Naplaćeno od gostiju', `${selected.naplaceno.toFixed(0)}€`],
                   ['Troškovi upisani', `${selected.troskovi.toFixed(0)}€`],
                   ['Ukupno prijava', `${selected.sessionCount}`],
-                  ['Prijava (desktop)', `${selected.activeSessions}`],
-                  ['Online (desktop)', `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
+                  ['Prijava sa mjerenjem', `${selected.activeSessions}`],
+                  ['Ukupno online', `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
                 ].map(([label, value]) => (
                   <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
                     <span style={{ color: '#6b7280' }}>{label}</span>
