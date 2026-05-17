@@ -34,9 +34,26 @@ type RegHistory = {
 const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
 
 const VEHICLE_CLASSES = [
-  'Hatchback', 'Medium', 'Sedan', 'SUV',
-  'Station Wagon', 'Luxury', 'Van', 'Convertible',
+  { key: 'Hatchback',     icon: '🚗', label: 'Hatchback' },
+  { key: 'Medium',        icon: '🚙', label: 'Medium' },
+  { key: 'Sedan',         icon: '🚘', label: 'Sedan' },
+  { key: 'SUV',           icon: '🛻', label: 'SUV' },
+  { key: 'Station Wagon', icon: '🚐', label: 'Karavan' },
+  { key: 'Luxury',        icon: '💎', label: 'Luksuz' },
+  { key: 'Van',           icon: '🚌', label: 'Van' },
+  { key: 'Convertible',   icon: '🏎️', label: 'Kabriolet' },
 ]
+
+const CLASS_COLOR: Record<string, { bg: string; color: string; border: string }> = {
+  'Hatchback':     { bg: '#E1F5EE', color: '#085041', border: '#1D9E75' },
+  'Medium':        { bg: '#E6F1FB', color: '#0C447C', border: '#185FA5' },
+  'Sedan':         { bg: '#EDE9FE', color: '#5B21B6', border: '#7C3AED' },
+  'SUV':           { bg: '#FEF3C7', color: '#92400E', border: '#D97706' },
+  'Station Wagon': { bg: '#FCE7F3', color: '#9D174D', border: '#DB2777' },
+  'Luxury':        { bg: '#FEE2E2', color: '#991B1B', border: '#DC2626' },
+  'Van':           { bg: '#ECFDF5', color: '#065F46', border: '#10B981' },
+  'Convertible':   { bg: '#FFF7ED', color: '#9A3412', border: '#EA580C' },
+}
 
 const FLEET_STATUS_OPTS = [
   { value: 'available',      label: 'Za izdavanje',  color: '#1D9E75', bg: '#E1F5EE' },
@@ -61,6 +78,10 @@ function getStatusInfo(status: string) {
   return FLEET_STATUS_OPTS.find(s => s.value === status) || FLEET_STATUS_OPTS[FLEET_STATUS_OPTS.length - 1]
 }
 
+function getClassInfo(cls: string | null) {
+  return VEHICLE_CLASSES.find(c => c.key === cls) || VEHICLE_CLASSES[0]
+}
+
 function getCookie(name: string): string {
   if (typeof document === 'undefined') return ''
   const match = document.cookie.match(new RegExp(`${name}=([^;]+)`))
@@ -79,6 +100,7 @@ export default function AdminFleetPage() {
   const [filterMarka, setFilterMarka] = useState('SVE')
   const [filterClass, setFilterClass] = useState('SVE')
   const [filterReg, setFilterReg] = useState('SVE')
+  const [activeTab, setActiveTab] = useState<'lista' | 'klase'>('lista')
 
   const [showForm, setShowForm] = useState(false)
   const [editVehicle, setEditVehicle] = useState<FleetVehicle | null>(null)
@@ -132,19 +154,13 @@ export default function AdminFleetPage() {
         }
         reader.onerror = () => resolve(null)
       })
-    } finally {
-      setUploadingDoc(null)
-    }
+    } finally { setUploadingDoc(null) }
   }
 
   async function saveDokumenti() {
     if (!regVehicle) return
     setRegSaving(true)
-    await supabase.from('vozila_fleet').update({
-      saobracajna_url: docUrls.saobracajna_url || null,
-      polisa_url: docUrls.polisa_url || null,
-      polisa_istek: docUrls.polisa_istek || null,
-    }).eq('id', regVehicle.id)
+    await supabase.from('vozila_fleet').update({ saobracajna_url: docUrls.saobracajna_url || null, polisa_url: docUrls.polisa_url || null, polisa_istek: docUrls.polisa_istek || null }).eq('id', regVehicle.id)
     setRegSaving(false)
     alert('✅ Dokumenti sačuvani!')
     fetchData()
@@ -224,18 +240,24 @@ export default function AdminFleetPage() {
   function openEdit(v: FleetVehicle) { setEditVehicle(v); setForm({ ...v }); setFeaturesStr((v.features || []).join(', ')); setShowForm(true) }
   function openNew() { setEditVehicle(null); setForm(EMPTY_FORM); setFeaturesStr(''); setShowForm(true) }
 
-  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' }
+  const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', color: '#111', boxSizing: 'border-box' as const }
   const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
   const inpSm: React.CSSProperties = { ...inp, fontSize: 12, padding: '7px 10px' }
+
+  // Grupišemo po klasama za tab Klase
+  const klaseStats = VEHICLE_CLASSES.map(cls => ({
+    ...cls,
+    vozila: vehicles.filter(v => v.vehicle_class === cls.key),
+    available: vehicles.filter(v => v.vehicle_class === cls.key && v.fleet_status === 'available').length,
+  }))
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 0 80px' }}>
       <style>{`
         @media (max-width: 640px) {
           .fleet-stats { grid-template-columns: 1fr 1fr !important; }
-          .fleet-filters { flex-direction: column !important; }
-          .fleet-filters select, .fleet-filters input { width: 100% !important; }
         }
+        .class-pill:hover { filter: brightness(0.93); }
       `}</style>
 
       {/* HEADER */}
@@ -244,7 +266,7 @@ export default function AdminFleetPage() {
           <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>Vozni park</div>
           <div style={{ fontSize: 12, color: '#6b7280' }}>{stats.ukupno} vozila · {stats.available} dostupno · {stats.service} servis · {stats.damaged} havarisan</div>
         </div>
-        <button onClick={openNew} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+        <button onClick={openNew} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           + Novo
         </button>
       </div>
@@ -255,124 +277,225 @@ export default function AdminFleetPage() {
         const skoro = vehicles.filter(v => v.dana_do_isteka !== null && v.dana_do_isteka > 0 && v.dana_do_isteka <= 15)
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-            {istekla.length > 0 && (
-              <div onClick={() => setFilterReg('istekla')} style={{ background: '#FEE2E2', border: '1px solid #DC2626', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                🚫 Istekla reg: {istekla.map(v => v.license_plate).join(', ')}
-              </div>
-            )}
-            {skoro.length > 0 && (
-              <div onClick={() => setFilterReg('skoro')} style={{ background: '#FAEEDA', border: '1px solid #EF9F27', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#BA7517', fontWeight: 600 }}>
-                ⚠️ Ističe ≤15d: {skoro.map(v => `${v.license_plate}(${Math.round(v.dana_do_isteka!)}d)`).join(', ')}
-              </div>
-            )}
+            {istekla.length > 0 && <div onClick={() => { setFilterReg('istekla'); setActiveTab('lista') }} style={{ background: '#FEE2E2', border: '1px solid #DC2626', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>🚫 Istekla reg: {istekla.map(v => v.license_plate).join(', ')}</div>}
+            {skoro.length > 0 && <div onClick={() => { setFilterReg('skoro'); setActiveTab('lista') }} style={{ background: '#FAEEDA', border: '1px solid #EF9F27', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#BA7517', fontWeight: 600 }}>⚠️ Ističe ≤15d: {skoro.map(v => `${v.license_plate}(${Math.round(v.dana_do_isteka!)}d)`).join(', ')}</div>}
           </div>
         )
       })()}
 
-      {/* FILTERI — kompaktni */}
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
-        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži tablice, naziv..."
-          style={{ ...inp, marginBottom: 8, fontSize: 14 }} />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 110 }}>
-            <option value="SVE">Svi statusi</option>
-            {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <select value={filterLok} onChange={e => setFilterLok(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
-            <option value="SVE">Sve lok.</option>
-            {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
-          </select>
-          <select value={filterMarka} onChange={e => setFilterMarka(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
-            {marke.map(m => <option key={m} value={m}>{m === 'SVE' ? 'Sve marke' : m}</option>)}
-          </select>
-          <select value={filterReg} onChange={e => setFilterReg(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
-            <option value="SVE">Reg: sve</option>
-            <option value="istekla">🚫 Istekla</option>
-            <option value="skoro">⚠️ ≤15d</option>
-            <option value="ok">✅ Uredna</option>
-            <option value="nema">❓ Nema</option>
-          </select>
-          {(searchQ || filterLok !== 'SVE' || filterStatus !== 'SVE' || filterMarka !== 'SVE' || filterReg !== 'SVE') && (
-            <button onClick={() => { setSearchQ(''); setFilterLok('SVE'); setFilterStatus('SVE'); setFilterMarka('SVE'); setFilterClass('SVE'); setFilterReg('SVE') }}
-              style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#6b7280' }}>✕</button>
-          )}
-        </div>
-        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>{filtered.length} vozila</div>
+      {/* TABOVI */}
+      <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: 12 }}>
+        {([['lista', '📋 Lista vozila'], ['klase', '🏷️ Klase vozila']] as const).map(([t, l]) => (
+          <button key={t} onClick={() => setActiveTab(t)}
+            style={{ padding: '8px 16px', fontSize: 13, border: 'none', background: 'none', cursor: 'pointer', fontWeight: activeTab === t ? 700 : 400, color: activeTab === t ? '#1D9E75' : '#9ca3af', borderBottom: activeTab === t ? '2px solid #1D9E75' : '2px solid transparent', marginBottom: -2 }}>
+            {l}
+          </button>
+        ))}
       </div>
 
-      {/* LISTA VOZILA */}
-      {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>Nema vozila.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {Array.from(new Set(filtered.map(v => v.marka || 'Ostalo'))).sort().map(marka => {
-            const vozilaMarke = filtered.filter(v => (v.marka || 'Ostalo') === marka)
-            return (
-              <div key={marka}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 4px 3px', borderBottom: '1px solid #f3f4f6', marginBottom: 2 }}>
-                  {marka} ({vozilaMarke.length})
-                </div>
-                {vozilaMarke.map(v => {
-                  const st = getStatusInfo(v.fleet_status)
-                  const isticeSkoro = v.dana_do_isteka !== null && v.dana_do_isteka <= 30 && v.dana_do_isteka > 0
-                  const istekla = v.dana_do_isteka !== null && v.dana_do_isteka <= 0
-                  return (
-                    <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', marginBottom: 3, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1 }}>
-                      {/* RED 1 — glavne info */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', flexWrap: 'wrap' as const }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#111', background: '#f3f4f6', padding: '1px 6px', borderRadius: 4 }}>
-                          {v.license_plate || '—'}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                          {v.marka} {v.model} {v.year ? `'${String(v.year).slice(2)}` : ''}
-                        </span>
-                        <span style={{ fontSize: 10, background: st.bg, color: st.color, padding: '1px 6px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
-                          {st.label}
-                        </span>
-                        {istekla && <span style={{ fontSize: 10, background: '#FEE2E2', color: '#DC2626', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>🚫</span>}
-                        {isticeSkoro && !istekla && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>⚠️{Math.round(v.dana_do_isteka!)}d</span>}
-                      </div>
-                      {/* RED 2 — detalji + akcije */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 6px', flexWrap: 'wrap' as const }}>
-                        <span style={{ fontSize: 10, color: '#9ca3af' }}>
-                          {v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}
-                          {v.istek_reg ? ` · 📋${v.istek_reg}` : ''}
-                        </span>
-                        <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', flexWrap: 'wrap' as const }}>
-                          <button onClick={() => openRegModal(v)}
-                            style={{ padding: '2px 7px', fontSize: 10, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 6, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>
-                            📋
-                          </button>
-                          <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
-                            style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
-                            {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                          </select>
-                          <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
-                            style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 70 }}>
-                            {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
-                          </select>
-                          <button onClick={() => openEdit(v)} style={{ padding: '2px 7px', fontSize: 10, border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️</button>
-                          <button onClick={() => deleteVehicle(v.id, v.license_plate || String(v.id))} style={{ padding: '2px 6px', fontSize: 10, border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+      {/* ═══ TAB: LISTA ═══ */}
+      {activeTab === 'lista' && (<>
+        {/* FILTERI */}
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži tablice, naziv..."
+            style={{ ...inp, marginBottom: 8, fontSize: 14 }} />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 110 }}>
+              <option value="SVE">Svi statusi</option>
+              {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            <select value={filterLok} onChange={e => setFilterLok(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
+              <option value="SVE">Sve lok.</option>
+              {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
+            </select>
+            <select value={filterMarka} onChange={e => setFilterMarka(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
+              {marke.map(m => <option key={m} value={m}>{m === 'SVE' ? 'Sve marke' : m}</option>)}
+            </select>
+            <select value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 100 }}>
+              <option value="SVE">Sve klase</option>
+              {VEHICLE_CLASSES.map(c => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+            </select>
+            <select value={filterReg} onChange={e => setFilterReg(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
+              <option value="SVE">Reg: sve</option>
+              <option value="istekla">🚫 Istekla</option>
+              <option value="skoro">⚠️ ≤15d</option>
+              <option value="ok">✅ Uredna</option>
+              <option value="nema">❓ Nema</option>
+            </select>
+            {(searchQ || filterLok !== 'SVE' || filterStatus !== 'SVE' || filterMarka !== 'SVE' || filterClass !== 'SVE' || filterReg !== 'SVE') && (
+              <button onClick={() => { setSearchQ(''); setFilterLok('SVE'); setFilterStatus('SVE'); setFilterMarka('SVE'); setFilterClass('SVE'); setFilterReg('SVE') }}
+                style={{ padding: '5px 10px', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#6b7280' }}>✕</button>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>{filtered.length} vozila</div>
+        </div>
+
+        {/* LISTA */}
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>Nema vozila.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {Array.from(new Set(filtered.map(v => v.marka || 'Ostalo'))).sort().map(marka => {
+              const vozilaMarke = filtered.filter(v => (v.marka || 'Ostalo') === marka)
+              return (
+                <div key={marka}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 4px 3px', borderBottom: '1px solid #f3f4f6', marginBottom: 2 }}>
+                    {marka} ({vozilaMarke.length})
+                  </div>
+                  {vozilaMarke.map(v => {
+                    const st = getStatusInfo(v.fleet_status)
+                    const clsInfo = getClassInfo(v.vehicle_class)
+                    const clsColor = CLASS_COLOR[v.vehicle_class || ''] || CLASS_COLOR['Hatchback']
+                    const isticeSkoro = v.dana_do_isteka !== null && v.dana_do_isteka <= 30 && v.dana_do_isteka > 0
+                    const istekla = v.dana_do_isteka !== null && v.dana_do_isteka <= 0
+                    return (
+                      <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', marginBottom: 3, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1 }}>
+                        {/* RED 1 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', flexWrap: 'wrap' as const }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#111', background: '#f3f4f6', padding: '1px 6px', borderRadius: 4 }}>
+                            {v.license_plate || '—'}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                            {v.marka} {v.model} {v.year ? `'${String(v.year).slice(2)}` : ''}
+                          </span>
+                          {/* KLASA PILL */}
+                          <span style={{ fontSize: 10, background: clsColor.bg, color: clsColor.color, border: `1px solid ${clsColor.border}`, padding: '1px 7px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                            {clsInfo.icon} {clsInfo.label}
+                          </span>
+                          <span style={{ fontSize: 10, background: st.bg, color: st.color, padding: '1px 6px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                            {st.label}
+                          </span>
+                          {istekla && <span style={{ fontSize: 10, background: '#FEE2E2', color: '#DC2626', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>🚫</span>}
+                          {isticeSkoro && !istekla && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>⚠️{Math.round(v.dana_do_isteka!)}d</span>}
+                        </div>
+                        {/* RED 2 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 6px', flexWrap: 'wrap' as const }}>
+                          <span style={{ fontSize: 10, color: '#9ca3af' }}>
+                            {v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}
+                            {v.istek_reg ? ` · 📋${v.istek_reg}` : ''}
+                          </span>
+                          <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', flexWrap: 'wrap' as const }}>
+                            <button onClick={() => openRegModal(v)}
+                              style={{ padding: '2px 7px', fontSize: 10, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 6, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>
+                              📋
+                            </button>
+                            <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
+                              style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
+                              {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                            <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
+                              style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 70 }}>
+                              {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
+                            </select>
+                            {/* QUICK KLASA */}
+                            <select value={v.vehicle_class || 'Hatchback'} onChange={e => quickClassUpdate(v.id, e.target.value)}
+                              style={{ padding: '2px 4px', fontSize: 10, border: `1px solid ${clsColor.border}`, borderRadius: 6, background: clsColor.bg, color: clsColor.color, cursor: 'pointer', maxWidth: 80, fontWeight: 600 }}>
+                              {VEHICLE_CLASSES.map(c => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+                            </select>
+                            <button onClick={() => openEdit(v)} style={{ padding: '2px 7px', fontSize: 10, border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️</button>
+                            <button onClick={() => deleteVehicle(v.id, v.license_plate || String(v.id))} style={{ padding: '2px 6px', fontSize: 10, border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+                          </div>
                         </div>
                       </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </>)}
+
+      {/* ═══ TAB: KLASE ═══ */}
+      {activeTab === 'klase' && (
+        <div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>
+            Pregled flote po klasama vozila. Klikni na klasu da filtriraš listu.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+            {klaseStats.map(cls => {
+              const clsColor = CLASS_COLOR[cls.key] || CLASS_COLOR['Hatchback']
+              const total = cls.vozila.length
+              if (total === 0) return null
+              return (
+                <div key={cls.key}
+                  className="class-pill"
+                  onClick={() => { setFilterClass(cls.key); setActiveTab('lista') }}
+                  style={{ border: `1.5px solid ${clsColor.border}`, borderRadius: 12, padding: '14px 16px', background: clsColor.bg, cursor: 'pointer', transition: 'all 0.15s' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div style={{ fontSize: 28 }}>{cls.icon}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: clsColor.color, lineHeight: 1 }}>{total}</div>
+                      <div style={{ fontSize: 10, color: clsColor.color, opacity: 0.7 }}>vozila</div>
                     </div>
-                  )
-                })}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: clsColor.color, marginBottom: 6 }}>{cls.label}</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.6)', color: clsColor.color, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                      ✅ {cls.available} dostupno
+                    </span>
+                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.6)', color: clsColor.color, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                      🔴 {total - cls.available} zauzeto
+                    </span>
+                  </div>
+                  {/* Mini lista tablica */}
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap' as const, gap: 3 }}>
+                    {cls.vozila.slice(0, 6).map(v => (
+                      <span key={v.id} style={{ fontSize: 9, fontFamily: 'monospace', background: 'rgba(255,255,255,0.7)', color: clsColor.color, padding: '1px 5px', borderRadius: 6, fontWeight: 700 }}>
+                        {v.license_plate || v.model}
+                      </span>
+                    ))}
+                    {cls.vozila.length > 6 && <span style={{ fontSize: 9, color: clsColor.color, opacity: 0.6 }}>+{cls.vozila.length - 6}</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Vozila bez klase */}
+          {vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).length > 0 && (
+            <div style={{ border: '1px dashed #e5e7eb', borderRadius: 10, padding: 14, background: '#f9fafb' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', marginBottom: 8 }}>❓ Bez klase ({vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).length})</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
+                {vehicles.filter(v => !v.vehicle_class || !VEHICLE_CLASSES.find(c => c.key === v.vehicle_class)).map(v => (
+                  <span key={v.id} style={{ fontSize: 11, fontFamily: 'monospace', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
+                    {v.license_plate || '—'}
+                  </span>
+                ))}
               </div>
-            )
-          })}
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>Dodijeli klasu kroz listu vozila koristeći padajući meni klase.</div>
+            </div>
+          )}
         </div>
       )}
 
       {/* FORMA MODAL */}
       {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200, padding: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 600, maxHeight: '92vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>{editVehicle ? 'Uredi vozilo' : 'Novo vozilo'}</div>
               <button onClick={() => { setShowForm(false); setEditVehicle(null); setForm(EMPTY_FORM); setFeaturesStr('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+            </div>
+
+            {/* KLASA — vizuelni picker */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ ...lbl, fontSize: 12, fontWeight: 700, color: '#374151' }}>Klasa vozila</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {VEHICLE_CLASSES.map(cls => {
+                  const isSelected = (form.vehicle_class || 'Hatchback') === cls.key
+                  const clsColor = CLASS_COLOR[cls.key]
+                  return (
+                    <button key={cls.key} onClick={() => setForm(f => ({ ...f, vehicle_class: cls.key }))}
+                      style={{ padding: '8px 4px', border: `2px solid ${isSelected ? clsColor.border : '#e5e7eb'}`, borderRadius: 10, background: isSelected ? clsColor.bg : '#f9fafb', cursor: 'pointer', textAlign: 'center' as const, transition: 'all 0.12s' }}>
+                      <div style={{ fontSize: 20, marginBottom: 2 }}>{cls.icon}</div>
+                      <div style={{ fontSize: 10, fontWeight: isSelected ? 700 : 400, color: isSelected ? clsColor.color : '#9ca3af' }}>{cls.label}</div>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             <div style={{ marginBottom: 12 }}>
@@ -398,11 +521,6 @@ export default function AdminFleetPage() {
               <div><label style={lbl}>Gorivo</label>
                 <select style={inp} value={form.fuel_type || 'diesel'} onChange={e => setForm(f => ({ ...f, fuel_type: e.target.value }))}>
                   <option value="diesel">Dizel</option><option value="petrol">Benzin</option><option value="electric">Električno</option><option value="hybrid">Hibrid</option>
-                </select>
-              </div>
-              <div><label style={lbl}>Klasa</label>
-                <select style={inp} value={form.vehicle_class || 'Hatchback'} onChange={e => setForm(f => ({ ...f, vehicle_class: e.target.value }))}>
-                  {VEHICLE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div><label style={lbl}>Cijena/dan (€)</label><input style={inp} type="number" value={form.price_per_day || 0} onChange={e => setForm(f => ({ ...f, price_per_day: parseFloat(e.target.value) || 0 }))} /></div>
@@ -435,7 +553,7 @@ export default function AdminFleetPage() {
 
       {/* REGISTRACIJA MODAL */}
       {showRegModal && regVehicle && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300, padding: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
               <div>
@@ -444,13 +562,11 @@ export default function AdminFleetPage() {
               </div>
               <button onClick={() => setShowRegModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
-
             <div style={{ display: 'flex', gap: 16, padding: '10px 16px', background: '#f9fafb', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
               <div><div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700 }}>TABLICE</div><div style={{ fontWeight: 700, fontFamily: 'monospace' }}>{regVehicle.license_plate || '—'}</div></div>
               <div><div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700 }}>ISTEK</div><div style={{ fontWeight: 700, color: regVehicle.dana_do_isteka !== null && regVehicle.dana_do_isteka <= 0 ? '#DC2626' : '#111' }}>{regVehicle.istek_reg || '—'}</div></div>
               <div><div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700 }}>MJESTO</div><div style={{ fontWeight: 700 }}>{regVehicle.mjesto_reg || '—'}</div></div>
             </div>
-
             <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6', padding: '0 16px', overflowX: 'auto' as const }}>
               {([['produzenje', '🔄 Produži'], ['nova', '🆕 Nove tablice'], ['dokumenti', '📁 Dokumenti'], ['istorija', '📜 Istorija']] as const).map(([t, l]) => (
                 <button key={t} onClick={() => setRegTab(t)}
@@ -459,14 +575,10 @@ export default function AdminFleetPage() {
                 </button>
               ))}
             </div>
-
             <div style={{ padding: 16 }}>
-              {/* PRODUŽI REGISTRACIJU — iste tablice, novi datum */}
               {regTab === 'produzenje' && (
                 <div>
-                  <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#085041' }}>
-                    Produži registraciju sa istim tablicama — samo unesite novi datum isteka.
-                  </div>
+                  <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#085041' }}>Produži registraciju sa istim tablicama — samo unesite novi datum isteka.</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                     <div><label style={lbl}>Novi istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
                     <div><label style={lbl}>Datum registracije</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
@@ -475,27 +587,20 @@ export default function AdminFleetPage() {
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setShowRegModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
-                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.istek_reg}
-                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.istek_reg ? '#9ca3af' : '#1D9E75'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.istek_reg} style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.istek_reg ? '#9ca3af' : '#1D9E75'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                       {regSaving ? '⏳...' : '🔄 Produži registraciju'}
                     </button>
                   </div>
                 </div>
               )}
-
-              {/* NOVA REGISTRACIJA — nove tablice */}
               {regTab === 'nova' && (
                 <div>
-                  <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#0C447C' }}>
-                    Nova registracija sa novim tablicama — stare tablice bit će arhivirane.
-                  </div>
+                  <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#0C447C' }}>Nova registracija sa novim tablicama — stare tablice bit će arhivirane.</div>
                   <div style={{ marginBottom: 10 }}>
                     <label style={lbl}>Nove tablice *</label>
                     <input style={{ ...inpSm, fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }} value={regForm.license_plate} onChange={e => setRegForm(f => ({ ...f, license_plate: e.target.value.toUpperCase() }))} placeholder="PG-BB222" />
                     {regVehicle?.license_plate && regForm.license_plate && regForm.license_plate !== regVehicle.license_plate && (
-                      <div style={{ marginTop: 4, fontSize: 11, color: '#185FA5', background: '#E6F1FB', padding: '3px 8px', borderRadius: 6 }}>
-                        {regVehicle.license_plate} → {regForm.license_plate}
-                      </div>
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#185FA5', background: '#E6F1FB', padding: '3px 8px', borderRadius: 6 }}>{regVehicle.license_plate} → {regForm.license_plate}</div>
                     )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -506,91 +611,42 @@ export default function AdminFleetPage() {
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setShowRegModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
-                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.license_plate || !regForm.istek_reg}
-                      style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.license_plate || !regForm.istek_reg ? '#9ca3af' : '#185FA5'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    <button onClick={saveRegistracija} disabled={regSaving || !regForm.license_plate || !regForm.istek_reg} style={{ flex: 2, padding: '10px', background: regSaving ? '#5DCAA5' : (!regForm.license_plate || !regForm.istek_reg ? '#9ca3af' : '#185FA5'), color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                       {regSaving ? '⏳...' : '🆕 Snimi novu registraciju'}
                     </button>
                   </div>
                 </div>
               )}
-
-              {/* DOKUMENTI */}
               {regTab === 'dokumenti' && (
                 <div>
-                  {/* Saobraćajna */}
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#111', marginBottom: 8 }}>📄 Saobraćajna dozvola</div>
-                    {docUrls.saobracajna_url ? (
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <a href={docUrls.saobracajna_url} target="_blank" rel="noreferrer"
-                          style={{ padding: '6px 14px', background: '#E1F5EE', color: '#085041', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-                          📄 Otvori dokument
-                        </a>
-                        <button onClick={() => setDocUrls(d => ({ ...d, saobracajna_url: '' }))}
-                          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button>
-                      </div>
-                    ) : null}
+                    {docUrls.saobracajna_url ? (<div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><a href={docUrls.saobracajna_url} target="_blank" rel="noreferrer" style={{ padding: '6px 14px', background: '#E1F5EE', color: '#085041', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📄 Otvori dokument</a><button onClick={() => setDocUrls(d => ({ ...d, saobracajna_url: '' }))} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button></div>) : null}
                     <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', border: '1px dashed #1D9E75', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: '#1D9E75', background: '#f9fafb', fontWeight: 600 }}>
                       {uploadingDoc === 'saobracajna' ? '⏳ Uploaduje se...' : '📷 Slikaj / Dodaj saobraćajnu'}
-                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc}
-                        onChange={async e => {
-                          const file = e.target.files?.[0]; if (!file) return
-                          const url = await uploadDoc(file, 'saobracajna')
-                          if (url) setDocUrls(d => ({ ...d, saobracajna_url: url }))
-                        }} />
+                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const url = await uploadDoc(file, 'saobracajna'); if (url) setDocUrls(d => ({ ...d, saobracajna_url: url })) }} />
                     </label>
                   </div>
-
-                  {/* Polisa */}
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#111', marginBottom: 8 }}>🛡️ Polisa osiguranja</div>
-                    {docUrls.polisa_url ? (
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <a href={docUrls.polisa_url} target="_blank" rel="noreferrer"
-                          style={{ padding: '6px 14px', background: '#E6F1FB', color: '#0C447C', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-                          🛡️ Otvori polisu
-                        </a>
-                        <button onClick={() => setDocUrls(d => ({ ...d, polisa_url: '' }))}
-                          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button>
-                      </div>
-                    ) : null}
+                    {docUrls.polisa_url ? (<div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><a href={docUrls.polisa_url} target="_blank" rel="noreferrer" style={{ padding: '6px 14px', background: '#E6F1FB', color: '#0C447C', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🛡️ Otvori polisu</a><button onClick={() => setDocUrls(d => ({ ...d, polisa_url: '' }))} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕ Ukloni</button></div>) : null}
                     <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', border: '1px dashed #185FA5', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: '#185FA5', background: '#f9fafb', fontWeight: 600 }}>
                       {uploadingDoc === 'polisa' ? '⏳ Uploaduje se...' : '📷 Slikaj / Dodaj polisu'}
-                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc}
-                        onChange={async e => {
-                          const file = e.target.files?.[0]; if (!file) return
-                          const url = await uploadDoc(file, 'polisa')
-                          if (url) setDocUrls(d => ({ ...d, polisa_url: url }))
-                        }} />
+                      <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const url = await uploadDoc(file, 'polisa'); if (url) setDocUrls(d => ({ ...d, polisa_url: url })) }} />
                     </label>
-                    <div style={{ marginTop: 10 }}>
-                      <label style={lbl}>Istek polise</label>
-                      <input style={inpSm} value={docUrls.polisa_istek} onChange={e => setDocUrls(d => ({ ...d, polisa_istek: e.target.value }))} placeholder="31.12.2026." />
-                    </div>
+                    <div style={{ marginTop: 10 }}><label style={lbl}>Istek polise</label><input style={inpSm} value={docUrls.polisa_istek} onChange={e => setDocUrls(d => ({ ...d, polisa_istek: e.target.value }))} placeholder="31.12.2026." /></div>
                   </div>
-
-                  <button onClick={saveDokumenti} disabled={regSaving || !!uploadingDoc}
-                    style={{ width: '100%', padding: '12px', background: regSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                    {regSaving ? '⏳ Snimanje...' : '💾 Sačuvaj dokumente'}
-                  </button>
+                  <button onClick={saveDokumenti} disabled={regSaving || !!uploadingDoc} style={{ width: '100%', padding: '12px', background: regSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{regSaving ? '⏳ Snimanje...' : '💾 Sačuvaj dokumente'}</button>
                 </div>
               )}
-
-              {/* ISTORIJA */}
               {regTab === 'istorija' && (
                 <div>
                   {regHistoryLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
                     : regHistory.length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema historije.</div>
                     : regHistory.map((r, i) => (
                       <div key={r.id} style={{ border: `1px solid ${i === 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, background: i === 0 ? '#f0fdf8' : '#fff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span>
-                          <span style={{ fontSize: 11, color: '#9ca3af' }}>{new Date(r.created_at).toLocaleDateString('sr-RS')}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12 }}>
-                          {r.istek_reg && <span>Istek: <strong>{r.istek_reg}</strong></span>}
-                          {r.mjesto_reg && <span>Mjesto: <strong>{r.mjesto_reg}</strong></span>}
-                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span><span style={{ fontSize: 11, color: '#9ca3af' }}>{new Date(r.created_at).toLocaleDateString('sr-RS')}</span></div>
+                        <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12 }}>{r.istek_reg && <span>Istek: <strong>{r.istek_reg}</strong></span>}{r.mjesto_reg && <span>Mjesto: <strong>{r.mjesto_reg}</strong></span>}</div>
                         {r.napomena && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' }}>{r.napomena}</div>}
                       </div>
                     ))}
@@ -602,14 +658,4 @@ export default function AdminFleetPage() {
       )}
     </div>
   )
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 8, marginTop: 14, paddingBottom: 4, borderBottom: '1px solid #f3f4f6' }}>{children}</div>
-}
-function Grid2({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 4 }}>{children}</div>
-}
-function Span2({ children }: { children: React.ReactNode }) {
-  return <div style={{ gridColumn: 'span 2' }}>{children}</div>
 }
