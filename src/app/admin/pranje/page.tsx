@@ -63,7 +63,9 @@ export default function AdminPranjePage() {
   const [payoutAmount, setPayoutAmount] = useState('')
   const [payoutNote, setPayoutNote] = useState('')
   const [payoutSaving, setPayoutSaving] = useState(false)
+  const [washPartners, setWashPartners] = useState<WashPartner[]>([])
   const [washPartner, setWashPartner] = useState<WashPartner | null>(null)
+  const [selectedPartnerId, setSelectedPartnerId] = useState('')
   const agentName = getCookie('avtorent-agent-name')
   const [agentEmail, setAgentEmail] = useState('')
   const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>([])
@@ -72,7 +74,6 @@ export default function AdminPranjePage() {
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null)
   const [showNewWash, setShowNewWash] = useState(false)
   const [newWashType, setNewWashType] = useState('')
-  const [newWashAssignedTo, setNewWashAssignedTo] = useState<'partner' | 'agent'>('partner')
   const [newWashCustomPrice, setNewWashCustomPrice] = useState('')
   const [newWashNotes, setNewWashNotes] = useState('')
   const [newWashSaving, setNewWashSaving] = useState(false)
@@ -88,7 +89,10 @@ export default function AdminPranjePage() {
 
   useEffect(() => {
     fetchData()
-    supabase.from('wash_partners').select('*').eq('is_active', true).single().then(({ data }) => setWashPartner(data))
+    supabase.from('wash_partners').select('*').eq('is_active', true).order('name').then(({ data }) => {
+      setWashPartners(data || [])
+      if (data && data.length > 0) { setWashPartner(data[0]); setSelectedPartnerId(data[0].id) }
+    })
     supabase.from('vozila_fleet').select('id, license_plate, agregirani_2, marka, model').eq('fleet_status', 'available').order('marka').then(({ data }) => setFleetVehicles(data || []))
     supabase.auth.getSession().then(({ data: { session } }) => { if (session?.user?.email) setAgentEmail(session.user.email) })
   }, [])
@@ -131,22 +135,23 @@ export default function AdminPranjePage() {
 
   async function handleNewWash() {
     if (!selectedVehicle || !newWashType) return
+    if (!washPartner) { alert('Odaberite perača!'); return }
     setNewWashSaving(true)
     const wt = WASH_TYPES.find(w => w.key === newWashType)
     let price = 0
     if (newWashType === 'specific') price = parseFloat(newWashCustomPrice || '0')
     else if (wt?.priceKey && washPartner) price = (washPartner as any)[wt.priceKey] || 0
-    else price = { quick: 5, detailed: 10, deep_quick: 40, deep_detailed: 80 }[newWashType as string] || 0
 
     await supabase.from('wash_orders').insert({
-      reservation_id: null, vehicle_name: selectedVehicle.agregirani_2 || selectedVehicle.license_plate,
+      reservation_id: null,
+      vehicle_name: selectedVehicle.agregirani_2 || selectedVehicle.license_plate,
       wash_type: newWashType, wash_type_label: wt?.label || newWashType, price,
-      status: 'pending', assigned_to: newWashAssignedTo,
-      agent_name: newWashAssignedTo !== 'partner' ? (agentName || 'Agent') : null,
-      wash_partner_id: newWashAssignedTo === 'partner' ? washPartner?.id : null,
+      status: 'pending', assigned_to: 'partner',
+      agent_name: null,
+      wash_partner_id: washPartner.id,
       notes: newWashNotes || null,
-      payout_status: newWashAssignedTo === 'partner' ? 'unpaid' : null,
-      payout_amount: newWashAssignedTo === 'partner' ? price : null,
+      payout_status: 'unpaid',
+      payout_amount: price,
     })
     setNewWashSaving(false); setShowNewWash(false)
     setSelectedVehicle(null); setVehicleSearch(''); setNewWashType(''); setNewWashCustomPrice(''); setNewWashNotes('')
@@ -258,7 +263,9 @@ export default function AdminPranjePage() {
                         <td style={{ padding: '12px 16px', color: '#374151' }}>{o.wash_type_label}</td>
                         <td style={{ padding: '12px 16px' }}>
                           {o.assigned_to === 'partner'
-                            ? <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20 }}>Praonica</span>
+                            ? <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20 }}>
+                                {washPartners.find(p => (o as any).wash_partner_id === p.id)?.name || 'Praonica'}
+                              </span>
                             : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 20 }}>Agent: {o.agent_name}</span>}
                         </td>
                         <td style={{ padding: '12px 16px' }}>
@@ -335,10 +342,21 @@ export default function AdminPranjePage() {
               </div>
             )}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Ko pere?</div>
-              <div style={{ background: '#E6F1FB', border: '1px solid #85B7EB', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#0C447C', fontWeight: 600 }}>
-                Praonica
-              </div>
+              <label style={lbl}>Dodjeli perača *</label>
+              {washPartners.length === 0 ? (
+                <div style={{ background: '#FCEBEB', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626' }}>
+                  Nema aktivnih perača. Dodaj perača u tab Perači.
+                </div>
+              ) : (
+                <select value={selectedPartnerId} onChange={e => {
+                  setSelectedPartnerId(e.target.value)
+                  setWashPartner(washPartners.find(p => p.id === e.target.value) || null)
+                }} style={inp}>
+                  {washPartners.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div style={{ marginBottom: 18 }}>
               <label style={lbl}>Napomena</label>
