@@ -33,28 +33,6 @@ type RegHistory = {
 
 const LOKACIJE = ['CRNA GORA', 'BiH', 'SRBIJA', 'ALBANIJA']
 
-const VEHICLE_CLASSES = [
-  { key: 'Hatchback',     icon: '🚗', label: 'Hatchback' },
-  { key: 'Medium',        icon: '🚙', label: 'Medium' },
-  { key: 'Sedan',         icon: '🚘', label: 'Sedan' },
-  { key: 'SUV',           icon: '🛻', label: 'SUV' },
-  { key: 'Station Wagon', icon: '🚐', label: 'Karavan' },
-  { key: 'Luxury',        icon: '💎', label: 'Luksuz' },
-  { key: 'Van',           icon: '🚌', label: 'Van' },
-  { key: 'Convertible',   icon: '🏎️', label: 'Kabriolet' },
-]
-
-const CLASS_COLOR: Record<string, { bg: string; color: string; border: string }> = {
-  'Hatchback':     { bg: '#E1F5EE', color: '#085041', border: '#1D9E75' },
-  'Medium':        { bg: '#E6F1FB', color: '#0C447C', border: '#185FA5' },
-  'Sedan':         { bg: '#EDE9FE', color: '#5B21B6', border: '#7C3AED' },
-  'SUV':           { bg: '#FEF3C7', color: '#92400E', border: '#D97706' },
-  'Station Wagon': { bg: '#FCE7F3', color: '#9D174D', border: '#DB2777' },
-  'Luxury':        { bg: '#FEE2E2', color: '#991B1B', border: '#DC2626' },
-  'Van':           { bg: '#ECFDF5', color: '#065F46', border: '#10B981' },
-  'Convertible':   { bg: '#FFF7ED', color: '#9A3412', border: '#EA580C' },
-}
-
 const FLEET_STATUS_OPTS = [
   { value: 'available',      label: 'Za izdavanje',  color: '#1D9E75', bg: '#E1F5EE' },
   { value: 'rented',         label: 'Iznajmljeno',   color: '#185FA5', bg: '#E6F1FB' },
@@ -71,15 +49,11 @@ const EMPTY_FORM: Partial<FleetVehicle> = {
   transmission: 'manual', fuel_type: 'diesel',
   category: 'economy', is_available: true,
   price_per_day: 0, seats: 5,
-  vehicle_class: 'Hatchback', features: [],
+  vehicle_class: '', features: [],
 }
 
 function getStatusInfo(status: string) {
   return FLEET_STATUS_OPTS.find(s => s.value === status) || FLEET_STATUS_OPTS[FLEET_STATUS_OPTS.length - 1]
-}
-
-function getClassInfo(cls: string | null) {
-  return VEHICLE_CLASSES.find(c => c.key === cls) || VEHICLE_CLASSES[0]
 }
 
 function getCookie(name: string): string {
@@ -88,8 +62,18 @@ function getCookie(name: string): string {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
+// Konvertuj YYYY-MM-DD u DD.MM.YYYY
+function todayDDMMYYYY(): string {
+  const d = new Date()
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${dd}.${mm}.${yyyy}.`
+}
+
 export default function AdminFleetPage() {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
+  const [dbKlase, setDbKlase] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -111,7 +95,10 @@ export default function AdminFleetPage() {
   const [regVehicle, setRegVehicle] = useState<FleetVehicle | null>(null)
   const [regHistory, setRegHistory] = useState<RegHistory[]>([])
   const [regHistoryLoading, setRegHistoryLoading] = useState(false)
-  const [regForm, setRegForm] = useState({ license_plate: '', istek_reg: '', mjesto_reg: '', datum_registracije: new Date().toISOString().split('T')[0], napomena: '' })
+  const [regForm, setRegForm] = useState({
+    license_plate: '', istek_reg: '', mjesto_reg: '',
+    datum_registracije: todayDDMMYYYY(), napomena: ''
+  })
   const [regSaving, setRegSaving] = useState(false)
   const [regTab, setRegTab] = useState<'produzenje' | 'nova' | 'dokumenti' | 'istorija'>('produzenje')
   const [uploadingDoc, setUploadingDoc] = useState<'saobracajna' | 'polisa' | null>(null)
@@ -121,8 +108,12 @@ export default function AdminFleetPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('vozila_fleet').select('*').order('marka')
-    if (data) setVehicles(data)
+    const [{ data: vData }, { data: kData }] = await Promise.all([
+      supabase.from('vozila_fleet').select('*').order('marka'),
+      supabase.from('vehicle_classes').select('naziv').order('naziv'),
+    ])
+    if (vData) setVehicles(vData)
+    if (kData) setDbKlase(kData.map((k: any) => k.naziv))
     setLoading(false)
   }, [])
 
@@ -130,7 +121,13 @@ export default function AdminFleetPage() {
 
   async function openRegModal(v: FleetVehicle) {
     setRegVehicle(v)
-    setRegForm({ license_plate: v.license_plate || '', istek_reg: v.istek_reg || '', mjesto_reg: v.mjesto_reg || '', datum_registracije: new Date().toISOString().split('T')[0], napomena: '' })
+    setRegForm({
+      license_plate: v.license_plate || '',
+      istek_reg: v.istek_reg || '',
+      mjesto_reg: v.mjesto_reg || '',
+      datum_registracije: todayDDMMYYYY(),
+      napomena: ''
+    })
     setDocUrls({ saobracajna_url: v.saobracajna_url || '', polisa_url: v.polisa_url || '', polisa_istek: v.polisa_istek || '' })
     setRegTab('produzenje')
     setShowRegModal(true)
@@ -244,31 +241,15 @@ export default function AdminFleetPage() {
   const lbl: React.CSSProperties = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 3, fontWeight: 500 }
   const inpSm: React.CSSProperties = { ...inp, fontSize: 12, padding: '7px 10px' }
 
-  // Grupišemo po klasama za tab Klase
-  const klaseStats = VEHICLE_CLASSES.map(cls => ({
-    ...cls,
-    vozila: vehicles.filter(v => v.vehicle_class === cls.key),
-    available: vehicles.filter(v => v.vehicle_class === cls.key && v.fleet_status === 'available').length,
-  }))
-
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 0 80px' }}>
-      <style>{`
-        @media (max-width: 640px) {
-          .fleet-stats { grid-template-columns: 1fr 1fr !important; }
-        }
-        .class-pill:hover { filter: brightness(0.93); }
-      `}</style>
-
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>Vozni park</div>
           <div style={{ fontSize: 12, color: '#6b7280' }}>{stats.ukupno} vozila · {stats.available} dostupno · {stats.service} servis · {stats.damaged} havarisan</div>
         </div>
-        <button onClick={openNew} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          + Novo
-        </button>
+        <button onClick={openNew} style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Novo</button>
       </div>
 
       {/* REGISTRACIJA BANNERI */}
@@ -295,10 +276,8 @@ export default function AdminFleetPage() {
 
       {/* ═══ TAB: LISTA ═══ */}
       {activeTab === 'lista' && (<>
-        {/* FILTERI */}
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži tablice, naziv..."
-            style={{ ...inp, marginBottom: 8, fontSize: 14 }} />
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 Pretraži tablice, naziv..." style={{ ...inp, marginBottom: 8, fontSize: 14 }} />
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 110 }}>
               <option value="SVE">Svi statusi</option>
@@ -313,7 +292,7 @@ export default function AdminFleetPage() {
             </select>
             <select value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 100 }}>
               <option value="SVE">Sve klase</option>
-              {VEHICLE_CLASSES.map(c => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+              {dbKlase.map(k => <option key={k} value={k}>{k}</option>)}
             </select>
             <select value={filterReg} onChange={e => setFilterReg(e.target.value)} style={{ ...inpSm, flex: 1, minWidth: 90 }}>
               <option value="SVE">Reg: sve</option>
@@ -330,7 +309,6 @@ export default function AdminFleetPage() {
           <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>{filtered.length} vozila</div>
         </div>
 
-        {/* LISTA */}
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
         ) : filtered.length === 0 ? (
@@ -346,53 +324,31 @@ export default function AdminFleetPage() {
                   </div>
                   {vozilaMarke.map(v => {
                     const st = getStatusInfo(v.fleet_status)
-                    const clsInfo = getClassInfo(v.vehicle_class)
-                    const clsColor = CLASS_COLOR[v.vehicle_class || ''] || CLASS_COLOR['Hatchback']
                     const isticeSkoro = v.dana_do_isteka !== null && v.dana_do_isteka <= 30 && v.dana_do_isteka > 0
                     const istekla = v.dana_do_isteka !== null && v.dana_do_isteka <= 0
                     return (
                       <div key={v.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', marginBottom: 3, borderLeft: `3px solid ${st.color}`, opacity: v.fleet_status === 'sold' ? 0.6 : 1 }}>
-                        {/* RED 1 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', flexWrap: 'wrap' as const }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#111', background: '#f3f4f6', padding: '1px 6px', borderRadius: 4 }}>
-                            {v.license_plate || '—'}
-                          </span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {v.marka} {v.model} {v.year ? `'${String(v.year).slice(2)}` : ''}
-                          </span>
-                          {/* KLASA PILL */}
-                          <span style={{ fontSize: 10, background: clsColor.bg, color: clsColor.color, border: `1px solid ${clsColor.border}`, padding: '1px 7px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
-                            {clsInfo.icon} {clsInfo.label}
-                          </span>
-                          <span style={{ fontSize: 10, background: st.bg, color: st.color, padding: '1px 6px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
-                            {st.label}
-                          </span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#111', background: '#f3f4f6', padding: '1px 6px', borderRadius: 4 }}>{v.license_plate || '—'}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.marka} {v.model} {v.year ? `'${String(v.year).slice(2)}` : ''}</span>
+                          {v.vehicle_class && <span style={{ fontSize: 10, background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>{v.vehicle_class}</span>}
+                          <span style={{ fontSize: 10, background: st.bg, color: st.color, padding: '1px 6px', borderRadius: 12, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{st.label}</span>
                           {istekla && <span style={{ fontSize: 10, background: '#FEE2E2', color: '#DC2626', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>🚫</span>}
                           {isticeSkoro && !istekla && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>⚠️{Math.round(v.dana_do_isteka!)}d</span>}
                         </div>
-                        {/* RED 2 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 6px', flexWrap: 'wrap' as const }}>
-                          <span style={{ fontSize: 10, color: '#9ca3af' }}>
-                            {v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}
-                            {v.istek_reg ? ` · 📋${v.istek_reg}` : ''}
-                          </span>
+                          <span style={{ fontSize: 10, color: '#9ca3af' }}>{v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}{v.istek_reg ? ` · 📋${v.istek_reg}` : ''}</span>
                           <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', flexWrap: 'wrap' as const }}>
-                            <button onClick={() => openRegModal(v)}
-                              style={{ padding: '2px 7px', fontSize: 10, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 6, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>
-                              📋
-                            </button>
-                            <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)}
-                              style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
+                            <button onClick={() => openRegModal(v)} style={{ padding: '2px 7px', fontSize: 10, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 6, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>📋</button>
+                            <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)} style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
                               {FLEET_STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                             </select>
-                            <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)}
-                              style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 70 }}>
+                            <select value={v.lokacija} onChange={e => quickLokUpdate(v.id, e.target.value)} style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 70 }}>
                               {LOKACIJE.map(l => <option key={l} value={l}>{l.split(' ')[0]}</option>)}
                             </select>
-                            {/* QUICK KLASA */}
-                            <select value={v.vehicle_class || 'Hatchback'} onChange={e => quickClassUpdate(v.id, e.target.value)}
-                              style={{ padding: '2px 4px', fontSize: 10, border: `1px solid ${clsColor.border}`, borderRadius: 6, background: clsColor.bg, color: clsColor.color, cursor: 'pointer', maxWidth: 80, fontWeight: 600 }}>
-                              {VEHICLE_CLASSES.map(c => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}
+                            <select value={v.vehicle_class || ''} onChange={e => quickClassUpdate(v.id, e.target.value)} style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
+                              <option value="">— klasa</option>
+                              {dbKlase.map(k => <option key={k} value={k}>{k}</option>)}
                             </select>
                             <button onClick={() => openEdit(v)} style={{ padding: '2px 7px', fontSize: 10, border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️</button>
                             <button onClick={() => deleteVehicle(v.id, v.license_plate || String(v.id))} style={{ padding: '2px 6px', fontSize: 10, border: '1px solid #fecaca', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
@@ -422,18 +378,16 @@ export default function AdminFleetPage() {
               <button onClick={() => { setShowForm(false); setEditVehicle(null); setForm(EMPTY_FORM); setFeaturesStr('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
             </div>
 
-            {/* KLASA — vizuelni picker */}
+            {/* KLASA — iz baze */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ ...lbl, fontSize: 12, fontWeight: 700, color: '#374151' }}>Klasa vozila</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-                {VEHICLE_CLASSES.map(cls => {
-                  const isSelected = (form.vehicle_class || 'Hatchback') === cls.key
-                  const clsColor = CLASS_COLOR[cls.key]
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
+                {dbKlase.map(k => {
+                  const isSelected = (form.vehicle_class || '') === k
                   return (
-                    <button key={cls.key} onClick={() => setForm(f => ({ ...f, vehicle_class: cls.key }))}
-                      style={{ padding: '8px 4px', border: `2px solid ${isSelected ? clsColor.border : '#e5e7eb'}`, borderRadius: 10, background: isSelected ? clsColor.bg : '#f9fafb', cursor: 'pointer', textAlign: 'center' as const, transition: 'all 0.12s' }}>
-                      <div style={{ fontSize: 20, marginBottom: 2 }}>{cls.icon}</div>
-                      <div style={{ fontSize: 10, fontWeight: isSelected ? 700 : 400, color: isSelected ? clsColor.color : '#9ca3af' }}>{cls.label}</div>
+                    <button key={k} onClick={() => setForm(f => ({ ...f, vehicle_class: k }))}
+                      style={{ padding: '7px 14px', border: `2px solid ${isSelected ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, background: isSelected ? '#E1F5EE' : '#f9fafb', cursor: 'pointer', fontSize: 13, fontWeight: isSelected ? 700 : 400, color: isSelected ? '#085041' : '#6b7280', transition: 'all 0.12s' }}>
+                      {k}
                     </button>
                   )
                 })}
@@ -476,7 +430,7 @@ export default function AdminFleetPage() {
                   {LOKACIJE.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
-              <div><label style={lbl}>Istek reg.</label><input style={inp} value={form.istek_reg || ''} onChange={e => setForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2026." /></div>
+              <div><label style={lbl}>Istek reg. (DD.MM.YYYY.)</label><input style={inp} value={form.istek_reg || ''} onChange={e => setForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2026." /></div>
               <div><label style={lbl}>Mjesto reg.</label><input style={inp} value={form.mjesto_reg || ''} onChange={e => setForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
               <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Vlasnik</label><input style={inp} value={form.vlasnik || ''} onChange={e => setForm(f => ({ ...f, vlasnik: e.target.value }))} /></div>
               <div><label style={lbl}>Kilometraža</label><input style={inp} type="number" value={form.current_mileage || ''} onChange={e => setForm(f => ({ ...f, current_mileage: parseInt(e.target.value) || undefined }))} /></div>
@@ -522,8 +476,8 @@ export default function AdminFleetPage() {
                 <div>
                   <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#085041' }}>Produži registraciju sa istim tablicama — samo unesite novi datum isteka.</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div><label style={lbl}>Novi istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
-                    <div><label style={lbl}>Datum registracije</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
+                    <div><label style={lbl}>Novi istek reg. (DD.MM.YYYY.) *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum registracije (DD.MM.YYYY.)</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
@@ -546,8 +500,8 @@ export default function AdminFleetPage() {
                     )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div><label style={lbl}>Istek reg. *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
-                    <div><label style={lbl}>Datum registracije</label><input type="date" style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} /></div>
+                    <div><label style={lbl}>Istek reg. (DD.MM.YYYY.) *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum registracije (DD.MM.YYYY.)</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
@@ -576,7 +530,7 @@ export default function AdminFleetPage() {
                       {uploadingDoc === 'polisa' ? '⏳ Uploaduje se...' : '📷 Slikaj / Dodaj polisu'}
                       <input type="file" accept="image/*,application/pdf" capture="environment" style={{ display: 'none' }} disabled={!!uploadingDoc} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const url = await uploadDoc(file, 'polisa'); if (url) setDocUrls(d => ({ ...d, polisa_url: url })) }} />
                     </label>
-                    <div style={{ marginTop: 10 }}><label style={lbl}>Istek polise</label><input style={inpSm} value={docUrls.polisa_istek} onChange={e => setDocUrls(d => ({ ...d, polisa_istek: e.target.value }))} placeholder="31.12.2026." /></div>
+                    <div style={{ marginTop: 10 }}><label style={lbl}>Istek polise (DD.MM.YYYY.)</label><input style={inpSm} value={docUrls.polisa_istek} onChange={e => setDocUrls(d => ({ ...d, polisa_istek: e.target.value }))} placeholder="31.12.2026." /></div>
                   </div>
                   <button onClick={saveDokumenti} disabled={regSaving || !!uploadingDoc} style={{ width: '100%', padding: '12px', background: regSaving ? '#5DCAA5' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{regSaving ? '⏳ Snimanje...' : '💾 Sačuvaj dokumente'}</button>
                 </div>
@@ -587,7 +541,7 @@ export default function AdminFleetPage() {
                     : regHistory.length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema historije.</div>
                     : regHistory.map((r, i) => (
                       <div key={r.id} style={{ border: `1px solid ${i === 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, background: i === 0 ? '#f0fdf8' : '#fff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span><span style={{ fontSize: 11, color: '#9ca3af' }}>{new Date(r.created_at).toLocaleDateString('sr-RS')}</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span><span style={{ fontSize: 11, color: '#9ca3af' }}>{r.datum_registracije || new Date(r.created_at).toLocaleDateString('sr-RS')}</span></div>
                         <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12 }}>{r.istek_reg && <span>Istek: <strong>{r.istek_reg}</strong></span>}{r.mjesto_reg && <span>Mjesto: <strong>{r.mjesto_reg}</strong></span>}</div>
                         {r.napomena && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' }}>{r.napomena}</div>}
                       </div>
@@ -639,7 +593,6 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
     if (!naziv) return
     const stari = klase.find(k => k.id === id)?.naziv
     await supabase.from('vehicle_classes').update({ naziv }).eq('id', id)
-    // Ažuriraj i vozila koja imaju staru klasu
     if (stari && stari !== naziv) {
       await supabase.from('vozila_fleet').update({ vehicle_class: naziv }).eq('vehicle_class', stari)
     }
@@ -650,7 +603,7 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
   async function deleteKlasa(id: number, naziv: string) {
     const count = vehicles.filter(v => v.vehicle_class === naziv).length
     if (count > 0) {
-      if (!confirm(`Klasa "${naziv}" koristi se za ${count} vozil${count === 1 ? 'o' : 'a'}. Svakako obrisati? Vozila će ostati bez klase.`)) return
+      if (!confirm(`Klasa "${naziv}" koristi se za ${count} vozila. Svakako obrisati?`)) return
       await supabase.from('vozila_fleet').update({ vehicle_class: null }).eq('vehicle_class', naziv)
     } else {
       if (!confirm(`Obrisati klasu "${naziv}"?`)) return
@@ -663,17 +616,10 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
 
   return (
     <div>
-      {/* Dodaj novu klasu */}
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 10 }}>Dodaj novu klasu</div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            style={{ ...inp, flex: 1 }}
-            value={noviNaziv}
-            onChange={e => setNoviNaziv(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addKlasa()}
-            placeholder="npr. Minivan, Pickup..."
-          />
+          <input style={{ ...inp, flex: 1 }} value={noviNaziv} onChange={e => setNoviNaziv(e.target.value)} onKeyDown={e => e.key === 'Enter' && addKlasa()} placeholder="npr. Minivan, Pickup..." />
           <button onClick={addKlasa} disabled={saving || !noviNaziv.trim()}
             style={{ padding: '8px 18px', background: noviNaziv.trim() ? '#1D9E75' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
             + Dodaj
@@ -681,66 +627,36 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
         </div>
       </div>
 
-      {/* Lista klasa */}
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
-          <span>Naziv klase</span>
-          <span>Vozila</span>
+          <span>Naziv klase</span><span>Vozila</span>
         </div>
-
         {klase.length === 0 ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Nema klasa. Dodaj prvu klasu gore.</div>
         ) : klase.map((k, i) => {
           const count = vehicles.filter(v => v.vehicle_class === k.naziv).length
           const available = vehicles.filter(v => v.vehicle_class === k.naziv && v.fleet_status === 'available').length
           const isEditing = editingId === k.id
-
           return (
             <div key={k.id} style={{ borderBottom: i < klase.length - 1 ? '1px solid #f3f4f6' : 'none', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, background: isEditing ? '#f0fdf8' : '#fff' }}>
               {isEditing ? (
                 <>
-                  <input
-                    style={{ ...inp, flex: 1, fontSize: 13, padding: '6px 10px' }}
-                    value={editNaziv}
-                    onChange={e => setEditNaziv(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(k.id); if (e.key === 'Escape') setEditingId(null) }}
-                    autoFocus
-                  />
-                  <button onClick={() => saveEdit(k.id)}
-                    style={{ padding: '6px 12px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    ✓ Snimi
-                  </button>
-                  <button onClick={() => setEditingId(null)}
-                    style={{ padding: '6px 10px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 12, cursor: 'pointer' }}>
-                    Odustani
-                  </button>
+                  <input style={{ ...inp, flex: 1, fontSize: 13, padding: '6px 10px' }} value={editNaziv} onChange={e => setEditNaziv(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(k.id); if (e.key === 'Escape') setEditingId(null) }} autoFocus />
+                  <button onClick={() => saveEdit(k.id)} style={{ padding: '6px 12px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>✓ Snimi</button>
+                  <button onClick={() => setEditingId(null)} style={{ padding: '6px 10px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 12, cursor: 'pointer' }}>Odustani</button>
                 </>
               ) : (
                 <>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{k.naziv}</div>
-                    {count > 0 && (
-                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                        {available} dostupno · {count - available} zauzeto
-                      </div>
-                    )}
+                    {count > 0 && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{available} dostupno · {count - available} zauzeto</div>}
                   </div>
-
-                  {/* Broj vozila + klik za filter */}
-                  <div
-                    onClick={() => count > 0 && onFilterClick(k.naziv)}
+                  <div onClick={() => count > 0 && onFilterClick(k.naziv)}
                     style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? '#1D9E75' : '#d1d5db', background: count > 0 ? '#E1F5EE' : '#f9fafb', border: `1px solid ${count > 0 ? '#1D9E75' : '#e5e7eb'}`, padding: '3px 10px', borderRadius: 20, cursor: count > 0 ? 'pointer' : 'default', minWidth: 32, textAlign: 'center' as const }}>
                     {count}
                   </div>
-
-                  <button onClick={() => { setEditingId(k.id); setEditNaziv(k.naziv) }}
-                    style={{ padding: '5px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#374151' }}>
-                    ✏️
-                  </button>
-                  <button onClick={() => deleteKlasa(k.id, k.naziv)}
-                    style={{ padding: '5px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>
-                    ✕
-                  </button>
+                  <button onClick={() => { setEditingId(k.id); setEditNaziv(k.naziv) }} style={{ padding: '5px 10px', fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#374151' }}>✏️</button>
+                  <button onClick={() => deleteKlasa(k.id, k.naziv)} style={{ padding: '5px 8px', fontSize: 11, border: '1px solid #fecaca', borderRadius: 7, background: '#fff', cursor: 'pointer', color: '#dc2626' }}>✕</button>
                 </>
               )}
             </div>
@@ -748,7 +664,6 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
         })}
       </div>
 
-      {/* Vozila bez klase */}
       {vehicles.filter(v => !v.vehicle_class || !klase.find(k => k.naziv === v.vehicle_class)).length > 0 && (
         <div style={{ marginTop: 14, border: '1px dashed #e5e7eb', borderRadius: 10, padding: 12, background: '#f9fafb' }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 6 }}>
@@ -756,9 +671,7 @@ function KlaseTab({ vehicles, onFilterClick }: { vehicles: FleetVehicle[]; onFil
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
             {vehicles.filter(v => !v.vehicle_class || !klase.find(k => k.naziv === v.vehicle_class)).map(v => (
-              <span key={v.id} style={{ fontSize: 11, fontFamily: 'monospace', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>
-                {v.license_plate || '—'}
-              </span>
+              <span key={v.id} style={{ fontSize: 11, fontFamily: 'monospace', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>{v.license_plate || '—'}</span>
             ))}
           </div>
           <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>Dodijeli klasu kroz listu vozila.</div>
