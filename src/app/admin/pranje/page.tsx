@@ -54,6 +54,47 @@ const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', fontSize:
 const lbl: React.CSSProperties = { fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }
 const inpSm: React.CSSProperties = { ...inp, padding: '7px 10px', fontSize: 12 }
 
+function VehicleSearch({ search, setSearch, selected, setSelected, dropdown, setDropdown, fleetVehicles }: {
+  search: string; setSearch: (v: string) => void
+  selected: FleetVehicle | null; setSelected: (v: FleetVehicle | null) => void
+  dropdown: boolean; setDropdown: (v: boolean) => void
+  fleetVehicles: FleetVehicle[]
+}) {
+  const filtered = fleetVehicles.filter(v =>
+    (v.license_plate || '').toLowerCase().includes(search.toLowerCase()) ||
+    (v.agregirani_2 || '').toLowerCase().includes(search.toLowerCase())
+  ).slice(0, 8)
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={selected ? `${selected.license_plate} — ${selected.agregirani_2}` : search}
+        onChange={e => { setSearch(e.target.value); setSelected(null); setDropdown(true) }}
+        onFocus={() => setDropdown(true)}
+        placeholder="Pretraži po tablicama..."
+        style={inp}
+      />
+      {selected && (
+        <button onClick={() => { setSelected(null); setSearch(''); setDropdown(false) }}
+          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16 }}>✕</button>
+      )}
+      {dropdown && !selected && filtered.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: 220, overflowY: 'auto' }}>
+          {filtered.map((v: FleetVehicle) => (
+            <div key={v.id} onClick={() => { setSelected(v); setSearch(''); setDropdown(false) }}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}
+              onMouseOver={e => (e.currentTarget.style.background = '#f0fdf8')}
+              onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
+              <span style={{ fontWeight: 700, color: '#1D9E75', marginRight: 8 }}>{v.license_plate}</span>
+              <span style={{ color: '#374151' }}>{v.agregirani_2}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPranjePage() {
   const [activeTab, setActiveTab] = useState<'nalozi' | 'peraci' | 'istorija'>('nalozi')
   const [orders, setOrders] = useState<WashOrder[]>([])
@@ -101,36 +142,6 @@ export default function AdminPranjePage() {
     const { data } = await supabase.from('wash_orders').select('*, reservations(ref_code, guest_name)').order('created_at', { ascending: false })
     setOrders(data || [])
     setLoading(false)
-  }
-
-  const filteredFleet = (q: string) => fleetVehicles.filter(v =>
-    (v.license_plate || '').toLowerCase().includes(q.toLowerCase()) ||
-    (v.agregirani_2 || '').toLowerCase().includes(q.toLowerCase())
-  ).slice(0, 8)
-
-  function VehicleSearch({ search, setSearch, selected, setSelected, dropdown, setDropdown }: any) {
-    return (
-      <div style={{ position: 'relative' }}>
-        <input value={selected ? `${selected.license_plate} — ${selected.agregirani_2}` : search}
-          onChange={e => { setSearch(e.target.value); setSelected(null); setDropdown(true) }}
-          onFocus={() => setDropdown(true)} placeholder="Pretraži po tablicama..." style={inp} />
-        {selected && <button onClick={() => { setSelected(null); setSearch(''); setDropdown(false) }}
-          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16 }}>✕</button>}
-        {dropdown && !selected && filteredFleet(search).length > 0 && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: 220, overflowY: 'auto' }}>
-            {filteredFleet(search).map((v: FleetVehicle) => (
-              <div key={v.id} onClick={() => { setSelected(v); setSearch(''); setDropdown(false) }}
-                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}
-                onMouseOver={e => (e.currentTarget.style.background = '#f0fdf8')}
-                onMouseOut={e => (e.currentTarget.style.background = '#fff')}>
-                <span style={{ fontWeight: 700, color: '#1D9E75', marginRight: 8 }}>{v.license_plate}</span>
-                <span style={{ color: '#374151' }}>{v.agregirani_2}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    )
   }
 
   async function handleNewWash() {
@@ -318,7 +329,7 @@ export default function AdminPranjePage() {
             </div>
             <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
               <label style={lbl}>Vozilo *</label>
-              <VehicleSearch search={vehicleSearch} setSearch={setVehicleSearch} selected={selectedVehicle} setSelected={setSelectedVehicle} dropdown={vehicleDropdown} setDropdown={setVehicleDropdown} />
+              <VehicleSearch search={vehicleSearch} setSearch={setVehicleSearch} selected={selectedVehicle} setSelected={setSelectedVehicle} dropdown={vehicleDropdown} setDropdown={setVehicleDropdown} fleetVehicles={fleetVehicles} />
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Tip pranja *</div>
@@ -384,7 +395,7 @@ export default function AdminPranjePage() {
             ) : (
               <div style={{ marginBottom: 14 }} onClick={e => e.stopPropagation()}>
                 <label style={lbl}>Vozilo *</label>
-                <VehicleSearch search={selfVehicleSearch} setSearch={setSelfVehicleSearch} selected={selfSelectedVehicle} setSelected={setSelfSelectedVehicle} dropdown={selfVehicleDropdown} setDropdown={setSelfVehicleDropdown} />
+                <VehicleSearch search={selfVehicleSearch} setSearch={setSelfVehicleSearch} selected={selfSelectedVehicle} setSelected={setSelfSelectedVehicle} dropdown={selfVehicleDropdown} setDropdown={setSelfVehicleDropdown} fleetVehicles={fleetVehicles} />
               </div>
             )}
             <div style={{ marginBottom: 14 }}>
