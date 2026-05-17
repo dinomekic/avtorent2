@@ -75,12 +75,8 @@ const FC_CSS = `
   .fc .fc-resource-group .fc-datagrid-cell-cushion { background: #0f172a !important; color: #94a3b8 !important; font-weight: 800 !important; font-size: 9px !important; text-transform: uppercase !important; letter-spacing: 1.5px !important; padding: 8px 10px !important; }
   .fc .fc-resource-group td { background: #0f172a !important; border-color: #1e293b !important; }
   .fc .fc-resource-group .fc-timeline-lane { background: #0f172a !important; }
-  .fc .fc-datagrid-body tr { height: 44px !important; }
-  .fc .fc-timeline-body tr { height: 44px !important; }
-  .fc .fc-datagrid-cell-frame { height: 44px !important; min-height: 44px !important; max-height: 44px !important; display: flex !important; align-items: center !important; }
-  .fc .fc-timeline-lane-frame { height: 44px !important; min-height: 44px !important; }
-  .fc .fc-timeline-lane { height: 44px !important; min-height: 44px !important; max-height: 44px !important; overflow: hidden !important; }
-  .fc .fc-timeline-slot-frame { height: 44px !important; }
+  .fc .fc-datagrid-cell-frame { display: flex !important; align-items: center !important; }
+  .fc .fc-timeline-lane { overflow: hidden !important; }
   .fc .fc-datagrid-body tr:nth-child(even) .fc-datagrid-cell { background: #fafafa !important; }
   .fc .fc-timeline-body tr:nth-child(even) .fc-timeline-lane { background: rgba(0,0,0,0.012) !important; }
   .fc .fc-event { border-radius: 4px !important; border: none !important; font-size: 10px !important; font-weight: 700 !important; padding: 2px 5px !important; cursor: pointer !important; margin: 2px 0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important; }
@@ -201,7 +197,9 @@ export default function AdminKalendarPage() {
       headerToolbar: { left: 'prev,next today', center: 'title', right: 'resourceTimelineMonth,resourceTimelineWeek' },
       buttonText: { today: 'Danas', month: 'Mjesec', week: 'Sedmica' },
       slotLabelFormat: [{ weekday: 'short' }, { day: 'numeric' }],
-      height: 'calc(100vh - 180px)',
+      height: 'auto',
+      expandRows: true,
+      stickyHeaderDates: true,
       resources: getResources(),
       scrollTime: undefined,
 
@@ -403,7 +401,7 @@ export default function AdminKalendarPage() {
   const vozilaLok = vozila.filter(v => v.lokacija === currentLok && (v.fleet_status || '').toLowerCase() === 'available')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <div style={{ padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', marginRight: 4 }}>📅 Kalendar</div>
@@ -444,13 +442,13 @@ export default function AdminKalendarPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, background: '#fff', overflow: 'hidden' }}>
+      <div style={{ flex: 1, background: '#fff' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: 32, marginBottom: 12 }}>📅</div><div>Učitavanje...</div></div></div>
         ) : !fcLoaded ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8', fontSize: 14 }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div><div>Inicijalizacija kalendara...</div></div></div>
         ) : (
-          <div ref={calendarRef} style={{ height: '100%' }} />
+          <div ref={calendarRef} />
         )}
       </div>
 
