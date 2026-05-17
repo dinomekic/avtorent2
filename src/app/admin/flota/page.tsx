@@ -543,8 +543,8 @@ export default function AdminFleetPage() {
                 <div>
                   <div style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#085041' }}>Produži registraciju sa istim tablicama — samo unesite novi datum isteka.</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div><label style={lbl}>Novi istek reg. (DD.MM.YYYY.) *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
-                    <div><label style={lbl}>Datum registracije (DD.MM.YYYY.)</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
+                    <div><label style={lbl}>Istek registracije *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum upisa</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
@@ -567,8 +567,8 @@ export default function AdminFleetPage() {
                     )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <div><label style={lbl}>Istek reg. (DD.MM.YYYY.) *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
-                    <div><label style={lbl}>Datum registracije (DD.MM.YYYY.)</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
+                    <div><label style={lbl}>Istek registracije *</label><input style={inpSm} value={regForm.istek_reg} onChange={e => setRegForm(f => ({ ...f, istek_reg: e.target.value }))} placeholder="15.06.2027." /></div>
+                    <div><label style={lbl}>Datum upisa</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
