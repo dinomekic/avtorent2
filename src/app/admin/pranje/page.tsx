@@ -306,7 +306,7 @@ export default function AdminPranjePage() {
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         <div style={{ display: 'flex', gap: 5 }}>
-                          {o.assigned_to === 'partner' && o.payout_status === 'unpaid' && (
+                          {o.assigned_to === 'partner' && o.status === 'done' && o.payout_status === 'unpaid' && (
                             <button onClick={() => { setPayoutOrder(o); setPayoutAmount(String(o.price || '')); setPayoutNote('') }}
                               style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 6, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>Isplati</button>
                           )}
