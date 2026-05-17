@@ -103,15 +103,17 @@ export default function PerformancePage() {
 
     // Sesije
     const agentSessions = sessions.filter(s => normIme(s.agent_name || '') === imeNorm)
-    const totalMinutes = agentSessions.reduce((s: number, sess: any) => {
-      if (sess.duration_minutes != null) return s + sess.duration_minutes
-      // Mobilni — računaj iz last_active - logged_in_at
+    const totalSeconds = agentSessions.reduce((s: number, sess: any) => {
+      if (sess.duration_minutes != null && sess.duration_minutes > 0) {
+        return s + sess.duration_minutes * 60
+      }
       if (sess.last_active && sess.logged_in_at) {
-        const mins = Math.round((new Date(sess.last_active).getTime() - new Date(sess.logged_in_at).getTime()) / 60000)
-        return s + Math.max(0, mins)
+        const secs = Math.round((new Date(sess.last_active).getTime() - new Date(sess.logged_in_at).getTime()) / 1000)
+        return s + Math.max(0, secs)
       }
       return s
     }, 0)
+    const totalMinutes = Math.floor(totalSeconds / 60)
     const activeSessions = agentSessions.filter((s: any) => s.duration_minutes !== null || s.last_active).length
 
     // Bonusi
@@ -127,6 +129,7 @@ export default function PerformancePage() {
       naplaceno,
       troskovi,
       totalMinutes,
+      totalSeconds,
       sessionCount: agentSessions.length,
       activeSessions,
       totalBonus,
@@ -230,7 +233,7 @@ export default function PerformancePage() {
                   <span style={{ fontWeight: 700, color: '#1D9E75' }}>{agent.totalComp.toFixed(0)}€</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, color: '#9ca3af' }}>
-                  <span>⏱ {Math.floor(agent.totalMinutes / 60)}h {agent.totalMinutes % 60}m online</span>
+                  <span>⏱ {agent.totalSeconds < 60 ? `${agent.totalSeconds}s` : `${Math.floor(agent.totalMinutes / 60)}h ${agent.totalMinutes % 60}m`} online</span>
                   <span>{agent.sessionCount} prijava</span>
                 </div>
               </div>
@@ -276,7 +279,7 @@ export default function PerformancePage() {
                   ['Troškovi upisani', `${selected.troskovi.toFixed(0)}€`],
                   ['Ukupno prijava', `${selected.sessionCount}`],
                   ['Prijava sa mjerenjem', `${selected.activeSessions}`],
-                  ['Ukupno online', `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
+                  ['Ukupno online', selected.totalSeconds < 60 ? `${selected.totalSeconds}s` : `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
                 ].map(([label, value]) => (
                   <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
                     <span style={{ color: '#6b7280' }}>{label}</span>
