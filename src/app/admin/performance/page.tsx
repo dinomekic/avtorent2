@@ -104,6 +104,7 @@ export default function PerformancePage() {
     // Sesije
     const agentSessions = sessions.filter(s => normIme(s.agent_name || '') === imeNorm)
     const totalMinutes = agentSessions.reduce((s: number, sess: any) => s + (sess.duration_minutes || 0), 0)
+    const activeSessions = agentSessions.filter((s: any) => s.duration_minutes !== null).length
 
     // Bonusi
     const bonusIssue = izdavanja.length * (agent.bonus_per_issue || 0)
@@ -119,6 +120,7 @@ export default function PerformancePage() {
       troskovi,
       totalMinutes,
       sessionCount: agentSessions.length,
+      activeSessions,
       totalBonus,
       totalComp,
       bonusIssue,
@@ -220,8 +222,8 @@ export default function PerformancePage() {
                   <span style={{ fontWeight: 700, color: '#1D9E75' }}>{agent.totalComp.toFixed(0)}€</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, color: '#9ca3af' }}>
-                  <span>⏱ {Math.floor(agent.totalMinutes / 60)}h {agent.totalMinutes % 60}m online</span>
-                  <span>{agent.sessionCount} sesija</span>
+                  <span>⏱ {Math.floor(agent.totalMinutes / 60)}h {agent.totalMinutes % 60}m (desktop)</span>
+                  <span>{agent.sessionCount} prijava</span>
                 </div>
               </div>
             </div>
@@ -264,8 +266,9 @@ export default function PerformancePage() {
                 {[
                   ['Naplaćeno od gostiju', `${selected.naplaceno.toFixed(0)}€`],
                   ['Troškovi upisani', `${selected.troskovi.toFixed(0)}€`],
-                  ['Online sesije', `${selected.sessionCount}`],
-                  ['Ukupno online', `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
+                  ['Ukupno prijava', `${selected.sessionCount}`],
+                  ['Prijava (desktop)', `${selected.activeSessions}`],
+                  ['Online (desktop)', `${Math.floor(selected.totalMinutes / 60)}h ${selected.totalMinutes % 60}m`],
                 ].map(([label, value]) => (
                   <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
                     <span style={{ color: '#6b7280' }}>{label}</span>
