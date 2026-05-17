@@ -10,6 +10,7 @@ const AGENT_NAV = [
   { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
   { href: '/admin/finansije', label: '💰 Finansije' },
+  { href: '/admin/koristenje', label: '🚙 Korišćenje vozila' },
   { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
   { href: '/admin/flota', label: '🚗 Flota' },
   { href: '/admin/pranje', label: '💦 Pranje vozila' },
