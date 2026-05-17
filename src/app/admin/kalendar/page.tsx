@@ -74,7 +74,10 @@ export default function AdminKalendarPage() {
   const [isNewRez, setIsNewRez] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [stats, setStats] = useState({ total: 0, zauzeto: 0 })
+  const [debugLog, setDebugLog] = useState<string[]>([])
+  function addLog(msg: string) {
+    setDebugLog(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${msg}`])
+  }
   const [slotWidth, setSlotWidth] = useState(28)
   const [rowHeight, setRowHeight] = useState(48)
   const [showLogovi, setShowLogovi] = useState(false)
@@ -160,11 +163,10 @@ export default function AdminKalendarPage() {
   async function fetchRez() {
     const { data } = await supabase.from('rezervacije').select('*')
     if (data) {
-      // Ref mora biti ažuriran PRIJE state-a jer refetchEvents čita iz ref-a
       rezervacijeRef.current = data
       updateStats(vozilaRef.current, data)
-      // State update triggeruje useEffect koji poziva refetchEvents
       setRezervacije([...data])
+      setTimeout(() => { calInstanceRef.current?.refetchEvents() }, 50)
     }
   }
 
@@ -180,14 +182,7 @@ export default function AdminKalendarPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // Real-time
-  useEffect(() => {
-    const ch = supabase.channel('kal-rt4')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rezervacije' }, () => {
-        fetchRez()
-      }).subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [])
+  // Real-time uklonjen — uzrokovao race condition sa saveRezervacija
 
   function getResources() {
     const q = searchQRef.current.toLowerCase()
@@ -343,6 +338,7 @@ export default function AdminKalendarPage() {
   async function saveRezervacija() {
     if (!rezForm.br_tablica || !rezForm.ime_prezime) { alert('Unesite tablice i ime!'); return }
     setSaving(true)
+    addLog(`SAVE START: id=${rezForm.id || 'NEW'} tablica=${rezForm.br_tablica} ime=${rezForm.ime_prezime}`)
     const dana = calcDana(rezForm)
     const ukupno = calcUkupno(rezForm)
     const payload = {
@@ -485,6 +481,17 @@ export default function AdminKalendarPage() {
           : !fcLoaded ? <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>Učitavam kalendar...</div>
           : <div ref={calendarRef} />}
       </div>
+
+      {/* DEBUG PANEL — privremeno */}
+      {debugLog.length > 0 && (
+        <div style={{ background: '#1a1f2e', borderRadius: 8, padding: 12, fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontWeight: 700, color: '#1D9E75' }}>DEBUG LOG</span>
+            <button onClick={() => setDebugLog([])} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 11 }}>Obriši</button>
+          </div>
+          {debugLog.map((l, i) => <div key={i} style={{ color: l.includes('error') ? '#f97316' : '#e2e8f0', marginBottom: 2 }}>{l}</div>)}
+        </div>
+      )}
 
       {showRezModal && (
         <RezervacijaModal form={rezForm} setForm={setRezForm} vozila={vozilaLok}
