@@ -51,17 +51,6 @@ function rezToForm(r: KalRezervacija): RezForm {
   }
 }
 
-function rezToEvent(r: KalRezervacija) {
-  return {
-    id: String(r.id),
-    resourceId: r.br_tablica,
-    start: `${r.od_datuma}T${r.vreme_izdavanja || '10:00'}`,
-    end: `${r.do_datuma}T${r.vreme_povratka || '10:00'}`,
-    title: r.ime_prezime,
-    className: r.daily_status === 'Izdato' ? 'ev-izdato' : r.daily_status === 'Nije izdato' ? 'ev-nije-izdato' : 'ev-cekanje',
-  }
-}
-
 export default function AdminKalendarPage() {
   const calendarRef = useRef<HTMLDivElement>(null)
   const calInstanceRef = useRef<any>(null)
@@ -69,6 +58,8 @@ export default function AdminKalendarPage() {
   const currentLokRef = useRef('CRNA GORA')
   const [vozila, setVozila] = useState<VoziloOption[]>([])
   const vozilaRef = useRef<VoziloOption[]>([])
+  // Rezervacije kao STATE — React re-render osvježava kalendar
+  const [rezervacije, setRezervacije] = useState<KalRezervacija[]>([])
   const rezervacijeRef = useRef<KalRezervacija[]>([])
   const [duznici, setDuznici] = useState<Duznik[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,14 +140,6 @@ export default function AdminKalendarPage() {
     document.head.appendChild(link)
   }, [])
 
-  // Osvježi samo evente u postojećem kalendaru — BEZ reinicijalizacije
-  const refreshEvents = useCallback((rez: KalRezervacija[]) => {
-    const cal = calInstanceRef.current
-    if (!cal) return
-    cal.removeAllEvents()
-    rez.filter(r => r.br_tablica).forEach(r => cal.addEvent(rezToEvent(r)))
-  }, [])
-
   const loadAll = useCallback(async () => {
     setLoading(true)
     const [{ data: v }, { data: r }, { data: d }] = await Promise.all([
@@ -165,21 +148,23 @@ export default function AdminKalendarPage() {
       supabase.from('duznici').select('*').order('ukupan_dug', { ascending: false }),
     ])
     if (v) { setVozila(v); vozilaRef.current = v }
-    if (r) { rezervacijeRef.current = r }
+    if (r) { 
+      setRezervacije(r)
+      rezervacijeRef.current = r
+    }
     if (d) setDuznici(d)
     setLoading(false)
     updateStats(v || [], r || [])
   }, [])
 
-  // Samo fetchuj rezervacije i osvježi evente
-  const refreshRez = useCallback(async () => {
+  async function fetchRez() {
     const { data } = await supabase.from('rezervacije').select('*')
     if (data) {
+      setRezervacije(data)
       rezervacijeRef.current = data
-      refreshEvents(data)
       updateStats(vozilaRef.current, data)
     }
-  }, [refreshEvents])
+  }
 
   function updateStats(v: any[], r: any[]) {
     const lok = currentLokRef.current
@@ -193,19 +178,14 @@ export default function AdminKalendarPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // Real-time — samo osvježi evente
+  // Real-time
   useEffect(() => {
-    const ch = supabase.channel('kal-rt3')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rezervacije' }, async () => {
-        const { data } = await supabase.from('rezervacije').select('*')
-        if (data) {
-          rezervacijeRef.current = data
-          refreshEvents(data)
-          updateStats(vozilaRef.current, data)
-        }
+    const ch = supabase.channel('kal-rt4')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rezervacije' }, () => {
+        fetchRez()
       }).subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [refreshEvents])
+  }, [])
 
   function getResources() {
     const q = searchQRef.current.toLowerCase()
@@ -219,7 +199,18 @@ export default function AdminKalendarPage() {
       }))
   }
 
-  // Init kalendar — samo kad se promijeni lokacija ili inicijalno
+  function getEvents(rez: KalRezervacija[]) {
+    return rez.filter(r => r.br_tablica).map(r => ({
+      id: String(r.id),
+      resourceId: r.br_tablica,
+      start: `${r.od_datuma}T${r.vreme_izdavanja || '10:00'}`,
+      end: `${r.do_datuma}T${r.vreme_povratka || '10:00'}`,
+      title: r.ime_prezime,
+      className: r.daily_status === 'Izdato' ? 'ev-izdato' : r.daily_status === 'Nije izdato' ? 'ev-nije-izdato' : 'ev-cekanje',
+    }))
+  }
+
+  // Init kalendar — samo inicijalno i kad se promijeni lokacija
   useEffect(() => {
     if (!fcLoaded || loading || !calendarRef.current) return
     const FC = (window as any).FullCalendar
@@ -242,7 +233,10 @@ export default function AdminKalendarPage() {
       slotLabelFormat: [{ weekday: 'short' }, { day: 'numeric' }],
       height: 'calc(100vh - 210px)',
       resources: getResources(),
-      events: rezervacijeRef.current.filter(r => r.br_tablica).map(rezToEvent),
+      // Events kao FUNKCIJA — FullCalendar poziva ovo svaki put kad pozovemo refetchEvents()
+      events: (_info: any, successCallback: any) => {
+        successCallback(getEvents(rezervacijeRef.current))
+      },
 
       resourceLabelContent: (arg: any) => {
         const v = vozilaRef.current.find(v => v.license_plate === arg.resource.id)
@@ -279,16 +273,14 @@ export default function AdminKalendarPage() {
         const stariRes = info.oldResource ? info.oldResource.id : resId
         const promijenjenoVozilo = info.newResource && info.newResource.id !== stariRes
         const poruka = promijenjenoVozilo
-          ? `Sigurno premjestiti rezervaciju?\n\n👤 ${info.event.title}\n🚗 Vozilo: ${stariRes} → ${resId}\n📅 Datum: ${startIso} – ${endIso}`
-          : `Sigurno promijeniti datum rezervacije?\n\n👤 ${info.event.title}\n📅 Novi termin: ${startIso} – ${endIso}`
+          ? `Sigurno premjestiti rezervaciju?\n\n👤 ${info.event.title}\n🚗 ${stariRes} → ${resId}\n📅 ${startIso} – ${endIso}`
+          : `Sigurno promijeniti datum?\n\n👤 ${info.event.title}\n📅 ${startIso} – ${endIso}`
         if (!window.confirm(poruka)) { info.revert(); return }
         const payload: any = { od_datuma: startIso, do_datuma: endIso }
         if (resId) payload.br_tablica = resId
         const { error } = await supabase.from('rezervacije').update(payload).eq('id', info.event.id)
         if (error) { alert('Greška: ' + error.message); info.revert(); return }
         await supabase.from('logovi').insert([{ akcija: `Drag&Drop REZ #${info.event.id} → ${resId}, ${startIso}–${endIso}` }])
-        const idx = rezervacijeRef.current.findIndex(r => r.id === parseInt(info.event.id))
-        if (idx !== -1) rezervacijeRef.current[idx] = { ...rezervacijeRef.current[idx], ...payload }
       },
 
       eventClick: (info: any) => {
@@ -310,6 +302,13 @@ export default function AdminKalendarPage() {
     calInstanceRef.current = cal
     return () => { cal.destroy(); calInstanceRef.current = null }
   }, [fcLoaded, loading, currentLok])
+
+  // Kad se rezervacije promijene — pozovi refetchEvents
+  useEffect(() => {
+    if (calInstanceRef.current && !loading) {
+      calInstanceRef.current.refetchEvents()
+    }
+  }, [rezervacije])
 
   useEffect(() => {
     searchQRef.current = searchQ
@@ -366,26 +365,18 @@ export default function AdminKalendarPage() {
       naplaceno: rezForm.naplaceno, ukupno_naplata: ukupno, broj_dana: dana,
     }
 
-    let savedId = rezForm.id
     if (rezForm.id) {
       await supabase.from('rezervacije').update(payload).eq('id', rezForm.id)
       await supabase.from('logovi').insert([{ akcija: `Izmijenjena REZ #${rezForm.id}` }])
     } else {
-      const { data: inserted } = await supabase.from('rezervacije').insert([payload]).select().single()
-      savedId = inserted?.id
+      await supabase.from('rezervacije').insert([payload])
       await supabase.from('logovi').insert([{ akcija: `Kreirana rezervacija za ${rezForm.ime_prezime}` }])
     }
 
     setSaving(false)
     setShowRezModal(false)
-
-    // Odmah ažuriraj lokalnu listu i kalendar bez reinicijalizacije
-    const { data: newRez } = await supabase.from('rezervacije').select('*')
-    if (newRez) {
-      rezervacijeRef.current = newRez
-      refreshEvents(newRez)
-      updateStats(vozilaRef.current, newRez)
-    }
+    // fetchRez ažurira state → useEffect detektuje promjenu → refetchEvents
+    await fetchRez()
   }
 
   async function deleteRezervacija() {
@@ -396,12 +387,7 @@ export default function AdminKalendarPage() {
     await supabase.from('rezervacije').delete().eq('id', rezForm.id)
     await supabase.from('logovi').insert([{ akcija: `Obrisana REZ #${rezForm.id}` }])
     setShowRezModal(false)
-    const { data: newRez } = await supabase.from('rezervacije').select('*')
-    if (newRez) {
-      rezervacijeRef.current = newRez
-      refreshEvents(newRez)
-      updateStats(vozilaRef.current, newRez)
-    }
+    await fetchRez()
   }
 
   async function razduziDuznika(br_v: string, trenutniDug: number) {
