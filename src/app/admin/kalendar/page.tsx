@@ -305,15 +305,7 @@ export default function AdminKalendarPage() {
     return () => { cal.destroy(); calInstanceRef.current = null }
   }, [fcLoaded, loading, currentLok])
 
-  // Kad se rezervacije promijene — pozovi refetchEvents
-  useEffect(() => {
-    if (calInstanceRef.current) {
-      // requestAnimationFrame osigurava da se poziv desi nakon što React završi render
-      requestAnimationFrame(() => {
-        calInstanceRef.current?.refetchEvents()
-      })
-    }
-  }, [rezervacije])
+  // useEffect za rezervacije uklonjen — refetchEvents se poziva direktno
 
   useEffect(() => {
     searchQRef.current = searchQ
@@ -380,12 +372,15 @@ export default function AdminKalendarPage() {
 
     setSaving(false)
     setShowRezModal(false)
-    // Fetchuj rezervacije i direktno pozovi refetchEvents nakon što se React re-render završi
     const { data: newRez } = await supabase.from('rezervacije').select('*')
     if (newRez) {
       rezervacijeRef.current = newRez
       updateStats(vozilaRef.current, newRez)
       setRezervacije([...newRez])
+      // Pozovi refetchEvents direktno — kalendar je živ jer se loading nije mijenjao
+      setTimeout(() => {
+        calInstanceRef.current?.refetchEvents()
+      }, 50)
     }
   }
 
@@ -402,6 +397,9 @@ export default function AdminKalendarPage() {
       rezervacijeRef.current = newRez
       updateStats(vozilaRef.current, newRez)
       setRezervacije([...newRez])
+      setTimeout(() => {
+        calInstanceRef.current?.refetchEvents()
+      }, 50)
     }
   }
 
