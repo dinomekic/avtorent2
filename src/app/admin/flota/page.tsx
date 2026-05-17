@@ -205,10 +205,25 @@ export default function AdminFleetPage() {
       name: noviAgregirani
     }).eq('id', regVehicle.id)
 
+    // Ažuriraj regVehicle state sa novim podacima
+    setRegVehicle(prev => prev ? {
+      ...prev,
+      license_plate: noviPlate,
+      istek_reg: regForm.istek_reg,
+      mjesto_reg: regForm.mjesto_reg || prev.mjesto_reg,
+    } : prev)
+
     setRegSaving(false)
-    setShowRegModal(false)
-    setRegVehicle(null)
     fetchData()
+
+    // Ostani u modalu, pređi na Istorija tab i refreshaj historiju
+    const { data: newHistory } = await supabase
+      .from('vehicle_reg_history')
+      .select('*')
+      .eq('vehicle_id', regVehicle.id)
+      .order('created_at', { ascending: false })
+    setRegHistory(newHistory || [])
+    setRegTab('istorija')
     alert('✅ Registracija sačuvana!')
   }
 
