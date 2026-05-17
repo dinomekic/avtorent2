@@ -590,42 +590,47 @@ export default function AdminFleetPage() {
               )}
               {regTab === 'istorija' && (
                 <div>
-                  {regHistoryLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
-                    : regHistory.length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema historije.</div>
-                    : regHistory.map((r, i) => {
-                      const sljedeci = regHistory[i + 1] // stariji zapis
-                      const promjenjeneTablice = sljedeci && sljedeci.license_plate && r.license_plate && sljedeci.license_plate !== r.license_plate
-                      return (
-                      <div key={r.id} style={{ border: `1px solid ${i === 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, background: i === 0 ? '#f0fdf8' : '#fff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                          <div>
-                            {promjenjeneTablice ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#9ca3af', textDecoration: 'line-through' }}>{sljedeci.license_plate}</span>
-                                <span style={{ fontSize: 11, color: '#9ca3af' }}>→</span>
-                                <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#185FA5' }}>{r.license_plate}</span>
-                                <span style={{ fontSize: 10, background: '#E6F1FB', color: '#0C447C', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }}>nove tablice</span>
+                  {regHistoryLoading ? (
+                    <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af' }}>Učitavanje...</div>
+                  ) : regHistory.length === 0 ? (
+                    <div style={{ padding: 30, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 10 }}>Nema historije.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {regHistory.map((r, i) => {
+                        const sljedeci = regHistory[i + 1]
+                        const promjenjeneTablice = sljedeci && sljedeci.license_plate && r.license_plate && sljedeci.license_plate !== r.license_plate
+                        return (
+                          <div key={r.id} style={{ border: `1px solid ${i === 0 ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px', background: i === 0 ? '#f0fdf8' : '#fff' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                              <div>
+                                {promjenjeneTablice ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#9ca3af', textDecoration: 'line-through' }}>{sljedeci.license_plate}</span>
+                                    <span style={{ fontSize: 11, color: '#9ca3af' }}>→</span>
+                                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#185FA5' }}>{r.license_plate}</span>
+                                    <span style={{ fontSize: 10, background: '#E6F1FB', color: '#0C447C', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }}>nove tablice</span>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span>
+                                )}
                               </div>
-                            ) : (
-                              <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.license_plate || '—'}</span>
+                              <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0, marginLeft: 8 }}>{r.datum_registracije || new Date(r.created_at).toLocaleDateString('sr-RS')}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12 }}>
+                              {r.istek_reg && <span>Istek: <strong>{r.istek_reg}</strong></span>}
+                              {r.mjesto_reg && <span>Mjesto: <strong>{r.mjesto_reg}</strong></span>}
+                              {r.created_by && <span>Agent: <strong>{r.created_by}</strong></span>}
+                            </div>
+                            {r.napomena && !r.napomena.startsWith('[Stari') && (
+                              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' }}>{r.napomena}</div>
                             )}
                           </div>
-                          <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0, marginLeft: 8 }}>{r.datum_registracije || new Date(r.created_at).toLocaleDateString('sr-RS')}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: '#6b7280', display: 'flex', gap: 12 }}>
-                          {r.istek_reg && <span>Istek: <strong>{r.istek_reg}</strong></span>}
-                          {r.mjesto_reg && <span>Mjesto: <strong>{r.mjesto_reg}</strong></span>}
-                          {r.created_by && <span>Agent: <strong>{r.created_by}</strong></span>}
-                        </div>
-                        {r.napomena && !r.napomena.startsWith('[Stari') && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' }}>{r.napomena}</div>}
-                      </div>
-                    )
-                  })
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
