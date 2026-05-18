@@ -107,7 +107,32 @@ export default function AdminKoristenjePage() {
     return new Date(b.timestamp_upisa || 0).getTime() - new Date(a.timestamp_upisa || 0).getTime()
   })
 
-  const totalKm = filtered.reduce((s, k) => s + parseFloat(String(k.predjena_km || k.kilometraza || 0)), 0)
+  const [zaduzujemId, setZaduzujemId] = useState<string | null>(null)
+  const [zaduzIznos, setZaduzIznos] = useState('')
+  const [zaduzSaving, setZaduzSaving] = useState(false)
+
+  async function handleZaduzi(d: typeof dugSorted[0]) {
+    if (!zaduzIznos || parseFloat(zaduzIznos) <= 0) { alert('Unesite iznos!'); return }
+    setZaduzSaving(true)
+    const iznos = parseFloat(zaduzIznos)
+    const id = Date.now().toString() + Math.random().toString(36).slice(2, 6)
+    await supabase.from('transakcije').insert([{
+      id,
+      tip_transakcije: 'priliv',
+      datum: new Date().toISOString().split('T')[0],
+      kategorija: 'Uplata duga za službeno vozilo',
+      iznos: Math.abs(iznos),
+      osoba: d.ime,
+      osobaemail: d.email,
+      komentar: `Uplata duga za km — ${d.ime}`,
+      timestamp_upisa: new Date().toISOString(),
+      status: 'Zavrseno',
+    }])
+    setZaduzSaving(false)
+    setZaduzujemId(null)
+    setZaduzIznos('')
+    fetchData()
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 0 80px' }}>
@@ -239,64 +264,109 @@ export default function AdminKoristenjePage() {
             Cijena po km: <strong>1.44€/100km × 8 = {(KM_CIJENA * 100).toFixed(2)}€/100km</strong>
           </div>
 
+          {/* SUMMARY BADGES */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 14 }}>
+            {dugSorted.filter(d => d.dug > 1).map(d => (
+              <div key={d.email} style={{ background: '#FCEBEB', border: '1px solid #DC2626', borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: '#DC2626', cursor: 'pointer' }}
+                onClick={() => setZaduzujemId(d.email)}>
+                ⚠️ {d.ime}: {d.dug.toFixed(2)}€
+              </div>
+            ))}
+            {dugSorted.filter(d => d.dug < -1).map(d => (
+              <div key={d.email} style={{ background: '#E1F5EE', border: '1px solid #1D9E75', borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: '#085041' }}>
+                ✅ {d.ime}: pretplata {Math.abs(d.dug).toFixed(2)}€
+              </div>
+            ))}
+          </div>
+
           <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
-            <div style={{ background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const }}>
+            <div style={{ background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb', display: 'grid', gridTemplateColumns: '1fr auto', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const }}>
               <span>Agent</span>
-              <div style={{ display: 'flex', gap: 40 }}>
+              <div style={{ display: 'flex', gap: 32 }}>
                 <span>Km ukupno</span>
                 <span>Plaćeno</span>
-                <span>Dug</span>
+                <span style={{ minWidth: 80, textAlign: 'right' as const }}>Stanje</span>
+                <span style={{ width: 100 }}></span>
               </div>
             </div>
             {dugSorted.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Nema dugova.</div>
-            ) : dugSorted.map(d => (
-              <div key={d.email} style={{ padding: '12px 14px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#111' }}>{d.ime}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af' }}>{d.email}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 32, alignItems: 'center', fontSize: 13 }}>
-                    <div style={{ textAlign: 'right' as const }}>
-                      <div style={{ fontWeight: 600, color: '#374151' }}>{d.ukupnoKm.toFixed(0)} km</div>
-                      <div style={{ fontSize: 10, color: '#9ca3af' }}>× {(KM_CIJENA).toFixed(4)}€/km</div>
+              <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Nema podataka.</div>
+            ) : dugSorted.map(d => {
+              const isDug = d.dug > 1
+              const isPretplata = d.dug < -1
+              const isZaduzu = zaduzujemId === d.email
+              return (
+                <div key={d.email} style={{ borderBottom: '1px solid #f3f4f6', background: isZaduzu ? '#f0fdf8' : '#fff' }}>
+                  <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#111' }}>{d.ime}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{d.email}</div>
                     </div>
-                    <div style={{ textAlign: 'right' as const }}>
-                      <div style={{ fontWeight: 600, color: '#1D9E75' }}>{d.uplaceno.toFixed(2)}€</div>
-                      <div style={{ fontSize: 10, color: '#9ca3af' }}>uplaćeno</div>
-                    </div>
-                    <div style={{ textAlign: 'right' as const, minWidth: 80 }}>
-                      <div style={{ fontWeight: 800, fontSize: 16, color: d.dug > 1 ? '#DC2626' : '#1D9E75' }}>
-                        {d.dug > 0 ? `${d.dug.toFixed(2)}€` : '✓'}
+                    <div style={{ display: 'flex', gap: 32, alignItems: 'center', fontSize: 13 }}>
+                      <div style={{ textAlign: 'right' as const }}>
+                        <div style={{ fontWeight: 600, color: '#374151' }}>{d.ukupnoKm.toFixed(0)} km</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af' }}>{(d.ukupnoKm * KM_CIJENA).toFixed(2)}€ ukupno</div>
                       </div>
-                      <div style={{ fontSize: 10, color: '#9ca3af' }}>{d.dug > 0 ? 'dug' : 'izmireno'}</div>
+                      <div style={{ textAlign: 'right' as const }}>
+                        <div style={{ fontWeight: 600, color: '#1D9E75' }}>{d.uplaceno.toFixed(2)}€</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af' }}>uplaćeno</div>
+                      </div>
+                      <div style={{ textAlign: 'right' as const, minWidth: 80 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: isDug ? '#DC2626' : isPretplata ? '#1D9E75' : '#9ca3af' }}>
+                          {isDug ? `${d.dug.toFixed(2)}€` : isPretplata ? `+${Math.abs(d.dug).toFixed(2)}€` : '✓'}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#9ca3af' }}>{isDug ? 'dug' : isPretplata ? 'pretplata' : 'izmireno'}</div>
+                      </div>
+                      <div style={{ width: 100 }}>
+                        {isDug && (
+                          <button onClick={() => { setZaduzujemId(isZaduzu ? null : d.email); setZaduzIznos(d.dug.toFixed(2)) }}
+                            style={{ padding: '5px 10px', fontSize: 11, background: isZaduzu ? '#f3f4f6' : '#DC2626', color: isZaduzu ? '#374151' : '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600, width: '100%' }}>
+                            {isZaduzu ? 'Otkaži' : '💳 Zaduži'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Breakdown po tablicama */}
-                {(() => {
-                  const byTablice: Record<string, number> = {}
-                  koristenje.filter(k => (k.email || '').toLowerCase().trim() === d.email).forEach(k => {
-                    const t = k.tablice || 'Nepoznato'
-                    const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
-                    byTablice[t] = (byTablice[t] || 0) + km
-                  })
-                  const entries = Object.entries(byTablice).filter(([, km]) => km > 0).sort((a, b) => b[1] - a[1])
-                  if (entries.length === 0) return null
-                  return (
-                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
-                      {entries.map(([tab, km]) => (
-                        <span key={tab} style={{ fontSize: 11, background: '#f3f4f6', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 600 }}>
-                          {tab}: {km.toFixed(0)}km · {(km * KM_CIJENA).toFixed(2)}€
-                        </span>
-                      ))}
+                  {/* Zaduži forma */}
+                  {isZaduzu && (
+                    <div style={{ padding: '10px 14px 14px', borderTop: '1px solid #e5e7eb', background: '#f0fdf8' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#085041', marginBottom: 8 }}>Zaduži agenta — uplata duga za km</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input type="number" step="0.01" value={zaduzIznos} onChange={e => setZaduzIznos(e.target.value)}
+                          placeholder="Iznos (€)" style={{ ...inp, maxWidth: 140, fontSize: 14, fontWeight: 700 }} />
+                        <button onClick={() => handleZaduzi(d)} disabled={zaduzSaving || !zaduzIznos}
+                          style={{ padding: '8px 18px', background: !zaduzIznos ? '#9ca3af' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                          {zaduzSaving ? '...' : '✓ Potvrdi uplatu'}
+                        </button>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>Upisaće se kao <strong>Uplata duga za službeno vozilo</strong></div>
+                      </div>
                     </div>
-                  )
-                })()}
-              </div>
-            ))}
+                  )}
+
+                  {/* Breakdown po tablicama */}
+                  {(() => {
+                    const byTablice: Record<string, number> = {}
+                    koristenje.filter(k => (k.email || '').toLowerCase().trim() === d.email).forEach(k => {
+                      const t = k.tablice || 'Nepoznato'
+                      const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
+                      byTablice[t] = (byTablice[t] || 0) + km
+                    })
+                    const entries = Object.entries(byTablice).filter(([, km]) => km > 0).sort((a, b) => b[1] - a[1])
+                    if (entries.length === 0) return null
+                    return (
+                      <div style={{ padding: '0 14px 12px', display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
+                        {entries.map(([tab, km]) => (
+                          <span key={tab} style={{ fontSize: 11, background: '#f3f4f6', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 600 }}>
+                            {tab}: {km.toFixed(0)}km · {(km * KM_CIJENA).toFixed(2)}€
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )
+            })}
           </div>
         </>
       )}
