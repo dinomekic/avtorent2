@@ -136,6 +136,10 @@ export default function AdminKoristenjePage() {
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 0 80px' }}>
+      <style>{`
+        @media (min-width: 641px) { .mobile-only { display: none !important; } }
+        @media (max-width: 640px) { .desktop-only { display: none !important; } }
+      `}</style>
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
@@ -178,12 +182,12 @@ export default function AdminKoristenjePage() {
           {/* FILTERI */}
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Pretraži tablice, ime, destinacija..." style={{ ...inp, marginBottom: 8, fontSize: 13 }} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)} style={{ ...inp, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+              <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120 }}>
                 <option value="">Svi agenti</option>
                 {agenti.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
-              <select value={filterTablice} onChange={e => setFilterTablice(e.target.value)} style={{ ...inp, flex: 1 }}>
+              <select value={filterTablice} onChange={e => setFilterTablice(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120 }}>
                 <option value="">Sve tablice</option>
                 {tabliceList.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -202,57 +206,99 @@ export default function AdminKoristenjePage() {
           ) : filtered.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>Nema zapisa.</div>
           ) : (
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' as const }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
-                  <thead>
-                    <tr style={{ background: '#f9fafb' }}>
-                      {['Datum/Vrijme', 'Agent', 'Tablice', 'KM', 'Destinacija', 'Zaduženje', 'Povratak', 'Ukupno', 'Status', ''].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' as const }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(k => {
-                      const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
-                      const cijena = km * KM_CIJENA
-                      const isAktivno = k.status === 'Aktivno'
-                      return (
-                        <tr key={k.id} style={{ borderBottom: '1px solid #f3f4f6', background: isAktivno ? '#f0fdf8' : '#fff', borderLeft: isAktivno ? '3px solid #1D9E75' : '3px solid transparent' }}>
-                          <td style={{ padding: '8px 10px', color: '#9ca3af', whiteSpace: 'nowrap' as const }}>
-                            {k.timestamp_upisa ? new Date(k.timestamp_upisa).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: '2-digit' }) : k.timestamp_tekst || '—'}
-                          </td>
-                          <td style={{ padding: '8px 10px', fontWeight: 600, color: '#111' }}>{k.ime_prezime || k.email || '—'}</td>
-                          <td style={{ padding: '8px 10px' }}>
-                            <input defaultValue={k.tablice || ''} onBlur={e => updateField(k.id, 'tablice', e.target.value)} style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, width: 90 }} />
-                          </td>
-                          <td style={{ padding: '8px 10px' }}>
-                            <div style={{ fontWeight: 700, color: '#111' }}>{km > 0 ? `${km.toFixed(0)} km` : '—'}</div>
-                            {cijena > 0 && <div style={{ fontSize: 10, color: '#DC2626', fontWeight: 600 }}>{cijena.toFixed(2)}€</div>}
-                          </td>
-                          <td style={{ padding: '8px 10px' }}>
-                            <input defaultValue={k.destinacija || ''} onBlur={e => updateField(k.id, 'destinacija', e.target.value)} style={{ ...inp, minWidth: 120 }} />
-                          </td>
-                          <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11 }}>{k.vreme_zaduzenja || '—'}</td>
-                          <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11 }}>{k.vreme_povratka || '—'}</td>
-                          <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11, whiteSpace: 'nowrap' as const }}>{k.ukupno_vremena || '—'}</td>
-                          <td style={{ padding: '8px 10px' }}>
-                            {k.status && (
-                              <span style={{ fontSize: 10, background: isAktivno ? '#E1F5EE' : '#f3f4f6', color: isAktivno ? '#085041' : '#6b7280', padding: '2px 8px', borderRadius: 20, fontWeight: isAktivno ? 700 : 400 }}>
-                                {isAktivno ? '🟢 Aktivno' : k.status}
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '8px 10px' }}>
-                            <button onClick={() => deleteRow(k.id)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+            <>
+              {/* DESKTOP tabela */}
+              <div className="desktop-only" style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' as const }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f9fafb' }}>
+                        {['Datum', 'Agent', 'Tablice', 'KM', 'Destinacija', 'Zaduženje', 'Povratak', 'Status', ''].map(h => (
+                          <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' as const }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map(k => {
+                        const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
+                        const cijena = km * KM_CIJENA
+                        const isAktivno = k.status === 'Aktivno'
+                        return (
+                          <tr key={k.id} style={{ borderBottom: '1px solid #f3f4f6', background: isAktivno ? '#f0fdf8' : '#fff', borderLeft: isAktivno ? '3px solid #1D9E75' : '3px solid transparent' }}>
+                            <td style={{ padding: '8px 10px', color: '#9ca3af', whiteSpace: 'nowrap' as const }}>
+                              {k.timestamp_upisa ? new Date(k.timestamp_upisa).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: '2-digit' }) : k.timestamp_tekst || '—'}
+                            </td>
+                            <td style={{ padding: '8px 10px', fontWeight: 600, color: '#111' }}>{k.ime_prezime || k.email || '—'}</td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <input defaultValue={k.tablice || ''} onBlur={e => updateField(k.id, 'tablice', e.target.value)} style={{ ...inp, fontFamily: 'monospace', fontWeight: 700, width: 90 }} />
+                            </td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <div style={{ fontWeight: 700, color: '#111' }}>{km > 0 ? `${km.toFixed(0)} km` : '—'}</div>
+                              {cijena > 0 && <div style={{ fontSize: 10, color: '#DC2626', fontWeight: 600 }}>{cijena.toFixed(2)}€</div>}
+                            </td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <input defaultValue={k.destinacija || ''} onBlur={e => updateField(k.id, 'destinacija', e.target.value)} style={{ ...inp, minWidth: 120 }} />
+                            </td>
+                            <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11 }}>{k.vreme_zaduzenja || '—'}</td>
+                            <td style={{ padding: '8px 10px', color: '#374151', fontSize: 11 }}>{k.vreme_povratka || '—'}</td>
+                            <td style={{ padding: '8px 10px' }}>
+                              {k.status && (
+                                <span style={{ fontSize: 10, background: isAktivno ? '#E1F5EE' : '#f3f4f6', color: isAktivno ? '#085041' : '#6b7280', padding: '2px 8px', borderRadius: 20, fontWeight: isAktivno ? 700 : 400 }}>
+                                  {isAktivno ? '🟢 Aktivno' : k.status}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <button onClick={() => deleteRow(k.id)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              {/* MOBILNE kartice */}
+              <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+                {filtered.map(k => {
+                  const km = parseFloat(String(k.predjena_km || k.kilometraza || 0))
+                  const cijena = km * KM_CIJENA
+                  const isAktivno = k.status === 'Aktivno'
+                  return (
+                    <div key={k.id} style={{ border: `1px solid ${isAktivno ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 10, background: isAktivno ? '#f0fdf8' : '#fff', padding: '10px 12px', borderLeft: `3px solid ${isAktivno ? '#1D9E75' : '#e5e7eb'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#111' }}>{k.ime_prezime || k.email || '—'}</div>
+                          <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                            {k.timestamp_upisa ? new Date(k.timestamp_upisa).toLocaleDateString('sr-RS') : k.timestamp_tekst || '—'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {k.status && (
+                            <span style={{ fontSize: 10, background: isAktivno ? '#E1F5EE' : '#f3f4f6', color: isAktivno ? '#085041' : '#6b7280', padding: '2px 8px', borderRadius: 20, fontWeight: isAktivno ? 700 : 400 }}>
+                              {isAktivno ? '🟢 Aktivno' : k.status}
+                            </span>
+                          )}
+                          <button onClick={() => deleteRow(k.id)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, fontSize: 12 }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, background: '#f3f4f6', padding: '1px 8px', borderRadius: 4 }}>{k.tablice || '—'}</span>
+                        {km > 0 && <span style={{ fontWeight: 700 }}>{km.toFixed(0)} km {cijena > 0 && <span style={{ color: '#DC2626', fontSize: 11 }}>({cijena.toFixed(2)}€)</span>}</span>}
+                        {k.destinacija && <span style={{ color: '#374151' }}>📍 {k.destinacija}</span>}
+                      </div>
+                      {(k.vreme_zaduzenja || k.vreme_povratka) && (
+                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                          {k.vreme_zaduzenja && <span>↗ {k.vreme_zaduzenja}</span>}
+                          {k.vreme_povratka && <span style={{ marginLeft: 10 }}>↙ {k.vreme_povratka}</span>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </>
       )}
