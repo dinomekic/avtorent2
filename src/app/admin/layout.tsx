@@ -23,7 +23,7 @@ const ADMIN_NAV = [
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
   { href: '/admin/finansije', label: '💰 Finansije' },
   { href: '/admin/finansije-panel', label: '💸 Finansije panel' },
-  { href: '/admin/koristenje', label: '🚘 Koristenje vozila' },
+  { href: '/admin/koristenje', label: '🙄 Koristenje vozila' },
   { href: '/admin/partneri', label: '🤝 Partneri' },
   { href: '/admin/moji-partneri', label: '👥 Moji partneri' },
   { href: '/admin/vozila', label: '🚙 Vozila' },
