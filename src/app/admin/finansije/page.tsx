@@ -445,15 +445,15 @@ export default function FinansijePage() {
         <div className="saldo-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div style={{ background: saldo >= 0 ? '#E1F5EE' : '#FCEBEB', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Saldo</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: saldo >= 0 ? '#085041' : '#dc2626' }}>{saldo.toFixed(0)}€</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: saldo >= 0 ? '#085041' : '#dc2626' }}>{saldo.toFixed(2)}€</div>
           </div>
           <div style={{ background: '#FAEEDA', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Firma dug</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#633806' }}>{firmaDug.toFixed(0)}€</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#633806' }}>{firmaDug.toFixed(2)}€</div>
           </div>
           <div style={{ background: '#E6F1FB', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>KM dug</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0C447C' }}>{kmDug.toFixed(0)}€</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0C447C' }}>{kmDug.toFixed(2)}€</div>
           </div>
         </div>
 
