@@ -147,6 +147,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <a href={link('/admin')} style={{ textDecoration: 'none' }}><Logo size="sm" /></a>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {agentName && <span style={{ fontSize: 12, color: '#6b7280' }}>{agentName.split(' ')[0]}</span>}
+            <button onClick={handleLogout}
+              style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: '1px solid #e5e7eb', borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}>
+              Odjavi
+            </button>
             <button onClick={() => setMenuOpen(o => !o)}
               style={{ background: menuOpen ? '#f0fdf8' : 'none', border: menuOpen ? '1px solid #1D9E75' : '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', fontSize: 18, cursor: 'pointer', color: menuOpen ? '#1D9E75' : '#374151', lineHeight: 1 }}>
               {menuOpen ? '✕' : '☰'}
@@ -189,8 +193,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ width: 210, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb' }}>
-          <a href={link('/admin')} style={{ textDecoration: 'none' }}><Logo size="md" /></a>
-          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, marginLeft: 36 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <a href={link('/admin')} style={{ textDecoration: 'none' }}><Logo size="md" /></a>
+            <button onClick={handleLogout}
+              style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: '1px solid #e5e7eb', borderRadius: 7, padding: '4px 9px', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+              Odjavi se
+            </button>
+          </div>
+          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>
+            {agentName && <span style={{ fontWeight: 500, color: '#374151' }}>{agentName} · </span>}
             {role === 'admin' ? 'admin' : 'agent'}
           </div>
         </div>
