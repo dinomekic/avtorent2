@@ -41,33 +41,47 @@ export default function NfcLoginPage() {
     setLoginState('reading')
 
     try {
-      const { data } = await supabase
-        .from('agents')
-        .select('full_name, role, email')
-        .eq('nfc_uid', cleanUid)
-        .eq('is_active', true)
-        .single()
+      // Server API kreira magic link token
+      const res = await fetch('/api/nfc-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: cleanUid }),
+      })
 
-      if (!data) {
+      if (!res.ok) {
         setLoginState('unknown')
-        resetAfter(3000)
+        resetAfter(4000)
         return
       }
 
-      setAgentName(data.full_name)
-      setAgentRole(data.role)
+      const { token, full_name, role } = await res.json()
+
+      // Verifikuj token — dobijamo pravu Supabase sesiju
+      const { data: authData, error: authErr } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: 'magiclink',
+      })
+
+      if (authErr || !authData.session) {
+        setLoginState('unknown')
+        resetAfter(4000)
+        return
+      }
+
+      setAgentName(full_name)
+      setAgentRole(role)
       setLoginState('success')
+
+      // Postavi cookije identično kao Google login
+      document.cookie = `avtorent-admin-token=${authData.session.access_token}; path=/; max-age=86400`
+      document.cookie = `avtorent-agent-name=${encodeURIComponent(full_name)}; path=/; max-age=86400`
 
       // Upiši sesiju
       await supabase.from('agent_sessions').insert({
-        agent_name: data.full_name,
+        agent_name: full_name,
         logged_in_at: new Date().toISOString(),
       })
 
-      // Postavi cookie
-      document.cookie = `avtorent-agent-name=${encodeURIComponent(data.full_name)}; path=/; max-age=86400`
-
-      // Redirect za 2s
       setTimeout(() => { window.location.href = '/admin' }, 2000)
 
     } catch {
