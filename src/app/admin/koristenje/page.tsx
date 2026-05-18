@@ -40,6 +40,10 @@ export default function AdminKoristenjePage() {
   const [activeTab, setActiveTab] = useState<'lista' | 'dugovi'>('lista')
   const agentName = getCookie('avtorent-agent-name')
 
+  const [zaduzujemId, setZaduzujemId] = useState<string | null>(null)
+  const [zaduzIznos, setZaduzIznos] = useState('')
+  const [zaduzSaving, setZaduzSaving] = useState(false)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     const [{ data: k }, { data: t }] = await Promise.all([
@@ -100,16 +104,12 @@ export default function AdminKoristenjePage() {
     const matchTablice = !filterTablice || k.tablice === filterTablice
     return matchQ && matchAgent && matchTablice
   }).sort((a, b) => {
-    // Aktivna uvijek na vrhu
     if (a.status === 'Aktivno' && b.status !== 'Aktivno') return -1
     if (b.status === 'Aktivno' && a.status !== 'Aktivno') return 1
-    // Onda po datumu — najnoviji prvo
     return new Date(b.timestamp_upisa || 0).getTime() - new Date(a.timestamp_upisa || 0).getTime()
   })
 
-  const [zaduzujemId, setZaduzujemId] = useState<string | null>(null)
-  const [zaduzIznos, setZaduzIznos] = useState('')
-  const [zaduzSaving, setZaduzSaving] = useState(false)
+  const totalKm = filtered.reduce((s, k) => s + parseFloat(String(k.predjena_km || k.kilometraza || 0)), 0)
 
   async function handleZaduzi(d: typeof dugSorted[0]) {
     if (!zaduzIznos || parseFloat(zaduzIznos) <= 0) { alert('Unesite iznos!'); return }
