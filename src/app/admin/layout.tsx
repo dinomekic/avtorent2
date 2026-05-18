@@ -9,7 +9,7 @@ const AGENT_NAV = [
   { href: '/admin/dan', label: '📅 Dnevni pregled' },
   { href: '/admin/rezervacije', label: '🚗 Rezervacije' },
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
-  { href: '/admin/finansije', label: '💰 Finansije' }, 
+  { href: '/admin/finansije', label: '💰 Finansije' },
   { href: '/admin/moji-partneri', label: '🤝 Moji partneri' },
   { href: '/admin/flota', label: '🚗 Flota' },
   { href: '/admin/pranje', label: '💦 Pranje vozila' },
@@ -23,7 +23,6 @@ const ADMIN_NAV = [
   { href: '/admin/kalendar', label: '🗓 Kalendar' },
   { href: '/admin/finansije', label: '💰 Finansije' },
   { href: '/admin/finansije-panel', label: '💸 Finansije panel' },
-  { href: '/admin/koristenje', label: '🚙 Korištenje vozila' },
   { href: '/admin/partneri', label: '🤝 Partneri' },
   { href: '/admin/moji-partneri', label: '👥 Moji partneri' },
   { href: '/admin/vozila', label: '🚙 Vozila' },
@@ -123,6 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [])
 
   if (pathname === '/admin/login') return <>{children}</>
+  if (pathname === '/login-kartica') return <>{children}</>
 
   const navItems = role === 'admin' ? ADMIN_NAV : AGENT_NAV
 
@@ -134,7 +134,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     await supabase.auth.signOut()
     document.cookie = 'avtorent-admin-token=; path=/; max-age=0'
     document.cookie = 'avtorent-agent-name=; path=/; max-age=0'
-    window.location.href = `${window.location.origin}/admin/login`
+    window.location.href = `${window.location.origin}/login-kartica`
   }
 
   // Linkovi sa punim origin-om da ostanu na istom domenu
