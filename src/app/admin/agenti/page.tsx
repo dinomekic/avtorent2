@@ -14,7 +14,7 @@ const LOK_FLAG: Record<string, string> = { 'CRNA GORA': '🇲🇪', 'BiH': '🇧
 type Agent = {
   id: string; email: string; full_name: string
   role: string; is_active: boolean; created_at: string
-  kalendar_lokacije: string[]
+  kalendar_lokacije: string[]; nfc_uid: string | null
 }
 
 export default function AdminAgentiPage() {
@@ -25,6 +25,8 @@ export default function AdminAgentiPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [editingLokId, setEditingLokId] = useState<string | null>(null)
+  const [editingNfcId, setEditingNfcId] = useState<string | null>(null)
+  const [nfcInput, setNfcInput] = useState('')
 
   useEffect(() => { fetchData() }, [])
 
@@ -63,6 +65,13 @@ export default function AdminAgentiPage() {
 
   async function changeRole(id: string, role: string) {
     await supabase.from('agents').update({ role }).eq('id', id)
+    fetchData()
+  }
+
+  async function saveNfcUid(id: string) {
+    await supabase.from('agents').update({ nfc_uid: nfcInput.trim() || null }).eq('id', id)
+    setEditingNfcId(null)
+    setNfcInput('')
     fetchData()
   }
 
@@ -112,7 +121,7 @@ export default function AdminAgentiPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
-                  {['Agent', 'Email', 'Uloga', 'Kalendar', 'Status', 'Dodan', ''].map(h => (
+                  {['Agent', 'Email', 'Uloga', 'NFC', 'Kalendar', 'Status', 'Dodan', ''].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
                   ))}
                 </tr>
@@ -137,7 +146,38 @@ export default function AdminAgentiPage() {
                       </select>
                     </td>
 
-                    {/* KALENDAR KOLONA */}
+                    {/* NFC KOLONA */}
+                    <td style={{ padding: '12px 14px' }}>
+                      {editingNfcId === a.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <input
+                            value={nfcInput}
+                            onChange={e => setNfcInput(e.target.value)}
+                            placeholder="Prisloni karticu..."
+                            autoFocus
+                            style={{ ...inp, fontSize: 12, padding: '5px 8px', fontFamily: 'monospace', width: 140 }}
+                            onKeyDown={e => { if (e.key === 'Enter') saveNfcUid(a.id) }}
+                          />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={() => saveNfcUid(a.id)}
+                              style={{ flex: 1, padding: '4px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓</button>
+                            <button onClick={() => { setEditingNfcId(null); setNfcInput('') }}
+                              style={{ flex: 1, padding: '4px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>✕</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {a.nfc_uid
+                            ? <div style={{ fontSize: 11, fontFamily: 'monospace', background: '#E1F5EE', color: '#085041', padding: '2px 7px', borderRadius: 6, marginBottom: 4, fontWeight: 600 }}>💳 {a.nfc_uid}</div>
+                            : <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>—</div>
+                          }
+                          <button onClick={() => { setEditingNfcId(a.id); setNfcInput(a.nfc_uid || '') }}
+                            style={{ padding: '3px 8px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
+                            ✏️ {a.nfc_uid ? 'Promijeni' : 'Dodaj'}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '12px 14px' }}>
                       {editingLokId === a.id ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
