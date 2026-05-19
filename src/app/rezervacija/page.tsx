@@ -142,7 +142,7 @@ function BookingPageContent() {
   const basePrice = originalBasePrice - partnerDiscountAmount
   // extrasTotal samo od filtriranih (odabranih)
   const extrasTotal = filteredExtras.filter(e => selectedExtras[e.id]).reduce((sum, e) => sum + getExtraTotal(e), 0)
-  const subtotalAfterPartner = basePrice + extrasTotal + insuranceTotal
+  const subtotalAfterPartner = basePrice + extrasTotal + insuranceTotal + form.transferFee
   const couponDiscountAmount = couponData ? Math.round(subtotalAfterPartner * (couponData.discount_percent / 100) * 100) / 100 : 0
   const total = subtotalAfterPartner - couponDiscountAmount
 
@@ -638,6 +638,11 @@ function BookingPageContent() {
                       <span>{extraName(e)}</span><span>{getExtraTotal(e)}€</span>
                     </div>
                   ))}
+                  {form.transferFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#6b7280' }}>
+                      <span>🚗 Transfer naknada</span><span>{form.transferFee}€</span>
+                    </div>
+                  )}
                   {couponData && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#1a56a0' }}>
                       <span>Kupon ({couponData.discount_percent}%)</span><span>-{couponDiscountAmount.toFixed(2)}€</span>
