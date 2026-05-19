@@ -180,12 +180,12 @@ export default function PotvrdastranicaPage() {
             rez.border_crossing !== 'Zabranjeno' ? ['Vožnja van granice', rez.border_crossing || 'Dozvoljeno'] : null,
             rez.insurance ? ['Osiguranje', rez.insurance] : null,
             rez.notes ? ['Napomena', rez.notes] : null,
-          ].filter(Boolean).map(([l, v]) => (
+          ].filter(Boolean).map((item) => { const [l, v] = item as [string, string]; return (
             <div key={l as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}>
               <span style={{ color: '#6b7280' }}>{l}</span>
               <span style={{ color: '#111', fontWeight: 500, maxWidth: 240, textAlign: 'right' as const }}>{v}</span>
             </div>
-          ))}
+          )})}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 0', fontSize: 15, fontWeight: 700 }}>
             <span>Ukupno</span>
             <span style={{ color: '#1D9E75' }}>{total}€</span>
