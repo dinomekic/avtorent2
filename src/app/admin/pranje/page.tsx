@@ -380,54 +380,7 @@ export default function AdminPranjePage() {
                 </tbody>
               </table>
             </div>
-
-            {/* MOBILNE kartice */}
-            <div>
-              {filteredOrders.length === 0
-                ? <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema naloga.</div>
-                : filteredOrders.map(o => {
-                  const st = STATUS_LABELS[o.status] || STATUS_LABELS.pending
-                  const partnerName = washPartners.find(p => p.id === o.wash_partner_id)?.name
-                  return (
-                    <div key={o.id} style={{ padding: '12px 14px', borderBottom: '1px solid #f3f4f6' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#111', marginBottom: 2 }}>{o.vehicle_name}</div>
-                          <div style={{ fontSize: 12, color: '#374151' }}>{o.wash_type_label}</div>
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: '#1D9E75', marginLeft: 12 }}>{o.price}€</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
-                        {o.assigned_to === 'partner'
-                          ? <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20 }}>{partnerName || 'Praonica'}</span>
-                          : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 20 }}>🧹 {o.agent_name}</span>}
-                        {o.assigned_to === 'partner' && (
-                          o.payout_status === 'unpaid'
-                            ? <span style={{ fontSize: 11, background: '#FCEBEB', color: '#791F1F', padding: '2px 8px', borderRadius: 20 }}>Neplaćeno</span>
-                            : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 20 }}>✓ Plaćeno</span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {o.assigned_to === 'partner' && o.status === 'done' && o.payout_status === 'unpaid' && (
-                          <button onClick={() => { setPayoutOrder(o); setPayoutAmount(String(o.price || '')); setPayoutNote('') }}
-                            style={{ padding: '7px 16px', fontSize: 12, border: '1px solid #1D9E75', borderRadius: 8, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>
-                            💰 Isplati
-                          </button>
-                        )}
-                        {o.status === 'pending' && (
-                          <button onClick={() => { setSelfPresetVehicleName(o.vehicle_name); setSelfPresetOrderId(o.id); setSelfWashCost(''); setSelfWashNote(''); setShowSelfWash(true) }}
-                            style={{ padding: '7px 16px', fontSize: 12, border: '1px solid #185FA5', borderRadius: 8, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>
-                            🧹 Ja ću oprati
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })
-              }
-            </div>
-          </>)}
+          )}
         </div>
       </>)}
 
