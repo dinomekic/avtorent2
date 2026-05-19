@@ -68,7 +68,20 @@ export default function AdminAgentiPage() {
     fetchData()
   }
 
-  async function saveNfcUid(id: string) {
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
+  const [editAgentForm, setEditAgentForm] = useState({ full_name: '', email: '' })
+  const [editAgentSaving, setEditAgentSaving] = useState(false)
+
+  async function saveAgent(id: string) {
+    setEditAgentSaving(true)
+    await supabase.from('agents').update({
+      full_name: editAgentForm.full_name.trim(),
+      email: editAgentForm.email.toLowerCase().trim(),
+    }).eq('id', id)
+    setEditAgentSaving(false)
+    setEditingAgentId(null)
+    fetchData()
+  }
     await supabase.from('agents').update({ nfc_uid: nfcInput.trim() || null }).eq('id', id)
     setEditingNfcId(null)
     setNfcInput('')
@@ -135,8 +148,33 @@ export default function AdminAgentiPage() {
                       </div>
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <div style={{ fontWeight: 500, color: '#111' }}>{a.full_name || '—'}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{a.email}</div>
+                      {editingAgentId === a.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <input value={editAgentForm.full_name} onChange={e => setEditAgentForm(f => ({ ...f, full_name: e.target.value }))}
+                            placeholder="Ime i prezime" autoFocus
+                            style={{ ...inp, fontSize: 12, padding: '5px 8px' }} />
+                          <input value={editAgentForm.email} onChange={e => setEditAgentForm(f => ({ ...f, email: e.target.value }))}
+                            placeholder="Email" type="email"
+                            style={{ ...inp, fontSize: 12, padding: '5px 8px' }} />
+                          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                            <button onClick={() => saveAgent(a.id)} disabled={editAgentSaving}
+                              style={{ flex: 1, padding: '4px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              {editAgentSaving ? '...' : '✓ Snimi'}
+                            </button>
+                            <button onClick={() => setEditingAgentId(null)}
+                              style={{ flex: 1, padding: '4px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>Otk.</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontWeight: 500, color: '#111' }}>{a.full_name || '—'}</div>
+                          <div style={{ fontSize: 11, color: '#9ca3af' }}>{a.email}</div>
+                          <button onClick={() => { setEditingAgentId(a.id); setEditAgentForm({ full_name: a.full_name || '', email: a.email }) }}
+                            style={{ marginTop: 4, padding: '2px 7px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
+                            ✏️ Uredi
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <select value={a.role} onChange={e => changeRole(a.id, e.target.value)}
