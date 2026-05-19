@@ -55,7 +55,6 @@ const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', fontSize:
 const inpSm: React.CSSProperties = { ...inp, padding: '7px 10px', fontSize: 12 }
 const lbl: React.CSSProperties = { fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }
 
-// ═══ VEHICLE SEARCH — van glavne komponente da ne baguje ═══
 function VehicleSearch({ search, setSearch, selected, setSelected, dropdown, setDropdown, fleetVehicles }: {
   search: string; setSearch: (v: string) => void
   selected: FleetVehicle | null; setSelected: (v: FleetVehicle | null) => void
@@ -112,8 +111,6 @@ export default function AdminPranjePage() {
   const agentName = getCookie('avtorent-agent-name')
   const [agentEmail, setAgentEmail] = useState('')
   const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>([])
-
-  // Novo pranje
   const [showNewWash, setShowNewWash] = useState(false)
   const [vehicleSearch, setVehicleSearch] = useState('')
   const [vehicleDropdown, setVehicleDropdown] = useState(false)
@@ -122,8 +119,6 @@ export default function AdminPranjePage() {
   const [newWashCustomPrice, setNewWashCustomPrice] = useState('')
   const [newWashNotes, setNewWashNotes] = useState('')
   const [newWashSaving, setNewWashSaving] = useState(false)
-
-  // Ja ću oprati
   const [showSelfWash, setShowSelfWash] = useState(false)
   const [selfVehicleSearch, setSelfVehicleSearch] = useState('')
   const [selfVehicleDropdown, setSelfVehicleDropdown] = useState(false)
@@ -191,7 +186,6 @@ export default function AdminPranjePage() {
     fetchData(); alert(`✅ Pranje evidentirano! Odliv ${cost}€ upisan u finansije.`)
   }
 
-  // Isplata perača — direktno u transakcije, bez potvrde
   async function sendPayout() {
     if (!payoutOrder || !payoutAmount) return
     setPayoutSaving(true)
@@ -200,8 +194,7 @@ export default function AdminPranjePage() {
     await supabase.from('transakcije').insert([{
       id: genId(), tip_transakcije: 'odliv', datum: new Date().toISOString().split('T')[0],
       kategorija: 'Pranje', iznos: -Math.abs(parseFloat(payoutAmount)),
-      vozilo: payoutOrder.vehicle_name,
-      komentar,
+      vozilo: payoutOrder.vehicle_name, komentar,
       osoba: agentName || 'Agent', osobaemail: agentEmail || null,
       timestamp_upisa: new Date().toISOString(), status: 'Zavrseno'
     }])
@@ -219,7 +212,6 @@ export default function AdminPranjePage() {
 
   return (
     <div>
-      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 600, color: '#111' }}>Pranje vozila</h1>
@@ -231,7 +223,6 @@ export default function AdminPranjePage() {
         </div>
       </div>
 
-      {/* TABOVI */}
       <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: 16 }}>
         {([['nalozi', '📋 Nalozi'], ['peraci', '👤 Perači'], ['istorija', '📜 Istorija po vozilu']] as const).map(([t, l]) => (
           <button key={t} onClick={() => setActiveTab(t)}
@@ -241,7 +232,6 @@ export default function AdminPranjePage() {
         ))}
       </div>
 
-      {/* ═══ TAB: NALOZI ═══ */}
       {activeTab === 'nalozi' && (<>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
           {[
@@ -326,71 +316,11 @@ export default function AdminPranjePage() {
             </div>
           )}
         </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#f9fafb' }}>
-                    {['Vozilo', 'Tip pranja', 'Perač', 'Status', 'Cijena', 'Isplata', ''].map(h => (
-                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map(o => {
-                    const st = STATUS_LABELS[o.status] || STATUS_LABELS.pending
-                    const partnerName = washPartners.find(p => p.id === o.wash_partner_id)?.name
-                    return (
-                      <tr key={o.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                        <td style={{ padding: '10px 14px' }}>
-                          <div style={{ fontWeight: 500, color: '#111' }}>{o.vehicle_name}</div>
-                          {o.reservations && <div style={{ fontSize: 11, color: '#9ca3af' }}>{o.reservations.ref_code}</div>}
-                        </td>
-                        <td style={{ padding: '10px 14px', color: '#374151' }}>{o.wash_type_label}</td>
-                        <td style={{ padding: '10px 14px' }}>
-                          {o.assigned_to === 'partner'
-                            ? <span style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '2px 8px', borderRadius: 20 }}>{partnerName || 'Praonica'}</span>
-                            : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 20 }}>🧹 {o.agent_name}</span>}
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>{st.label}</span>
-                        </td>
-                        <td style={{ padding: '10px 14px', fontWeight: 600, color: '#1D9E75' }}>{o.price}€</td>
-                        <td style={{ padding: '10px 14px' }}>
-                          {o.assigned_to === 'partner' ? (
-                            o.payout_status === 'unpaid'
-                              ? <span style={{ fontSize: 11, background: '#FCEBEB', color: '#791F1F', padding: '2px 8px', borderRadius: 20 }}>Neplaćeno</span>
-                              : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 20 }}>✓ Plaćeno</span>
-                          ) : <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>}
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <div style={{ display: 'flex', gap: 5 }}>
-                            {o.assigned_to === 'partner' && o.status === 'done' && o.payout_status === 'unpaid' && (
-                              <button onClick={() => { setPayoutOrder(o); setPayoutAmount(String(o.price || '')); setPayoutNote('') }}
-                                style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #1D9E75', borderRadius: 6, background: '#E1F5EE', cursor: 'pointer', color: '#085041', fontWeight: 600 }}>Isplati</button>
-                            )}
-                            {o.status === 'pending' && (
-                              <button onClick={() => { setSelfPresetVehicleName(o.vehicle_name); setSelfPresetOrderId(o.id); setSelfWashCost(''); setSelfWashNote(''); setShowSelfWash(true) }}
-                                style={{ padding: '3px 10px', fontSize: 11, border: '1px solid #185FA5', borderRadius: 6, background: '#E6F1FB', cursor: 'pointer', color: '#0C447C', fontWeight: 600 }}>🧹 Ja ću</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {filteredOrders.length === 0 && <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema naloga.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </>)}
 
-      {/* ═══ TAB: PERAČI ═══ */}
       {activeTab === 'peraci' && <PeraciTab orders={orders} />}
-
-      {/* ═══ TAB: ISTORIJA ═══ */}
       {activeTab === 'istorija' && <IstorijaTab orders={orders} washPartners={washPartners} />}
 
-      {/* NOVO PRANJE MODAL */}
       {showNewWash && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
@@ -398,12 +328,10 @@ export default function AdminPranjePage() {
               <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Novo pranje</div>
               <button onClick={() => setShowNewWash(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
             </div>
-
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Vozilo *</label>
               <VehicleSearch search={vehicleSearch} setSearch={setVehicleSearch} selected={selectedVehicle} setSelected={setSelectedVehicle} dropdown={vehicleDropdown} setDropdown={setVehicleDropdown} fleetVehicles={fleetVehicles} />
             </div>
-
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Perač *</label>
               {washPartners.length === 0
@@ -413,7 +341,6 @@ export default function AdminPranjePage() {
                   </select>
               }
             </div>
-
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Tip pranja *</div>
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 5 }}>
@@ -429,19 +356,16 @@ export default function AdminPranjePage() {
                 })}
               </div>
             </div>
-
             {newWashType === 'specific' && (
               <div style={{ marginBottom: 14 }}>
                 <label style={lbl}>Cijena (€)</label>
                 <input type="number" step="0.01" value={newWashCustomPrice} onChange={e => setNewWashCustomPrice(e.target.value)} style={inp} />
               </div>
             )}
-
             <div style={{ marginBottom: 18 }}>
               <label style={lbl}>Napomena</label>
               <input value={newWashNotes} onChange={e => setNewWashNotes(e.target.value)} style={inp} placeholder="Opciono..." />
             </div>
-
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowNewWash(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
               <button onClick={handleNewWash} disabled={newWashSaving || !selectedVehicle || !newWashType || !washPartner}
@@ -453,7 +377,6 @@ export default function AdminPranjePage() {
         </div>
       )}
 
-      {/* JA ĆU OPRATI MODAL */}
       {showSelfWash && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 560, padding: 20 }}>
@@ -462,7 +385,6 @@ export default function AdminPranjePage() {
               <button onClick={() => setShowSelfWash(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
             </div>
             <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>Unesite iznos — upisaće se kao odliv u finansije.</div>
-
             {selfPresetVehicleName ? (
               <div style={{ background: '#f0fdf8', border: '1px solid #1D9E75', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 13, fontWeight: 600, color: '#085041' }}>🚗 {selfPresetVehicleName}</div>
             ) : (
@@ -471,7 +393,6 @@ export default function AdminPranjePage() {
                 <VehicleSearch search={selfVehicleSearch} setSearch={setSelfVehicleSearch} selected={selfSelectedVehicle} setSelected={setSelfSelectedVehicle} dropdown={selfVehicleDropdown} setDropdown={setSelfVehicleDropdown} fleetVehicles={fleetVehicles} />
               </div>
             )}
-
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Koliko ste potrošili? (€) *</label>
               <input type="number" step="0.01" value={selfWashCost} onChange={e => setSelfWashCost(e.target.value)} placeholder="npr. 5" style={{ ...inp, fontSize: 18, fontWeight: 700 }} />
@@ -491,7 +412,6 @@ export default function AdminPranjePage() {
         </div>
       )}
 
-      {/* ISPLATA MODAL */}
       {payoutOrder && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 560, padding: 20 }}>
@@ -524,7 +444,6 @@ export default function AdminPranjePage() {
   )
 }
 
-// ═══ PERAČI TAB ═══
 function PeraciTab({ orders }: { orders: WashOrder[] }) {
   const [peraci, setPeraci] = useState<WashPartner[]>([])
   const [loading, setLoading] = useState(true)
@@ -572,7 +491,6 @@ function PeraciTab({ orders }: { orders: WashOrder[] }) {
         <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>Registrovani perači ({peraci.length})</div>
         <button onClick={openNew} style={{ padding: '7px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Novi perač</button>
       </div>
-
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
         {peraci.length === 0
           ? <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>Nema perača.</div>
@@ -607,8 +525,6 @@ function PeraciTab({ orders }: { orders: WashOrder[] }) {
                     ))}
                   </div>
                 </div>
-
-                {/* Istorija pranja po peraču */}
                 {isSelected && (
                   <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 16px', background: '#f9fafb' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>
@@ -617,34 +533,36 @@ function PeraciTab({ orders }: { orders: WashOrder[] }) {
                     </div>
                     {peracOrders.length === 0
                       ? <div style={{ fontSize: 13, color: '#9ca3af' }}>Nema pranja.</div>
-                      : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                          <thead>
-                            <tr style={{ background: '#fff' }}>
-                              {['Datum', 'Vozilo', 'Tip pranja', 'Status', 'Cijena', 'Isplata'].map(h => (
-                                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {peracOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(o => {
-                              const st = STATUS_LABELS[o.status] || STATUS_LABELS.pending
-                              return (
-                                <tr key={o.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                  <td style={{ padding: '6px 10px', color: '#374151' }}>{new Date(o.created_at).toLocaleDateString('sr-RS')}</td>
-                                  <td style={{ padding: '6px 10px', fontWeight: 500 }}>{o.vehicle_name}</td>
-                                  <td style={{ padding: '6px 10px', color: '#374151' }}>{o.wash_type_label}</td>
-                                  <td style={{ padding: '6px 10px' }}><span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '1px 7px', borderRadius: 20 }}>{st.label}</span></td>
-                                  <td style={{ padding: '6px 10px', fontWeight: 700, color: '#1D9E75' }}>{o.price}€</td>
-                                  <td style={{ padding: '6px 10px' }}>
-                                    {o.payout_status === 'unpaid'
-                                      ? <span style={{ fontSize: 11, background: '#FCEBEB', color: '#dc2626', padding: '1px 7px', borderRadius: 20 }}>Neplaćeno</span>
-                                      : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '1px 7px', borderRadius: 20 }}>Plaćeno</span>}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
+                      : <div style={{ overflowX: 'auto' as const }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 400 }}>
+                            <thead>
+                              <tr style={{ background: '#fff' }}>
+                                {['Datum', 'Vozilo', 'Tip pranja', 'Status', 'Cijena', 'Isplata'].map(h => (
+                                  <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {peracOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(o => {
+                                const st = STATUS_LABELS[o.status] || STATUS_LABELS.pending
+                                return (
+                                  <tr key={o.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                    <td style={{ padding: '6px 10px', color: '#374151' }}>{new Date(o.created_at).toLocaleDateString('sr-RS')}</td>
+                                    <td style={{ padding: '6px 10px', fontWeight: 500 }}>{o.vehicle_name}</td>
+                                    <td style={{ padding: '6px 10px', color: '#374151' }}>{o.wash_type_label}</td>
+                                    <td style={{ padding: '6px 10px' }}><span style={{ fontSize: 11, background: st.bg, color: st.color, padding: '1px 7px', borderRadius: 20 }}>{st.label}</span></td>
+                                    <td style={{ padding: '6px 10px', fontWeight: 700, color: '#1D9E75' }}>{o.price}€</td>
+                                    <td style={{ padding: '6px 10px' }}>
+                                      {o.payout_status === 'unpaid'
+                                        ? <span style={{ fontSize: 11, background: '#FCEBEB', color: '#dc2626', padding: '1px 7px', borderRadius: 20 }}>Neplaćeno</span>
+                                        : <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '1px 7px', borderRadius: 20 }}>Plaćeno</span>}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                     }
                   </div>
                 )}
@@ -652,8 +570,6 @@ function PeraciTab({ orders }: { orders: WashOrder[] }) {
             )
           })}
       </div>
-
-      {/* FORMA MODAL */}
       {showForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, padding: '24px', maxWidth: 420, width: '100%' }}>
@@ -692,7 +608,6 @@ function PeraciTab({ orders }: { orders: WashOrder[] }) {
   )
 }
 
-// ═══ ISTORIJA TAB ═══
 function IstorijaTab({ orders, washPartners }: { orders: WashOrder[], washPartners: WashPartner[] }) {
   const [search, setSearch] = useState('')
   const [selectedVozilo, setSelectedVozilo] = useState<string | null>(null)
@@ -724,7 +639,6 @@ function IstorijaTab({ orders, washPartners }: { orders: WashOrder[], washPartne
           }
         </div>
       </div>
-
       <div>
         {!selectedVozilo
           ? <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', border: '1px dashed #e5e7eb', borderRadius: 12 }}>Odaberite vozilo sa liste</div>
