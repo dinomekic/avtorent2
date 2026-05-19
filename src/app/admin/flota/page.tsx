@@ -22,6 +22,7 @@ type FleetVehicle = {
   dana_do_isteka: number | null; agregirani_2: string | null
   vehicle_class: string | null; features: string[] | null
   saobracajna_url: string | null; polisa_url: string | null; polisa_istek: string | null
+  zeleni_karton: boolean | null; zeleni_karton_istek: string | null
 }
 
 type RegHistory = {
@@ -103,6 +104,8 @@ export default function AdminFleetPage() {
   const [regTab, setRegTab] = useState<'produzenje' | 'nova' | 'dokumenti' | 'istorija'>('produzenje')
   const [uploadingDoc, setUploadingDoc] = useState<'saobracajna' | 'polisa' | null>(null)
   const [docUrls, setDocUrls] = useState({ saobracajna_url: '', polisa_url: '', polisa_istek: '' })
+  const [zeleniKarton, setZeleniKarton] = useState(false)
+  const [zeleniKartonIstek, setZeleniKartonIstek] = useState('')
 
   const agentName = getCookie('avtorent-agent-name')
 
@@ -129,6 +132,8 @@ export default function AdminFleetPage() {
       napomena: ''
     })
     setDocUrls({ saobracajna_url: v.saobracajna_url || '', polisa_url: v.polisa_url || '', polisa_istek: v.polisa_istek || '' })
+    setZeleniKarton(v.zeleni_karton || false)
+    setZeleniKartonIstek(v.zeleni_karton_istek || '')
     setRegTab('produzenje')
     setShowRegModal(true)
     setRegHistoryLoading(true)
@@ -157,7 +162,13 @@ export default function AdminFleetPage() {
   async function saveDokumenti() {
     if (!regVehicle) return
     setRegSaving(true)
-    await supabase.from('vozila_fleet').update({ saobracajna_url: docUrls.saobracajna_url || null, polisa_url: docUrls.polisa_url || null, polisa_istek: docUrls.polisa_istek || null }).eq('id', regVehicle.id)
+    await supabase.from('vozila_fleet').update({
+      saobracajna_url: docUrls.saobracajna_url || null,
+      polisa_url: docUrls.polisa_url || null,
+      polisa_istek: docUrls.polisa_istek || null,
+      zeleni_karton: zeleniKarton,
+      zeleni_karton_istek: zeleniKartonIstek || null,
+    }).eq('id', regVehicle.id)
     setRegSaving(false)
     alert('✅ Dokumenti sačuvani!')
     fetchData()
@@ -404,7 +415,7 @@ export default function AdminFleetPage() {
                           {isticeSkoro && !istekla && <span style={{ fontSize: 10, background: '#FAEEDA', color: '#BA7517', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>⚠️{Math.round(v.dana_do_isteka!)}d</span>}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 6px', flexWrap: 'wrap' as const }}>
-                          <span style={{ fontSize: 10, color: '#9ca3af' }}>{v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}{v.istek_reg ? ` · 📋${v.istek_reg}` : ''}</span>
+                          <span style={{ fontSize: 10, color: '#9ca3af' }}>{v.transmission === 'manual' ? 'MAN' : 'AUT'} · {v.fuel_type === 'diesel' ? 'DSL' : v.fuel_type === 'petrol' ? 'BNZ' : 'EL'} · {v.lokacija?.split(' ')[0]}{v.istek_reg ? ` · 📋${v.istek_reg}` : ''}{v.zeleni_karton === false ? ' · 🟢❌' : v.zeleni_karton ? ' · 🟢✅' : ''}</span>
                           <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', flexWrap: 'wrap' as const }}>
                             <button onClick={() => openRegModal(v)} style={{ padding: '2px 7px', fontSize: 10, border: `1px solid ${istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#d1d5db'}`, borderRadius: 6, background: istekla ? '#FEE2E2' : isticeSkoro ? '#FAEEDA' : '#fff', cursor: 'pointer', color: istekla ? '#DC2626' : isticeSkoro ? '#BA7517' : '#374151', fontWeight: 600 }}>📋</button>
                             <select value={v.fleet_status} onChange={e => quickStatusUpdate(v.id, e.target.value)} style={{ padding: '2px 4px', fontSize: 10, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#374151', cursor: 'pointer', maxWidth: 90 }}>
@@ -547,6 +558,27 @@ export default function AdminFleetPage() {
                     <div><label style={lbl}>Datum upisa</label><input style={inpSm} value={regForm.datum_registracije} onChange={e => setRegForm(f => ({ ...f, datum_registracije: e.target.value }))} placeholder="01.01.2027." /></div>
                   </div>
                   <div style={{ marginBottom: 10 }}><label style={lbl}>Mjesto reg.</label><input style={inpSm} value={regForm.mjesto_reg} onChange={e => setRegForm(f => ({ ...f, mjesto_reg: e.target.value }))} /></div>
+
+                  {/* ZELENI KARTON */}
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>🟢 Zeleni karton</div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: zeleniKarton ? 8 : 0 }}>
+                      <button onClick={() => setZeleniKarton(true)}
+                        style={{ flex: 1, padding: '7px', border: `1px solid ${zeleniKarton ? '#1D9E75' : '#e5e7eb'}`, borderRadius: 7, background: zeleniKarton ? '#E1F5EE' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: zeleniKarton ? 700 : 400, color: zeleniKarton ? '#085041' : '#374151' }}>
+                        ✅ Ima
+                      </button>
+                      <button onClick={() => setZeleniKarton(false)}
+                        style={{ flex: 1, padding: '7px', border: `1px solid ${!zeleniKarton ? '#DC2626' : '#e5e7eb'}`, borderRadius: 7, background: !zeleniKarton ? '#FCEBEB' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: !zeleniKarton ? 700 : 400, color: !zeleniKarton ? '#DC2626' : '#374151' }}>
+                        ❌ Nema
+                      </button>
+                    </div>
+                    {zeleniKarton && (
+                      <div>
+                        <label style={lbl}>Istek zelenog kartona (DD.MM.YYYY.)</label>
+                        <input style={inpSm} value={zeleniKartonIstek} onChange={e => setZeleniKartonIstek(e.target.value)} placeholder="31.12.2025." />
+                      </div>
+                    )}
+                  </div>
                   <div style={{ marginBottom: 14 }}><label style={lbl}>Napomena</label><textarea style={{ ...inpSm, minHeight: 40, resize: 'vertical' as const }} value={regForm.napomena} onChange={e => setRegForm(f => ({ ...f, napomena: e.target.value }))} /></div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setShowRegModal(false)} style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: 8, background: 'transparent', fontSize: 13, cursor: 'pointer', color: '#374151' }}>Odustani</button>
