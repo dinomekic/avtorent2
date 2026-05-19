@@ -18,6 +18,12 @@ const INSURANCE_OPTIONS = [
   { key: 'kasko_ucesce', label: 'Kasko sa učešćem', labelEn: 'Casco with excess', labelDe: 'Kasko mit Selbstbeteiligung', desc: 'Kasko sa učešćem 300€', price: 8 },
 ]
 
+// ID-ovi koji su već prikazani u Osiguranje ili Granica sekciji
+const EXCLUDED_EXTRA_IDS = [
+  'd18de2b4-9913-4387-83cc-d3407b21d4b4', // Kasko osiguranje
+  '3ee49f93-3886-4095-9de3-5469be901797', // Dozvola za izlazak iz zemlje
+]
+
 const LOCATIONS = [
   'Bulevar Veljka Vlahovića 16, Podgorica',
   'Podgorica aerodrom (TGD)',
@@ -53,27 +59,20 @@ function BookingPageContent() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   const [form, setForm] = useState({
-    // Korisnik
     guestName: '', guestEmail: '', guestPhone: '',
     guestNationality: '', guestDob: '', guestLicense: '',
-    // Datumi
     pickupDate: searchParams.get('pickupDate') || '',
     returnDate: searchParams.get('returnDate') || '',
     pickupTime: searchParams.get('pickupTime') || '10:00',
     returnTime: searchParams.get('returnTime') || '10:00',
-    // Lokacije
     pickupLocation: searchParams.get('pickupLocation') || '',
     dropoffLocation: searchParams.get('dropoffLocation') || '',
     transferFee: parseFloat(searchParams.get('transferFee') || '0'),
     sameDropoff: true,
-    // Dodatni vozač
     hasSecondDriver: false,
     driver2Name: '', driver2License: '', driver2Nationality: '',
-    // Osiguranje
     insurance: 'basic',
-    // Napomena & broj leta
     notes: '', flightNumber: '',
-    // Granica
     borderCrossing: 'allowed',
   })
 
@@ -98,6 +97,9 @@ function BookingPageContent() {
       .catch(() => {})
   }, [vehicleId])
 
+  // Filtrirani dodaci — bez kasko i dozvole za izlazak
+  const filteredExtras = extras.filter(e => !EXCLUDED_EXTRA_IDS.includes(e.id))
+
   function getExtraPrice(extra: Extra): number {
     if (extra.is_vehicle_specific) {
       const ve = vehicleExtras.find(ve => ve.extra_id === extra.id)
@@ -117,7 +119,8 @@ function BookingPageContent() {
   const originalBasePrice = pricePerDay * days
   const partnerDiscountAmount = partnerDiscount > 0 ? Math.round(originalBasePrice * (partnerDiscount / 100) * 100) / 100 : 0
   const basePrice = originalBasePrice - partnerDiscountAmount
-  const extrasTotal = extras.filter(e => selectedExtras[e.id]).reduce((sum, e) => sum + getExtraTotal(e), 0)
+  // extrasTotal samo od filtriranih (odabranih)
+  const extrasTotal = filteredExtras.filter(e => selectedExtras[e.id]).reduce((sum, e) => sum + getExtraTotal(e), 0)
   const subtotalAfterPartner = basePrice + extrasTotal + insuranceTotal
   const couponDiscountAmount = couponData ? Math.round(subtotalAfterPartner * (couponData.discount_percent / 100) * 100) / 100 : 0
   const total = subtotalAfterPartner - couponDiscountAmount
@@ -164,7 +167,7 @@ function BookingPageContent() {
     e.preventDefault()
     if (!validateStep1() || !validateStep2()) return
     setSubmitting(true)
-    const selectedExtrasList = extras.filter(ex => selectedExtras[ex.id]).map(ex => ({
+    const selectedExtrasList = filteredExtras.filter(ex => selectedExtras[ex.id]).map(ex => ({
       extraId: ex.id,
       extraName: lang === 'en' ? ex.name_en : lang === 'de' ? ex.name_de : ex.name,
       pricePerUnit: getExtraPrice(ex), days: ex.type === 'fixed' ? 1 : days,
@@ -211,7 +214,6 @@ function BookingPageContent() {
   const errStyle: React.CSSProperties = { fontSize: 11, color: '#ef4444', marginTop: 3 }
   const extraName = (e: Extra) => lang === 'en' ? (e.name_en || e.name) : lang === 'de' ? (e.name_de || e.name) : e.name
   const typeLabel = (e: Extra) => e.type === 'fixed' ? 'fiksno' : `${getExtraPrice(e)}€ × ${days} dana`
-
   const insLabel = (ins: typeof INSURANCE_OPTIONS[0]) =>
     lang === 'en' ? ins.labelEn : lang === 'de' ? ins.labelDe : ins.label
 
@@ -229,7 +231,6 @@ function BookingPageContent() {
             <div style={{ fontSize: 8, color: '#4a90d9', letterSpacing: 2 }}>BALKAN · RENT A CAR</div>
           </div>
         </div>
-        {/* Step indicator */}
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
           {[1,2,3].map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -244,13 +245,13 @@ function BookingPageContent() {
       </nav>
 
       <style>{`
-        @media (max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr !important; } .form-grid-3 { grid-template-columns: 1fr !important; } }
+        @media (max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr !important; } }
         input:focus, select:focus, textarea:focus { border-color: #1a56a0 !important; box-shadow: 0 0 0 3px rgba(26,86,160,0.1); }
       `}</style>
 
       <main style={{ maxWidth: 680, margin: '24px auto', padding: '0 16px 60px' }}>
 
-        {/* VOZILO KARTICA — uvijek vidljiva */}
+        {/* VOZILO KARTICA */}
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 14, alignItems: 'center' }}>
           {vehicleImage
             ? <img src={vehicleImage} alt={vehicleName} style={{ width: 100, height: 66, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
@@ -262,7 +263,6 @@ function BookingPageContent() {
               {vehicleCategory && <span style={{ fontSize: 11, background: '#f0f6ff', border: '1px solid #dbeafe', borderRadius: 20, padding: '2px 8px', color: '#1a56a0', textTransform: 'capitalize' }}>{vehicleCategory}</span>}
               {vehicleSeats && <span style={{ fontSize: 11, background: '#f3f4f6', borderRadius: 20, padding: '2px 8px', color: '#6b7280' }}>👥 {vehicleSeats}</span>}
               {vehicleTransmission && <span style={{ fontSize: 11, background: '#f3f4f6', borderRadius: 20, padding: '2px 8px', color: '#6b7280' }}>⚙️ {vehicleTransmission === 'automatic' ? 'Automatik' : 'Manual'}</span>}
-              {vehicleFuel && <span style={{ fontSize: 11, background: '#f3f4f6', borderRadius: 20, padding: '2px 8px', color: '#6b7280' }}>⛽ {vehicleFuel}</span>}
               {vehicleYear && <span style={{ fontSize: 11, background: '#f3f4f6', borderRadius: 20, padding: '2px 8px', color: '#6b7280' }}>{vehicleYear}</span>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -280,7 +280,7 @@ function BookingPageContent() {
 
         <form onSubmit={handleSubmit}>
 
-          {/* ═══ KORAK 1 — Vaši podaci ═══ */}
+          {/* ═══ KORAK 1 ═══ */}
           {step === 1 && (
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px' }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 4 }}>👤 Vaši podaci</div>
@@ -364,7 +364,7 @@ function BookingPageContent() {
             </div>
           )}
 
-          {/* ═══ KORAK 2 — Termin i dodaci ═══ */}
+          {/* ═══ KORAK 2 ═══ */}
           {step === 2 && (
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px' }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 4 }}>📅 Termin najma</div>
@@ -484,12 +484,12 @@ function BookingPageContent() {
                 </div>
               </div>
 
-              {/* Dodaci */}
-              {extras.length > 0 && (
+              {/* Dodaci — BEZ kasko i dozvole za izlazak (već su gore) */}
+              {filteredExtras.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>🎒 Dodaci i oprema</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {extras.map(extra => (
+                    {filteredExtras.map(extra => (
                       <label key={extra.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: `1.5px solid ${selectedExtras[extra.id] ? '#1a56a0' : '#e5e7eb'}`, borderRadius: 8, cursor: 'pointer', background: selectedExtras[extra.id] ? '#f0f6ff' : '#fff' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <input type="checkbox" checked={!!selectedExtras[extra.id]} onChange={e => setSelectedExtras(s => ({ ...s, [extra.id]: e.target.checked }))} style={{ width: 16, height: 16, accentColor: '#1a56a0' }} />
@@ -531,22 +531,19 @@ function BookingPageContent() {
             </div>
           )}
 
-          {/* ═══ KORAK 3 — Pregled i potvrda ═══ */}
+          {/* ═══ KORAK 3 ═══ */}
           {step === 3 && (
             <div>
               <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '24px', marginBottom: 16 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 16 }}>✅ Pregled rezervacije</div>
 
-                {/* Sekcija: Vozač */}
+                {/* Vozač */}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>👤 Vozač</div>
                   {[
-                    ['Ime i Prezime', form.guestName],
-                    ['Email', form.guestEmail],
-                    ['Telefon', form.guestPhone],
-                    ['Nacionalnost', form.guestNationality],
-                    ['Datum rođenja', form.guestDob],
-                    ['Broj vozačke', form.guestLicense],
+                    ['Ime i Prezime', form.guestName], ['Email', form.guestEmail],
+                    ['Telefon', form.guestPhone], ['Nacionalnost', form.guestNationality],
+                    ['Datum rođenja', form.guestDob], ['Broj vozačke', form.guestLicense],
                   ].filter(([, v]) => v).map(([l, v]) => (
                     <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, borderBottom: '1px solid #f9fafb' }}>
                       <span style={{ color: '#6b7280' }}>{l}</span><span style={{ color: '#111', fontWeight: 500 }}>{v}</span>
@@ -559,7 +556,7 @@ function BookingPageContent() {
                   )}
                 </div>
 
-                {/* Sekcija: Termin */}
+                {/* Termin */}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>📅 Termin</div>
                   {[
@@ -576,8 +573,8 @@ function BookingPageContent() {
                   ))}
                 </div>
 
-                {/* Sekcija: Dodaci */}
-                {(extras.some(e => selectedExtras[e.id]) || form.insurance !== 'basic') && (
+                {/* Dodaci u pregledu */}
+                {(filteredExtras.some(e => selectedExtras[e.id]) || form.insurance !== 'basic') && (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>🎒 Dodaci</div>
                     {form.insurance !== 'basic' && (
@@ -585,7 +582,7 @@ function BookingPageContent() {
                         <span style={{ color: '#6b7280' }}>🛡️ {insLabel(selectedInsurance)}</span><span style={{ color: '#111', fontWeight: 500 }}>{insuranceTotal}€</span>
                       </div>
                     )}
-                    {extras.filter(e => selectedExtras[e.id]).map(e => (
+                    {filteredExtras.filter(e => selectedExtras[e.id]).map(e => (
                       <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, borderBottom: '1px solid #f9fafb' }}>
                         <span style={{ color: '#6b7280' }}>{extraName(e)}</span><span style={{ color: '#111', fontWeight: 500 }}>{getExtraTotal(e)}€</span>
                       </div>
@@ -610,8 +607,10 @@ function BookingPageContent() {
                       <span>🛡️ {insLabel(selectedInsurance)}</span><span>{insuranceTotal}€</span>
                     </div>
                   )}
-                  {extras.filter(e => selectedExtras[e.id]).map(e => (
-                    <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#6b7280' }}><span>{extraName(e)}</span><span>{getExtraTotal(e)}€</span></div>
+                  {filteredExtras.filter(e => selectedExtras[e.id]).map(e => (
+                    <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#6b7280' }}>
+                      <span>{extraName(e)}</span><span>{getExtraTotal(e)}€</span>
+                    </div>
                   ))}
                   {couponData && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#1a56a0' }}>
