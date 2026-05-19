@@ -24,12 +24,8 @@ const EXCLUDED_EXTRA_IDS = [
   '3ee49f93-3886-4095-9de3-5469be901797', // Dozvola za izlazak iz zemlje
 ]
 
-const LOCATIONS = [
-  'Bulevar Veljka Vlahovića 16, Podgorica',
-  'Podgorica aerodrom (TGD)',
-  'Tivat aerodrom (TIV)',
-  'Centar Podgorice',
-]
+type DBLocation = { id: string; name: string; city: string; country: string }
+type DBTransfer = { id: string; from_location_id: string; to_location_id: string; price: number }
 
 const NATIONALITIES = [
   'Crna Gora', 'Srbija', 'Bosna i Hercegovina', 'Hrvatska', 'Slovenija',
@@ -66,7 +62,9 @@ function BookingPageContent() {
     pickupTime: searchParams.get('pickupTime') || '10:00',
     returnTime: searchParams.get('returnTime') || '10:00',
     pickupLocation: searchParams.get('pickupLocation') || '',
+    pickupLocationCustom: '',
     dropoffLocation: searchParams.get('dropoffLocation') || '',
+    dropoffLocationCustom: '',
     transferFee: parseFloat(searchParams.get('transferFee') || '0'),
     sameDropoff: true,
     hasSecondDriver: false,
@@ -78,7 +76,20 @@ function BookingPageContent() {
 
   const [extras, setExtras] = useState<Extra[]>([])
   const [vehicleExtras, setVehicleExtras] = useState<VehicleExtra[]>([])
+  const [dbLocations, setDbLocations] = useState<DBLocation[]>([])
+  const [dbTransfers, setDbTransfers] = useState<DBTransfer[]>([])
   const [selectedExtras, setSelectedExtras] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    // Učitaj lokacije i transfere iz baze
+    fetch('/api/locations')
+      .then(r => r.json())
+      .then(d => {
+        setDbLocations(d.locations || [])
+        setDbTransfers(d.transfers || [])
+      })
+      .catch(() => {})
+  }, [])
   const [couponCode, setCouponCode] = useState('')
   const [couponData, setCouponData] = useState<{ discount_percent: number } | null>(null)
   const [couponError, setCouponError] = useState('')
@@ -99,6 +110,16 @@ function BookingPageContent() {
 
   // Filtrirani dodaci — bez kasko i dozvole za izlazak
   const filteredExtras = extras.filter(e => !EXCLUDED_EXTRA_IDS.includes(e.id))
+
+  // Izračunaj transfer naknadu iz baze
+  function calcTransferFee(fromName: string, toName: string): number {
+    if (!fromName || !toName || fromName === toName) return 0
+    const fromLoc = dbLocations.find(l => l.name === fromName)
+    const toLoc = dbLocations.find(l => l.name === toName)
+    if (!fromLoc || !toLoc) return 0
+    const t = dbTransfers.find(t => t.from_location_id === fromLoc.id && t.to_location_id === toLoc.id)
+    return t?.price || 0
+  }
 
   function getExtraPrice(extra: Extra): number {
     if (extra.is_vehicle_specific) {
@@ -152,7 +173,8 @@ function BookingPageContent() {
     const e: Record<string, string> = {}
     if (!form.pickupDate) e.pickupDate = 'Obavezno polje'
     if (!form.returnDate) e.returnDate = 'Obavezno polje'
-    if (!form.pickupLocation.trim()) e.pickupLocation = 'Odaberite lokaciju'
+    const pickupLoc = form.pickupLocation === '__custom' ? form.pickupLocationCustom : form.pickupLocation
+    if (!pickupLoc?.trim()) e.pickupLocation = 'Odaberite lokaciju'
     if (form.pickupDate && form.returnDate && form.returnDate < form.pickupDate) e.returnDate = 'Datum povratka ne može biti prije preuzimanja'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -173,6 +195,8 @@ function BookingPageContent() {
       pricePerUnit: getExtraPrice(ex), days: ex.type === 'fixed' ? 1 : days,
       totalPrice: getExtraTotal(ex), type: ex.type,
     }))
+    const resolvedPickup = form.pickupLocation === '__custom' ? form.pickupLocationCustom : form.pickupLocation
+    const resolvedDropoff = form.sameDropoff ? resolvedPickup : (form.dropoffLocation === '__custom' ? form.dropoffLocationCustom : form.dropoffLocation)
     try {
       const res = await fetch('/api/reservations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -183,8 +207,8 @@ function BookingPageContent() {
           guestLicense: form.guestLicense, guestDob: form.guestDob,
           pickupDate: form.pickupDate, returnDate: form.returnDate,
           pickupTime: form.pickupTime, returnTime: form.returnTime,
-          pickupLocation: form.pickupLocation,
-          dropoffLocation: form.sameDropoff ? form.pickupLocation : form.dropoffLocation,
+          pickupLocation: resolvedPickup,
+          dropoffLocation: resolvedDropoff,
           transferFee: form.transferFee,
           hasSecondDriver: form.hasSecondDriver,
           driver2Name: form.driver2Name, driver2License: form.driver2License,
@@ -405,16 +429,13 @@ function BookingPageContent() {
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12 }}>📍 Lokacije</div>
                 <div style={{ marginBottom: 10 }}>
                   <label style={lbl}>Lokacija preuzimanja *</label>
-                  <select style={inp(errors.pickupLocation)} value={LOCATIONS.includes(form.pickupLocation) ? form.pickupLocation : 'custom'} onChange={e => {
-                    if (e.target.value === 'custom') setForm(f => ({ ...f, pickupLocation: '' }))
-                    else setForm(f => ({ ...f, pickupLocation: e.target.value }))
-                  }}>
+                  <select style={inp(errors.pickupLocation)} value={form.pickupLocation} onChange={e => setForm(f => ({ ...f, pickupLocation: e.target.value }))}>
                     <option value="">-- Odaberi lokaciju --</option>
-                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                    <option value="custom">Druga lokacija...</option>
+                    {dbLocations.map(l => <option key={l.id} value={l.name}>{l.name} ({l.country})</option>)}
+                    <option value="__custom">Druga lokacija...</option>
                   </select>
-                  {!LOCATIONS.includes(form.pickupLocation) && (
-                    <input style={{ ...inp(errors.pickupLocation), marginTop: 6 }} value={form.pickupLocation} onChange={e => setForm(f => ({ ...f, pickupLocation: e.target.value }))} placeholder="Unesite adresu..." />
+                  {form.pickupLocation === '__custom' && (
+                    <input style={{ ...inp(errors.pickupLocation), marginTop: 6 }} value={form.pickupLocationCustom || ''} onChange={e => setForm(f => ({ ...f, pickupLocationCustom: e.target.value }))} placeholder="Unesite adresu..." />
                   )}
                   {errors.pickupLocation && <div style={errStyle}>{errors.pickupLocation}</div>}
                 </div>
@@ -427,18 +448,23 @@ function BookingPageContent() {
                 {!form.sameDropoff && (
                   <div>
                     <label style={lbl}>Lokacija vraćanja</label>
-                    <select style={inp()} value={LOCATIONS.includes(form.dropoffLocation) ? form.dropoffLocation : 'custom'} onChange={e => {
-                      if (e.target.value === 'custom') setForm(f => ({ ...f, dropoffLocation: '' }))
-                      else setForm(f => ({ ...f, dropoffLocation: e.target.value }))
+                    <select style={inp()} value={form.dropoffLocation} onChange={e => {
+                      const dropoff = e.target.value
+                      const fee = calcTransferFee(form.pickupLocation, dropoff)
+                      setForm(f => ({ ...f, dropoffLocation: dropoff, transferFee: fee }))
                     }}>
                       <option value="">-- Odaberi lokaciju --</option>
-                      {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                      <option value="custom">Druga lokacija...</option>
+                      {dbLocations.map(l => <option key={l.id} value={l.name}>{l.name} ({l.country})</option>)}
+                      <option value="__custom">Druga lokacija...</option>
                     </select>
-                    {!LOCATIONS.includes(form.dropoffLocation) && (
-                      <input style={{ ...inp(), marginTop: 6 }} value={form.dropoffLocation} onChange={e => setForm(f => ({ ...f, dropoffLocation: e.target.value }))} placeholder="Unesite adresu..." />
+                    {form.dropoffLocation === '__custom' && (
+                      <input style={{ ...inp(), marginTop: 6 }} value={form.dropoffLocationCustom || ''} onChange={e => setForm(f => ({ ...f, dropoffLocationCustom: e.target.value }))} placeholder="Unesite adresu..." />
                     )}
-                    {form.transferFee > 0 && <div style={{ fontSize: 12, color: '#085041', background: '#E1F5EE', padding: '5px 10px', borderRadius: 6, marginTop: 4 }}>Naknada za transfer: <strong>{form.transferFee}€</strong></div>}
+                    {form.transferFee > 0 && (
+                      <div style={{ fontSize: 12, color: '#085041', background: '#E1F5EE', padding: '5px 10px', borderRadius: 6, marginTop: 4 }}>
+                        Naknada za transfer: <strong>{form.transferFee}€</strong>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -562,8 +588,8 @@ function BookingPageContent() {
                   {[
                     ['Preuzimanje', `${form.pickupDate} u ${form.pickupTime}`],
                     ['Povratak', `${form.returnDate} u ${form.returnTime}`],
-                    ['Lokacija preuzimanja', form.pickupLocation],
-                    ['Lokacija vraćanja', form.sameDropoff ? form.pickupLocation : form.dropoffLocation],
+                    ['Lokacija preuzimanja', form.pickupLocation === '__custom' ? form.pickupLocationCustom : form.pickupLocation],
+                    ['Lokacija vraćanja', form.sameDropoff ? (form.pickupLocation === '__custom' ? form.pickupLocationCustom : form.pickupLocation) : (form.dropoffLocation === '__custom' ? form.dropoffLocationCustom : form.dropoffLocation)],
                     ['Broj leta', form.flightNumber],
                     ['Granica', form.borderCrossing === 'allowed' ? '✅ Dozvoljeno van CG' : '🚫 Zabranjeno van CG'],
                   ].filter(([, v]) => v).map(([l, v]) => (
