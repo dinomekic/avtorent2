@@ -82,6 +82,8 @@ export default function AdminAgentiPage() {
     setEditingAgentId(null)
     fetchData()
   }
+
+  async function saveNfcUid(id: string) {
     await supabase.from('agents').update({ nfc_uid: nfcInput.trim() || null }).eq('id', id)
     setEditingNfcId(null)
     setNfcInput('')
